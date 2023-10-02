@@ -2,7 +2,8 @@
 Implementation of the Game of Life (GoL) in JAX
 '''
 import utils #local
-import patterns
+import patterns #local
+import evolve
 #import jax.numpy as jnp
 import numpy as np
 
@@ -24,6 +25,21 @@ fig = plt.figure()
 plt.gray()
 
 img = plt.imshow(universe, animated=True)
+
+def animate(i):
+    """perform animation step"""
+    global universe
+
+    universe = evolve.evolve(universe)
+    
+    img.set_array(universe)
+    
+    return img,
+
+interval = 200 #ms
+
+#animate 24 frames with interval between them calling animate function at each frame
+ani = animation.FuncAnimation(fig, animate, frames=24, interval=interval, blit=True)
 
 plt.show()
 
