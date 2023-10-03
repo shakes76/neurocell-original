@@ -9,7 +9,7 @@ import numpy as np
 
 utils.jax_status()
 
-N = 64
+N = 256 
 insert_point = (32,32)
 grid_size = (N,N) 
 universe = np.zeros(grid_size) 
@@ -37,7 +37,7 @@ def animate(i):
     
     return img,
 
-interval = 200 #ms
+interval = 10 #ms
 
 #animate 24 frames with interval between them calling animate function at each frame
 ani = animation.FuncAnimation(fig, animate, frames=24, interval=interval, blit=True)

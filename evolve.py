@@ -1,9 +1,11 @@
 '''
 Evolve a series of grid cells via rules
 '''
-#import jax.numpy as jnp
 import numpy as np
 import scipy.signal as signal
+
+import jax.numpy as jnp
+import jax.scipy.signal as jsignal
 
 neighborhood = np.ones((3,3), np.int) # 8 connected kernel
 neighborhood[1,1] = 0 #do not count centre pixel
@@ -53,13 +55,14 @@ def evolve_fast(grid, alive_value=1, dead_value=0):
     '''
         
     #get weighted sum of neighbors using convolution
-    x = np.around(signal.fftconvolve(grid, neighborhood, mode='same'))
+    #x = jnp.around(jsignal.convolve2d(grid, neighborhood, mode='same'))
+    x = jnp.around(jsignal.fftconvolve(grid, neighborhood, mode='same'))
 
     #implement the GoL rules by thresholding the weights
     #If point alive then count of 2 and 3 is allowed, else just 3 
     #weights = np.where(np.logical_or(3 < x, x < 2), 0, 1)
-    weights = np.where(x==3, alive_value, dead_value) #always alive
-    weights += np.where(np.logical_and(grid==alive_value,x==2), alive_value, dead_value)
+    weights = jnp.where(x==3, alive_value, dead_value) #always alive
+    weights += jnp.where(jnp.logical_and(grid==alive_value,x==2), alive_value, dead_value)
     
     #update the grid
     return weights
