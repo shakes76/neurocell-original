@@ -30,8 +30,9 @@ def animate(i):
     """perform animation step"""
     global universe
 
-    universe = evolve.evolve(universe)
-    
+    #universe = evolve.evolve(universe)
+    universe = evolve.evolve_fast(universe) 
+
     img.set_array(universe)
     
     return img,

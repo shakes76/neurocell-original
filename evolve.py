@@ -43,3 +43,24 @@ def evolve(grid, finite=True, alive_value=1, dead_value=0):
     #update the grid
     return weights
 
+def evolve_fast(grid, alive_value=1, dead_value=0):
+    '''
+    Given the current states of the cells, apply the GoL rules:
+    - Any live cell with fewer than two live neighbors dies, as if by underpopulation.
+    - Any live cell with two or three live neighbors lives on to the next generation.
+    - Any live cell with more than three live neighbors dies, as if by overpopulation.
+    - Any dead cell with exactly three live neighbors becomes a live cell, as if by reproduction
+    '''
+        
+    #get weighted sum of neighbors using convolution
+    x = np.around(signal.fftconvolve(grid, neighborhood, mode='same'))
+
+    #implement the GoL rules by thresholding the weights
+    #If point alive then count of 2 and 3 is allowed, else just 3 
+    #weights = np.where(np.logical_or(3 < x, x < 2), 0, 1)
+    weights = np.where(x==3, alive_value, dead_value) #always alive
+    weights += np.where(np.logical_and(grid==alive_value,x==2), alive_value, dead_value)
+    
+    #update the grid
+    return weights
+
