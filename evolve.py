@@ -6,9 +6,16 @@ import scipy.signal as signal
 
 import jax.numpy as jnp
 import jax.scipy.signal as jsignal
+import jax.nn as nn
 
 neighborhood = np.ones((3,3), np.int) # 8 connected kernel
 neighborhood[1,1] = 0 #do not count centre pixel
+neuralhood = jnp.ones((3,3), dtype=jnp.float32) # 8 connected kernel
+neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
+neuralhood /= 8. #normed
+#activation = nn.relu
+activation = nn.tanh
+#activation = nn.sigmoid
 
 def evolve(grid, finite=True, alive_value=1, dead_value=0):
     '''
@@ -52,11 +59,10 @@ def evolve_fast(grid, alive_value=1, dead_value=0):
     - Any live cell with two or three live neighbors lives on to the next generation.
     - Any live cell with more than three live neighbors dies, as if by overpopulation.
     - Any dead cell with exactly three live neighbors becomes a live cell, as if by reproduction
-    '''
-        
+    ''' 
     #get weighted sum of neighbors using convolution
-    #x = jnp.around(jsignal.convolve2d(grid, neighborhood, mode='same'))
-    x = jnp.around(jsignal.fftconvolve(grid, neighborhood, mode='same'))
+    x = jsignal.convolve2d(grid, neighborhood, mode='same')
+    #x = jnp.around(jsignal.fftconvolve(grid, neighborhood, mode='same'))
 
     #implement the GoL rules by thresholding the weights
     #If point alive then count of 2 and 3 is allowed, else just 3 
@@ -66,4 +72,35 @@ def evolve_fast(grid, alive_value=1, dead_value=0):
     
     #update the grid
     return weights
+
+def evolve_neural(grid, Lambda=10, Gamma=20, alive_value=1, dead_value=0):
+    '''
+    Evolve using neural rules.
+    Consider each cell a non-linear switch that connects to neighbors
+    Weighted sum is applied WRT neighbors via convolve
+    Activation is applied to decide if cell fires based on neighbors
+    Assumes grid values are normed
+    ''' 
+    #get weighted sum of neighbors using convolution
+    x = jsignal.convolve2d(grid, neighborhood, mode='same')
+    #weights = jsignal.fftconvolve(grid, neuralhood, mode='same')
+    print("x max", jnp.max(x))
+    #print("grid max", jnp.max(grid), grid.dtype)
+    #print("hood max", jnp.max(neuralhood), neuralhood.dtype)
+    #norm
+    x = nn.standardize(x, axis=(0,1))
+    print("x mean/std", jnp.mean(x), jnp.std(x))
+    #implement neural rules by activating the weights
+    #weights = activation(x)
+    #weights = x
+    #print("weight max", jnp.max(weights), weights.dtype)
+    x = jnp.where(jnp.logical_and(Lambda<x, x<Gamma), x, 0) #always alive
+    #weights += jnp.where(jnp.logical_and(grid==alive_value,x==2), alive_value, dead_value)
+    #x = activation(x)
+    #norm
+    #x = nn.standardize(x, axis=(0,1), variance=1)
+    x = activation(x)
+    
+    #update the grid
+    return x
 
