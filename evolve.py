@@ -73,7 +73,7 @@ def evolve_fast(grid, alive_value=1, dead_value=0):
     #update the grid
     return weights
 
-def evolve_neural(grid, Lambda=10, Gamma=20, alive_value=1, dead_value=0):
+def evolve_neural(grid, Lambda=12, Gamma=24, alive_value=1, dead_value=0):
     '''
     Evolve using neural rules.
     Consider each cell a non-linear switch that connects to neighbors

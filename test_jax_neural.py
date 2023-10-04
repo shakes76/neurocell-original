@@ -1,20 +1,20 @@
 '''
-Implementation of the Game of Life (GoL) in JAX
+Implementation of the Neural Cell in JAX
 '''
 import utils #local
 import patterns #local
 import evolve
-#import jax.numpy as jnp
 import numpy as np
 
 utils.jax_status()
 
-N = 64
+N = 128
 insert_point = (16,16)
 grid_size = (N,N) 
 universe = np.zeros(grid_size) 
 
-universe = patterns.insertGlider(universe, index=insert_point)
+#universe = patterns.insertGlider(universe, index=insert_point)
+universe = patterns.insertGliderGun(universe, index=insert_point)
 universe = universe.astype(np.float32)
 print("Universe Shape:", universe.shape, universe.dtype)
 

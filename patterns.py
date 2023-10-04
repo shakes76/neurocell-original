@@ -24,7 +24,7 @@ def insertGlider(grid, index=(0,0), value=1):
 
     return grid
     
-def insertGliderGun(grid, iindex=(0,0), value=1):
+def insertGliderGun(grid, index=(0,0), value=1):
     '''
     Insert a glider construct at the index position
     '''
