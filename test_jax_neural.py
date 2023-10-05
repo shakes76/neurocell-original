@@ -43,7 +43,7 @@ def animate(i):
     
     return img,
 
-interval = 200 #ms
+interval = 50 #ms
 
 #animate 24 frames with interval between them calling animate function at each frame
 ani = animation.FuncAnimation(fig, animate, frames=24, interval=interval, blit=True)
