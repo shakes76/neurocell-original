@@ -133,7 +133,7 @@ def filter(N, filterType='smooth', x0 = 0, y0 = 0):
     - sharpen
     '''
     #create kernel
-    kernelImage = jnp.zeros((N,N), dtype=np.int64)
+    kernelImage = jnp.zeros((N,N), dtype=jnp.int32)
 
     if filterType == 'sobelV':
         kernel = kernelSobelVertical()
