@@ -8,11 +8,17 @@ import jax.numpy as jnp
 import jax.scipy.signal as jsignal
 import jax.nn as nn
 
+import filters
+
 neighborhood = np.ones((3,3), np.int) # 8 connected kernel
 neighborhood[1,1] = 0 #do not count centre pixel
-neuralhood = jnp.ones((3,3), dtype=jnp.float32) # 8 connected kernel
+neuralhood = filters.kernelSmooth(dtype=jnp.float32) # 8 connected kernel
 neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
-neuralhood /= 8. #normed
+# neuralhood /= 8. #normed
+# neuralhood = filters.kernelSobelVertical(dtype=jnp.float32) # 8 connected kernel
+# neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
+# neuralhood /= 8. #normed
+
 #activation = nn.relu
 activation = nn.tanh
 #activation = nn.sigmoid
@@ -82,14 +88,14 @@ def evolve_neural(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
     Assumes grid values are normed
     ''' 
     #get weighted sum of neighbors using convolution
-    x = jsignal.convolve2d(grid, neighborhood, mode='same')
+    x = jsignal.convolve2d(grid, neuralhood, mode='same')
     #weights = jsignal.fftconvolve(grid, neuralhood, mode='same')
-    print("x max", jnp.max(x))
+    #print("x max", jnp.max(x))
     #print("grid max", jnp.max(grid), grid.dtype)
     #print("hood max", jnp.max(neuralhood), neuralhood.dtype)
     #norm
     x = nn.standardize(x, axis=(0,1))
-    print("x mean/std", jnp.mean(x), jnp.std(x))
+    #print("x mean/std", jnp.mean(x), jnp.std(x))
     #implement neural rules by activating the weights
     #weights = activation(x)
     #weights = x

@@ -5,6 +5,7 @@ import utils #local
 import patterns #local
 import evolve
 import numpy as np
+import jax.numpy as jnp
 
 utils.jax_status()
 
@@ -38,15 +39,16 @@ def animate(i):
     #universe = evolve.evolve(universe)
     #universe = evolve.evolve_fast(universe) 
     universe = evolve.evolve_neural(universe) 
+    print("i", i, "universe count", jnp.sum(universe))
 
     img.set_array(universe)
     
     return img,
 
-interval = 50 #ms
+interval = 20 #ms
 
 #animate 24 frames with interval between them calling animate function at each frame
-ani = animation.FuncAnimation(fig, animate, frames=24, interval=interval, blit=True)
+ani = animation.FuncAnimation(fig, animate, frames=2048, interval=interval, blit=True)
 
 plt.show()
 
