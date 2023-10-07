@@ -12,12 +12,14 @@ import filters
 
 neighborhood = np.ones((3,3), np.int) # 8 connected kernel
 neighborhood[1,1] = 0 #do not count centre pixel
-neuralhood = filters.kernelSmooth(dtype=jnp.float32) # 8 connected kernel
+neuralhood = filters.smooth(dtype=jnp.float32) # 8 connected kernel
 neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
 # neuralhood /= 8. #normed
 # neuralhood = filters.kernelSobelVertical(dtype=jnp.float32) # 8 connected kernel
 # neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
 # neuralhood /= 8. #normed
+nethood = filters.forward(dtype=jnp.float32) # 8 connected kernel
+# nethood = nethood.at[1,1].set(0) #do not count centre pixel
 
 #activation = nn.relu
 activation = nn.tanh
@@ -92,21 +94,41 @@ def evolve_neural(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
     #weights = jsignal.fftconvolve(grid, neuralhood, mode='same')
     #print("x max", jnp.max(x))
     #print("grid max", jnp.max(grid), grid.dtype)
-    #print("hood max", jnp.max(neuralhood), neuralhood.dtype)
     #norm
     x = nn.standardize(x, axis=(0,1))
     #print("x mean/std", jnp.mean(x), jnp.std(x))
     #implement neural rules by activating the weights
     #weights = activation(x)
-    #weights = x
     #print("weight max", jnp.max(weights), weights.dtype)
     x = jnp.where(jnp.logical_and(Lambda<x, x<Gamma), x, 0) #always alive
     #weights += jnp.where(jnp.logical_and(grid==alive_value,x==2), alive_value, dead_value)
-    #x = activation(x)
-    #norm
-    #x = nn.standardize(x, axis=(0,1), variance=1)
     x = activation(x)
     
     #update the grid
     return x
 
+def evolve_network(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
+    '''
+    Evolve using neural network rules.
+    Consider each cell a non-linear switch that connects to neighbors
+    Weighted sum is applied WRT neighbors via convolve
+    Activation is applied to decide if cell fires based on neighbors
+    Assumes grid values are normed
+    ''' 
+    #get weighted sum of neighbors using convolution
+    x = jsignal.convolve2d(grid, nethood, mode='same')
+    #weights = jsignal.fftconvolve(grid, nethood, mode='same')
+    #print("x max", jnp.max(x))
+    #print("grid max", jnp.max(grid), grid.dtype)
+    #norm
+    x = nn.standardize(x, axis=(0,1))
+    #print("x mean/std", jnp.mean(x), jnp.std(x))
+    #implement neural rules by activating the weights
+    #weights = activation(x)
+    #print("weight max", jnp.max(weights), weights.dtype)
+    # x = jnp.where(jnp.logical_and(Lambda<x, x<Gamma), x, 0) #always alive
+    #weights += jnp.where(jnp.logical_and(grid==alive_value,x==2), alive_value, dead_value)
+    x = activation(x)
+    
+    #update the grid
+    return x

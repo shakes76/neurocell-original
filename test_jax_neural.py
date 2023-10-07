@@ -31,9 +31,6 @@ universe = patterns.insertGliderGun(universe, index=insert_point)
 universe = universe.astype(np.float32)
 print("Universe Shape:", universe.shape, universe.dtype)
 
-#universe = evolve.evolve_neural(universe) 
-#print("Universe Shape (updated):", universe.shape, universe.dtype)
-
 #plot cells
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -51,6 +48,7 @@ def animate(i):
     #universe = evolve.evolve(universe)
     #universe = evolve.evolve_fast(universe) 
     universe = evolve.evolve_neural(universe, Lambda=args.ell, Gamma=args.gee) 
+    # universe = evolve.evolve_network(universe, Lambda=args.ell, Gamma=args.gee) 
     print("i", i, "universe count", jnp.sum(universe))
 
     img.set_array(universe)
@@ -63,11 +61,3 @@ interval = args.interval #ms
 ani = animation.FuncAnimation(fig, animate, frames=2048, interval=interval, blit=True)
 
 plt.show()
-
-#universe = evolve.evolve_neural(universe) 
-#print("Universe Shape (updated):", universe.shape, universe.dtype)
-
-#img = plt.imshow(universe, animated=True)
-
-#plt.show()
-
