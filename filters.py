@@ -18,28 +18,50 @@ def smooth(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
 
-def forward(dtype=jnp.int32):
+def backward(dtype=jnp.int32):
     '''
-    Returns the forward derivative kernel
+    Returns the backward pass kernel
     '''
-    kernel =   [[1, 0, -1],
-                [2, 4, -2],
-                [1, 0, -1]]
+    kernel =   [[1, 0, 0],
+                [1, 0, 0],
+                [1, 0, 0]]
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
 
-def backward(dtype=jnp.int32):
+def forward(dtype=jnp.int32):
     '''
-    Returns the backward derivative kernel
+    Returns the forward pass kernel
     '''
-    kernel =   [[-1, 0, 1],
-                [-2, 4, 2],
-                [-1, 0, 1]]
+    kernel =   [[0, 0, 1],
+                [0, 0, 1],
+                [0, 0, 1]]
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
     
+def forwardPropagation(dtype=jnp.int32):
+    '''
+    Returns the forward derivative kernel
+    '''
+    kernel =   [[0, 0, -1],
+                [0, 3, -1],
+                [0, 0, -1]]
+    kernel = jnp.array(kernel, dtype=dtype)
+    # print(kernel.shape)
+    return kernel
+
+def backPropagation(dtype=jnp.int32):
+    '''
+    Returns the backward derivative kernel
+    '''
+    kernel =   [[-1, 0, 0],
+                [-1, 3, 0],
+                [-1, 0, 0]]
+    kernel = jnp.array(kernel, dtype=dtype)
+    # print(kernel.shape)
+    return kernel
+
 def gaussian(dtype=jnp.int32):
     '''
     Returns the Gaussian smoothing kernel

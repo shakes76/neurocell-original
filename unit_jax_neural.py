@@ -18,13 +18,14 @@ args = parser.parse_args()
 
 utils.jax_status()
 
-N = 128
+N = 32
 insert_point = (16,16)
 grid_size = (N,N) 
 universe = np.zeros(grid_size) 
 
 #universe = patterns.insertGlider(universe, index=insert_point)
-universe = patterns.insertGliderGun(universe, index=insert_point)
+# universe = patterns.insertGliderGun(universe, index=insert_point)
+universe = patterns.insertInputVertical(universe, input=np.ones(5), index=insert_point)
 universe = universe.astype(np.float32)
 print("Universe Shape:", universe.shape, universe.dtype)
 
@@ -34,6 +35,10 @@ import matplotlib.pyplot as plt
 fig = plt.figure()
 
 plt.gray()
+
+img = plt.imshow(universe, animated=True)
+
+plt.show()
 
 # universe = evolve.evolve_neural(universe, Lambda=args.ell, Gamma=args.gee) 
 universe = evolve.evolve_network(universe, Lambda=args.ell, Gamma=args.gee) 
