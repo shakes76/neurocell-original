@@ -18,7 +18,8 @@ neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
 # neuralhood = filters.kernelSobelVertical(dtype=jnp.float32) # 8 connected kernel
 # neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
 # neuralhood /= 8. #normed
-nethood = filters.forward(dtype=jnp.float32) # 8 connected kernel
+# nethood = filters.forward(dtype=jnp.float32) # 8 connected kernel
+nethood = filters.forwardPropagation(dtype=jnp.float32) # 8 connected kernel
 # nethood = filters.backPropagation(dtype=jnp.float32) # 8 connected kernel
 # nethood = nethood.at[1,1].set(0) #do not count centre pixel
 
