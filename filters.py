@@ -23,7 +23,7 @@ def backward(dtype=jnp.int32):
     Returns the backward pass kernel
     '''
     kernel =   [[1, 0, 0],
-                [1, 0, 0],
+                [1, 3, 0],
                 [1, 0, 0]]
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
@@ -34,7 +34,7 @@ def forward(dtype=jnp.int32):
     Returns the forward pass kernel
     '''
     kernel =   [[0, 0, 1],
-                [0, 0, 1],
+                [0, 3, 1],
                 [0, 0, 1]]
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
