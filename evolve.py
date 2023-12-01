@@ -10,7 +10,7 @@ import jax.nn as nn
 
 import filters
 
-neighborhood = np.ones((3,3), np.int) # 8 connected kernel
+neighborhood = np.ones((3,3), np.int32) # 8 connected kernel
 neighborhood[1,1] = 0 #do not count centre pixel
 neuralhood = filters.kernelSmooth(dtype=jnp.float32) # 8 connected kernel
 neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
