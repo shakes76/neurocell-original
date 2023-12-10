@@ -23,7 +23,7 @@ args = parser.parse_args()
 
 utils.jax_status()
 
-N = 64
+N = 512
 # insert_point = (16,16)
 grid_size = (N,N) 
 universe = np.zeros(grid_size)

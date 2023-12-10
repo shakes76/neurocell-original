@@ -19,8 +19,8 @@ neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
 # neuralhood = neuralhood.at[1,1].set(0) #do not count centre pixel
 # neuralhood /= 8. #normed
 
-# activation = nn.relu
-activation = nn.tanh
+activation = nn.relu
+# activation = nn.tanh
 # activation = nn.sigmoid
 
 def evolve(grid, finite=True, alive_value=1, dead_value=0):
@@ -96,9 +96,9 @@ def evolve_neural(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
 
     #norm
     avg = jnp.nanmean(jnp.where(x!=0, x, jnp.nan))
-    dev = jnp.nanstd(jnp.where(x!=0, x, jnp.nan))
+    var = jnp.nanvar(jnp.where(x!=0, x, jnp.nan))
 
-    x = nn.standardize(x, axis=(0,1), mean=avg, variance=dev)
+    x = nn.standardize(x, axis=(0,1), mean=avg, variance=var)
     #print("x mean/std", jnp.mean(x), jnp.std(x))
     #implement neural rules by activating the weights
     #weights = activation(x)
