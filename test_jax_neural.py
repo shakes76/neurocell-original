@@ -16,18 +16,23 @@ parser.add_argument('--ell', '--lambda', default=8, type=float,
                     metavar='Lambda', help='Lower bound', dest='ell')
 parser.add_argument('--gee', '--Gamma', default=16, type=float,
                     metavar='Gamma', help='Upper bound', dest='gee')
+parser.add_argument('--pat', '--pattern', default="pattern.rle", type=str,
+                    metavar='Pattern', help='Pattern to insert into the grid', dest='pat')
 
 args = parser.parse_args()
 
 utils.jax_status()
 
-N = 128
-insert_point = (16,16)
+N = 64
+# insert_point = (16,16)
 grid_size = (N,N) 
-universe = np.zeros(grid_size) 
+universe = np.zeros(grid_size)
+with open(args.pat) as rleFile:
+    patterns.insertFromRLE(grid=universe, rleString=rleFile.read())
 
+print(universe)
 #universe = patterns.insertGlider(universe, index=insert_point)
-universe = patterns.insertGliderGun(universe, index=insert_point)
+#universe = patterns.insertGliderGun(universe, index=insert_point)
 universe = universe.astype(np.float32)
 print("Universe Shape:", universe.shape, universe.dtype)
 
@@ -40,7 +45,7 @@ import matplotlib.animation as animation
 
 fig = plt.figure()
 
-plt.gray()
+plt.magma()
 
 img = plt.imshow(universe, animated=True)
 
