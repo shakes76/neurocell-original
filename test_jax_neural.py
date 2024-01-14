@@ -10,6 +10,8 @@ import jax.numpy as jnp
 import argparse
 
 parser = argparse.ArgumentParser(description='Neurocell JAX')
+parser.add_argument('--N', '--size', default=512, type=int,
+                    metavar='Size', help='Initial grid size of the universe', dest='N')
 parser.add_argument('--int', '--interval', default=20, type=int,
                     metavar='Interval', help='Interval between frames in ms', dest='interval')
 parser.add_argument('--ell', '--lambda', default=8, type=float,
@@ -23,7 +25,8 @@ args = parser.parse_args()
 
 utils.jax_status()
 
-N = 512
+N = args.N
+print("Universe Size (N):", N)
 # insert_point = (16,16)
 grid_size = (N,N) 
 universe = np.zeros(grid_size)
