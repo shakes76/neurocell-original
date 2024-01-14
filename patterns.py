@@ -1,9 +1,21 @@
 '''
 Different patterns of cells known
 ''' 
+
 import jax.numpy as jnp
 import rle
 
+#Neural patterns
+def insertInputVertical(grid, input, index=(0,0)):
+    '''
+    Insert a line of input receptors, where input is a 1D array
+    '''
+    for i, value in enumerate(input):
+        grid[index[0]+i, index[1]] = value
+    
+    return grid
+
+#GoL Patterns
 def insertBlinker(grid, index=(0,0), value=1):
     '''
     Insert a blinker oscillator construct at the index position

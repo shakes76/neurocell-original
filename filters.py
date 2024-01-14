@@ -7,7 +7,7 @@ Integer values are used for the kernels and they are not normalised in general
 """
 import jax.numpy as jnp
 
-def kernelSmooth(dtype=jnp.int32):
+def smooth(dtype=jnp.int32):
     '''
     Returns the window or smoothing kernel
     '''
@@ -17,8 +17,52 @@ def kernelSmooth(dtype=jnp.int32):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
+
+def backward(dtype=jnp.int32):
+    '''
+    Returns the backward pass kernel
+    '''
+    kernel =   [[1, 0, 0],
+                [1, 3, 0],
+                [1, 0, 0]]
+    kernel = jnp.array(kernel, dtype=dtype)
+    # print(kernel.shape)
+    return kernel
+
+def forward(dtype=jnp.int32):
+    '''
+    Returns the forward pass kernel
+    '''
+    kernel =   [[0, 0, 1],
+                [0, 3, 1],
+                [0, 0, 1]]
+    kernel = jnp.array(kernel, dtype=dtype)
+    # print(kernel.shape)
+    return kernel
     
-def kernelGaussian(dtype=jnp.int32):
+def forwardPropagation(dtype=jnp.int32):
+    '''
+    Returns the forward derivative kernel
+    '''
+    kernel =   [[0, 0, -1],
+                [0, 3, -1],
+                [0, 0, -1]]
+    kernel = jnp.array(kernel, dtype=dtype)
+    # print(kernel.shape)
+    return kernel
+
+def backPropagation(dtype=jnp.int32):
+    '''
+    Returns the backward derivative kernel
+    '''
+    kernel =   [[-1, 0, 0],
+                [-1, 3, 0],
+                [-1, 0, 0]]
+    kernel = jnp.array(kernel, dtype=dtype)
+    # print(kernel.shape)
+    return kernel
+
+def gaussian(dtype=jnp.int32):
     '''
     Returns the Gaussian smoothing kernel
     '''
@@ -29,7 +73,7 @@ def kernelGaussian(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
     
-def kernelSobelVertical(dtype=jnp.int32):
+def sobelVertical(dtype=jnp.int32):
     '''
     Returns the Sobel vertical kernel, usually used for edge detection
     '''
@@ -40,7 +84,7 @@ def kernelSobelVertical(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
     
-def kernelSobelHorizontal(dtype=jnp.int32):
+def sobelHorizontal(dtype=jnp.int32):
     '''
     Returns the Sobel horizontal kernel, usually used for edge detection
     '''
@@ -51,7 +95,7 @@ def kernelSobelHorizontal(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
     
-def kernelEdge1(dtype=jnp.int32):
+def edge1(dtype=jnp.int32):
     '''
     Returns a diagonal edge kernel, usually used for edge detection
     [[1, 0, -1],
@@ -65,7 +109,7 @@ def kernelEdge1(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
     
-def kernelEdge2(dtype=jnp.int32):
+def edge2(dtype=jnp.int32):
     '''
     Returns a center diagonal edge kernel, usually used for edge detection
     [[1, 0, -1],
@@ -79,7 +123,7 @@ def kernelEdge2(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
     
-def kernelEdge3(dtype=jnp.int32):
+def edge3(dtype=jnp.int32):
     '''
     Returns an edge kernel, usually used for edge detection
     [[-1, -1, -1],
@@ -93,7 +137,7 @@ def kernelEdge3(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
     
-def kernelHaar(dtype=jnp.int32):
+def haar(dtype=jnp.int32):
     '''
     Returns the Haar kernel, usually used for edge detection
     [[1, 1],
@@ -105,7 +149,7 @@ def kernelHaar(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
     
-def kernelSharpen(dtype=jnp.int32):
+def sharpen(dtype=jnp.int32):
     '''
     Returns the sharpen kernel, usually used for edge enhancement
     [[0, -1, 0],
@@ -136,23 +180,23 @@ def filter(N, filterType='smooth', x0 = 0, y0 = 0):
     kernelImage = jnp.zeros((N,N), dtype=jnp.int32)
 
     if filterType == 'sobelV':
-        kernel = kernelSobelVertical()
+        kernel = sobelVertical()
     elif filterType == 'sobelH':
-        kernel = kernelSobelHorizontal()
+        kernel = sobelHorizontal()
     elif filterType == 'edge1':
-        kernel = kernelEdge1()
+        kernel = edge1()
     elif filterType == 'edge2':
-        kernel = kernelEdge2()
+        kernel = edge2()
     elif filterType == 'edge3':
-        kernel = kernelEdge3()
+        kernel = edge3()
     elif filterType == 'haar':
-        kernel = kernelHaar()
+        kernel = haar()
     elif filterType == 'sharpen':
-        kernel = kernelSharpen()
+        kernel = sharpen()
     elif filterType == 'gauss':
-        kernel = kernelGaussian()
+        kernel = gaussian()
     else:
-        kernel = kernelSmooth()
+        kernel = smooth()
     
     kernelImage[x0:x0+kernel.shape[0], y0:y0+kernel.shape[1]] = kernel
     # print(kernelImage)
