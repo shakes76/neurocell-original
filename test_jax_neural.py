@@ -18,7 +18,7 @@ parser.add_argument('--ell', '--lambda', default=8, type=float,
                     metavar='Lambda', help='Lower bound', dest='ell')
 parser.add_argument('--gee', '--Gamma', default=16, type=float,
                     metavar='Gamma', help='Upper bound', dest='gee')
-parser.add_argument('--pat', '--pattern', default="pattern.rle", type=str,
+parser.add_argument('--pat', '--pattern', default="patterns/pattern.rle", type=str,
                     metavar='Pattern', help='Pattern to insert into the grid', dest='pat')
 
 args = parser.parse_args()
