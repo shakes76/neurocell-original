@@ -23,10 +23,6 @@ nethood = filters.forwardPropagation(dtype=jnp.float32) # 8 connected kernel
 # nethood = filters.backPropagation(dtype=jnp.float32) # 8 connected kernel
 # nethood = nethood.at[1,1].set(0) #do not count centre pixel
 
-activation = nn.relu
-# activation = nn.tanh
-# activation = nn.sigmoid
-
 def evolve(grid, finite=True, alive_value=1, dead_value=0):
     '''
     Given the current states of the cells, apply the GoL rules:
@@ -83,13 +79,39 @@ def evolve_fast(grid, alive_value=1, dead_value=0):
     #update the grid
     return weights
 
-def evolve_neural(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
+def evolve_neural(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0, activation=nn.tanh):
     '''
     Evolve using neural rules.
     Consider each cell a non-linear switch that connects to neighbors
     Weighted sum is applied WRT neighbors via convolve
     Activation is applied to decide if cell fires based on neighbors
     Assumes grid values are normed
+    ''' 
+    #get weighted sum of neighbors using convolution
+    x = jsignal.convolve2d(grid, neuralhood, mode='same')
+    #weights = jsignal.fftconvolve(grid, nethood, mode='same')
+    #print("x max", jnp.max(x))
+    #print("grid max", jnp.max(grid), grid.dtype)
+    #norm
+    x = nn.standardize(x, axis=(0,1))
+    #print("x mean/std", jnp.mean(x), jnp.std(x))
+    #implement neural rules by activating the weights
+    #weights = activation(x)
+    #print("weight max", jnp.max(weights), weights.dtype)
+    x = jnp.where(jnp.logical_and(Lambda<x, x<Gamma), x, 0) #always alive
+    #weights += jnp.where(jnp.logical_and(grid==alive_value,x==2), alive_value, dead_value)
+    x = activation(x)
+    
+    #update the grid
+    return x
+
+def evolve_neural_nz(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0, activation=nn.relu):
+    '''
+    Evolve using neural rules.
+    Consider each cell a non-linear switch that connects to neighbors
+    Weighted sum is applied WRT neighbors via convolve
+    Activation is applied to decide if cell fires based on neighbors
+    Assumes grid values are normed, only using non-zero values
     ''' 
     #get weighted sum of neighbors using convolution
     x = jsignal.convolve2d(grid, neuralhood, mode='same')
@@ -114,7 +136,7 @@ def evolve_neural(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
     #update the grid
     return x
 
-def evolve_network(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
+def evolve_network(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0, activation=nn.tanh):
     '''
     Evolve using neural network rules.
     Consider each cell a non-linear switch that connects to neighbors
@@ -123,7 +145,7 @@ def evolve_network(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
     Assumes grid values are normed
     ''' 
     #get weighted sum of neighbors using convolution
-    x = jsignal.convolve2d(grid, nethood, mode='same')
+    x = jsignal.convolve2d(grid, neuralhood, mode='same')
     #weights = jsignal.fftconvolve(grid, nethood, mode='same')
     #print("x max", jnp.max(x))
     #print("grid max", jnp.max(grid), grid.dtype)
@@ -133,7 +155,7 @@ def evolve_network(grid, Lambda=8, Gamma=16, alive_value=1, dead_value=0):
     #implement neural rules by activating the weights
     #weights = activation(x)
     #print("weight max", jnp.max(weights), weights.dtype)
-    # x = jnp.where(jnp.logical_and(Lambda<x, x<Gamma), x, 0) #always alive
+    x = jnp.where(jnp.logical_and(Lambda<x, x<Gamma), x, 0) #always alive
     #weights += jnp.where(jnp.logical_and(grid==alive_value,x==2), alive_value, dead_value)
     x = activation(x)
     
