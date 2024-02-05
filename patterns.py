@@ -89,7 +89,7 @@ def insertGliderGun(grid, index=(0,0), value=1):
 
     return grid
 
-def insertFromPlainText(grid, txtString, value=1, pad=0):
+def insertFromPlainText(grid, txtString, value=1, pad=0, index=(0,0)):
     '''
     Assumes txtString contains the entire pattern as a human readable pattern
     '''
@@ -106,19 +106,17 @@ def insertFromPlainText(grid, txtString, value=1, pad=0):
         elif cell == '!':
             commentCase = True
         elif cell == 'O' or cell == 'o':
-            grid[i][j] = value
+            grid[index[0]+i][index[1]+j] = value
             j += 1
         elif cell == '.':
             j += 1
     grid = jnp.pad(grid, pad, 'constant', constant_values=0)
     return grid
-            
-        
 
-def insertFromRLE(grid, rleString, value=1, pad=0):
+def insertFromRLE(grid, rleString, value=1, pad=0, index=(0,0)):
     '''
     Given string loaded from RLE file, populate the game grid
     '''
     parsed_text = rle.RunLengthEncodedParser(rleString)
     human_string = parsed_text.human_friendly_pattern
-    insertFromPlainText(grid, human_string, value, pad)
+    insertFromPlainText(grid, human_string, value, pad, index)

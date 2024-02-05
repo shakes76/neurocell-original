@@ -30,14 +30,14 @@ utils.jax_status()
 N = args.N
 print("Universe Size (N):", N)
 grid_size = (N,N) 
+insert_point = (N//4,N//4)
 universe = np.zeros(grid_size)
-#~ with open(args.pat) as rleFile:
-    #~ patterns.insertFromRLE(grid=universe, rleString=rleFile.read())
+with open(args.pat) as rleFile:
+    patterns.insertFromRLE(grid=universe, rleString=rleFile.read(), index=insert_point)
 
 #~ print(universe)
-insert_point = (16,16)
-#~ universe = patterns.insertGlider(universe, index=insert_point)
-universe = patterns.insertGliderGun(universe, index=insert_point)
+#universe = patterns.insertGlider(universe, index=insert_point)
+#universe = patterns.insertGliderGun(universe, index=insert_point)
 universe = universe.astype(np.float32)
 print("Universe Shape:", universe.shape, universe.dtype)
 
@@ -58,8 +58,8 @@ def animate(i):
     global universe
 
     #universe = evolve.evolve(universe)
-    #universe = evolve.evolve_fast(universe) 
-    universe = evolve.evolve_neural(universe, Lambda=args.ell, Gamma=args.gee) 
+    universe = evolve.evolve_fast(universe) 
+    #universe = evolve.evolve_neural(universe, Lambda=args.ell, Gamma=args.gee) 
     #~ universe = evolve.evolve_neural_nz(universe, Lambda=args.ell, Gamma=args.gee) 
     #~ universe = evolve.evolve_network(universe, Lambda=args.ell, Gamma=args.gee) 
     print("i", i, "universe count", jnp.sum(universe))
