@@ -13,12 +13,10 @@ def trigSignalGenerator(batch_size, freqs, amps, num_samples, srate, add_noise=T
     # indices = jnp.arange(len(freqs))
     categories = len(freqs)
     time = num_samples/srate # in seconds
-    # time = jnp.full(batch_size, num_samples/sample_rate) # in seconds
-    # num_samples = jnp.full(batch_size, num_samples) # second
 
     # choices = jax.random.choice(jax.random.key(1), categories, )
     choices = jax.random.randint(jax.random.key(1), (batch_size,), 0, categories)
-    print("choices:",choices)
+    # print("choices:",choices)
 
     #create each wave for each member of lists freqs and amplitudes
     t = jnp.linspace(0, time, num_samples)
@@ -30,12 +28,16 @@ def trigSignalGenerator(batch_size, freqs, amps, num_samples, srate, add_noise=T
     freqs = jnp.tile(freqs.T, (1,num_samples))
     amps = jnp.tile(amps.T, (1,num_samples))
     # print("new freqs",freqs)
-    
-    print("choosen:",amps[choices])
-    # waves = jnp.array([amps[choices] * jnp.sin(freqs[choices] * i * 2*jnp.pi) for i in t[choices]]) #2D array of the waves
-    waves = amps[choices] * jnp.sin(freqs[choices] * t[choices] * 2*jnp.pi) #2D array of the waves
 
-    return waves
+    #noise
+    noise = 0.05 * jax.random.normal(jax.random.key(1), (batch_size, num_samples))
+    # noise = jax.random.normal(jax.random.key(1))
+    print("noise:",noise.shape)
+    
+    # print("choosen:",amps[choices])
+    waves = amps[choices] * jnp.sin(freqs[choices] * t[choices] * 2*jnp.pi) + noise #2D array of the waves
+
+    return waves, choices
 
 #three waves
 batch_size = 4
@@ -46,8 +48,11 @@ sample_rate = 100 # samples per second
 num_samples = sample_rate * time_to_plot
 
 #create each wave for each member of lists freqs and amplitudes
-waves = trigSignalGenerator(batch_size, freqs, amplitudes, num_samples, sample_rate) #2D array of the waves
-print(waves.shape)
+waves, labels = trigSignalGenerator(batch_size, freqs, amplitudes, num_samples, sample_rate) #2D array of the waves
+print("batch size:", batch_size)
+print("data size:",waves.shape)
+print("labels:",labels)
+print("freqs chosen:",freqs[labels])
 
 import matplotlib.pyplot as plt
 
