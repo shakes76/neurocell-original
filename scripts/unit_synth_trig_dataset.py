@@ -30,7 +30,7 @@ def trigSignalGenerator(batch_size, freqs, amps, num_samples, srate, add_noise=T
     # print("new freqs",freqs)
 
     #noise
-    noise = 0.05 * jax.random.normal(jax.random.key(1), (batch_size, num_samples))
+    noise = 0.02 * jax.random.normal(jax.random.key(1), (batch_size, num_samples))
     # noise = jax.random.normal(jax.random.key(1))
     print("noise:",noise.shape)
     
@@ -63,6 +63,6 @@ t = jnp.linspace(0, time_to_plot, num_samples)
 for number, wave in enumerate(waves): #transpose to allow traversing columns instead of rows
     ax[number].plot(t, wave, '-')
     ax[number].axis('off')
-    ax[number].set_title('Wave '+str(number))
+    ax[number].set_title('Wave '+str(labels[number]))
 
 plt.show()

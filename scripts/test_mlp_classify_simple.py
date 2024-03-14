@@ -10,9 +10,9 @@ from typing import Mapping, Tuple
 import trig #local
 
 #parameters
-batch_size = 8
+batch_size = 128
 num_classes = 3
-iterations = 1000
+iterations = 4000
 
 #PRNGs
 key = jax.random.key(42)
@@ -24,8 +24,8 @@ model_name = "MLP"
 
 #===========
 #data
-freqs = jnp.array([0.5, 1, 2.0]) #Hz - cycles per second
-amplitudes = jnp.array([1.0, 0.5, 1.5])
+freqs = jnp.array([0.5, 2.0, 4.0]) #Hz - cycles per second
+amplitudes = jnp.array([1.0, 1.0, 1.0])
 time_to_plot = 1 # second
 sample_rate = 100 # samples per second
 num_samples = sample_rate * time_to_plot
@@ -68,7 +68,9 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimiser.
 network = hk.without_apply_rng(hk.transform(_forward))
-opt = optax.adam(1e-3)
+# cosine_decay_scheduler = optax.cosine_decay_schedule(1e-4, decay_steps=iterations, alpha=0.95)
+# opt = optax.adam(learning_rate=cosine_decay_scheduler)
+opt = optax.adam(learning_rate=1e-4)
 
 #loss function
 def loss(params: hk.Params, batch, labels) -> jnp.ndarray:
@@ -78,11 +80,12 @@ def loss(params: hk.Params, batch, labels) -> jnp.ndarray:
     logits = network.apply(params, batch)
     labels = jax.nn.one_hot(labels, num_classes)
 
-    l2_loss = 0.5 * sum(jnp.sum(jnp.square(p)) for p in jax.tree_leaves(params))
+    # l2_loss = 0.5 * sum(jnp.sum(jnp.square(p)) for p in jax.tree_leaves(params))
     softmax_xent = -jnp.sum(labels * jax.nn.log_softmax(logits))
     softmax_xent /= labels.shape[0]
 
-    return softmax_xent + 1e-4 * l2_loss
+    # return softmax_xent + 1e-4 * l2_loss
+    return softmax_xent
 
 # Evaluation metric (classification accuracy).
 @jax.jit
@@ -115,12 +118,12 @@ for step in range(iterations):
         # Periodically evaluate classification accuracy on train & test sets.
         batch, labels = train_data.next()
         train_accuracy = accuracy(avg_params, batch, labels)
+        loss_value = loss(params, batch, labels)
         batch, labels = train_data.next()
         test_accuracy = accuracy(avg_params, batch, labels)
-        # test_accuracy = accuracy(avg_params, test_ds)
         train_accuracy, test_accuracy = jax.device_get(
             (train_accuracy, test_accuracy))
-        print(f"[Step {step}] Train / Test accuracy: "
+        print(f"[Step {step}, Loss {loss_value}] Train / Test accuracy: "
                 f"{train_accuracy:.3f} / {test_accuracy:.3f}.")
 
     # Do SGD on a batch of training examples.
