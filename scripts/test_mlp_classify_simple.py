@@ -10,8 +10,7 @@ from typing import Mapping, Tuple
 import trig #local
 
 #parameters
-batch_size = 128
-num_classes = 3
+batch_size = 100
 iterations = 4000
 
 #PRNGs
@@ -24,8 +23,9 @@ model_name = "MLP"
 
 #===========
 #data
-freqs = jnp.array([0.5, 2.0, 4.0]) #Hz - cycles per second
-amplitudes = jnp.array([1.0, 1.0, 1.0])
+freqs = jnp.array([0.5, 2.0]) #Hz - cycles per second
+amplitudes = jnp.array([1.0, 1.0])
+num_classes = len(freqs)
 time_to_plot = 1 # second
 sample_rate = 100 # samples per second
 num_samples = sample_rate * time_to_plot

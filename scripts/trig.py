@@ -34,7 +34,7 @@ def trigSignalGenerator(batch_size, freqs, amps, num_samples, srate, key, add_no
     noise = 0
     if add_noise:
         new_key2, subkey2 = jax.random.split(new_key)
-        noise = 0.001 * jax.random.normal(subkey2, (batch_size, num_samples))
+        noise = 0.002 * jax.random.normal(subkey2, (batch_size, num_samples))
     # print("noise:",noise.shape)
     
     # print("choosen:",amps[choices])
