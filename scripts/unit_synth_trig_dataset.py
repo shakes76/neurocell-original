@@ -4,6 +4,10 @@ Unit test to generate simple trignometry dataset for classification.
 import jax
 import jax.numpy as jnp
 
+print("Total Devices:",jax.devices())
+print("Used Devices:",jax.local_devices())
+print("Using", jnp.ones(3).device_buffer.device())
+
 def trigSignalGenerator(batch_size, freqs, amps, num_samples, srate, add_noise=True):
     '''
     Generates a random sine signal as per args:
