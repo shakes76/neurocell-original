@@ -10,17 +10,22 @@ import matplotlib.pyplot as plt
 from typing import Tuple
 
 #parameters
-samples = 120
-iterations = 2000
+# samples = 120
+iterations = 5000
 num_classes = 1
 
 #===========
 ##data
-X = np.arange(0, 60, 0.5).reshape(-1, 1)
-Y = np.zeros(samples)
+# X = np.arange(0, 60, 0.5, dtype=np.float32).reshape(-1, 1)
+# Y = np.zeros(samples, dtype=np.float32)
+X = np.arange(-30, 30, 1, dtype=np.float32).reshape(-1, 1)
+Y = np.zeros(X.shape[0], dtype=np.float32)
 
 #square wave
-Y[ (X[:,0] >= 20) & (X[:,0] < 40) ] = 1.0
+# Y[ (X[:,0] >= 20) & (X[:,0] < 40) ] = 1.0
+Y[(X[:, 0] <= -10)] = 1.0
+Y[(X[:, 0] > -10) & (X[:, 0] < 10)] = 0.5
+Y[(X[:, 0] > 10)] = 0
 
 plt.plot(X, Y)
 plt.show()
@@ -58,8 +63,7 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimiser.
 network = hk.without_apply_rng(hk.transform(_forward))
-# opt = optax.sgd(learning_rate=0.01)
-opt = optax.adam(learning_rate=1e-4)
+opt = optax.sgd(learning_rate=0.01)
 
 #loss function
 def loss(params: hk.Params, batch, labels) -> jnp.ndarray:
@@ -68,7 +72,6 @@ def loss(params: hk.Params, batch, labels) -> jnp.ndarray:
     '''
     logits = network.apply(params, batch)
     return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits))
-    # return -jnp.sum(labels * jnp.log(logits))
 
 @jax.jit
 def update(
@@ -84,16 +87,16 @@ def update(
     return new_params, opt_state
 
 # Initialize network and optimiser; note we draw an input to get shapes.
-params = avg_params = network.init(jax.random.PRNGKey(42), X[0])
+params = network.init(jax.random.PRNGKey(42), X)
 opt_state = opt.init(params)
 
 # Train/eval loop.
 for step in range(iterations):
     # Do SGD on a batch of training examples.
     for x, y in zip(X, Y):
-        params, opt_state = update(params, opt_state, X, Y)
+        params, opt_state = update(params, opt_state, x, y)
 
-    if step % 500 == 0:
+    if step % 1000 == 0:
         loss_value = loss(params, X, Y)
         print(f"[Step {step}, Loss {loss_value}]")
         # Periodically evaluate on train & test sets.
