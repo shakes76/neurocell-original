@@ -10,22 +10,17 @@ import matplotlib.pyplot as plt
 from typing import Tuple
 
 #parameters
-# samples = 120
+samples = 120
 iterations = 5000
 num_classes = 1
 
 #===========
 ##data
-# X = np.arange(0, 60, 0.5, dtype=np.float32).reshape(-1, 1)
-# Y = np.zeros(samples, dtype=np.float32)
-X = np.arange(-30, 30, 1, dtype=np.float32).reshape(-1, 1)
-Y = np.zeros(X.shape[0], dtype=np.float32)
+X = np.arange(-30, 30, 0.5, dtype=np.float32).reshape(-1, 1)
+Y = np.zeros(samples, dtype=np.float32)
 
 #square wave
-# Y[ (X[:,0] >= 20) & (X[:,0] < 40) ] = 1.0
-Y[(X[:, 0] <= -10)] = 1.0
-Y[(X[:, 0] > -10) & (X[:, 0] < 10)] = 0.5
-Y[(X[:, 0] > 10)] = 0
+Y[ (X[:,0] >= -10) & (X[:,0] < 10) ] = 1.0
 
 plt.plot(X, Y)
 plt.show()
