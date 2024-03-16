@@ -5,6 +5,7 @@ This means that there can be UVMs possible and that machines that can self-repli
 
 In this branch, we take notes of von Nuemann's work and discuss the implications in various sections:
 
+* [Goals](goals.md) of his work
 * [Models](models.md) of Self-replication 
 
 ## References
