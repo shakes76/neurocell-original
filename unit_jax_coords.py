@@ -12,9 +12,9 @@ grid_size = (N,N)
 col = 4
 offset = 4
 length = 8
-insert_points = []
-for index in range(length):
-    insert_points.append((index,col))
+# insert_points = []
+# for index in range(length):
+#     insert_points.append((index,col))
 
 input_size = (length,1)
 inputs = jnp.ones(input_size)
