@@ -21,8 +21,8 @@ class Universe(hk.Module):
         self.init()
 
     def init(self):
-        w_init = jnp.zeros
-        # w_init = hk.initializers.RandomNormal()
+        # w_init = jnp.zeros
+        w_init = hk.initializers.RandomNormal()
         self.universe = hk.get_parameter("w", shape=self.grid_size, dtype=jnp.float32, init=w_init)
 
     def get_cells(self):
@@ -46,7 +46,7 @@ class Universe(hk.Module):
             self.out_offset = offset
         return jax.lax.dynamic_slice(self.universe, self.out_offset, output_size)
     
-    def __call__(self, x, in_offset, output_size, out_offset):
+    def __call__(self, x, in_offset, output_size, out_offset, act=nn.relu):
         #input
         net = self.set_input_vector(x, in_offset)
         #forward pass
@@ -55,6 +55,6 @@ class Universe(hk.Module):
         #norm
         net = nn.standardize(net, axis=(0,1))
         #excite
-        self.universe = nn.relu(net)
+        self.universe = act(net)
         #read output
         return self.get_output_vector(output_size, out_offset)
