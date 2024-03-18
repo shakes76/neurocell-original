@@ -17,7 +17,8 @@ class Universe(hk.Module):
         super().__init__(name=name)
         self.N = N
         self.grid_size = (N,N)
-        self.nethood = filters.forwardPropagation(dtype=jnp.float32) # 8 connected kernel
+        self.nethood = filters.forward(dtype=jnp.float32) # 8 connected kernel
+        # self.nethood = filters.forwardPropagation(dtype=jnp.float32) # 8 connected kernel
         self.init()
 
     def init(self):

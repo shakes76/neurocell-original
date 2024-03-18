@@ -16,12 +16,13 @@ N = 6
 samples = 120
 iterations = 200
 num_classes = 1
+print("N:", N, "iterations:", iterations)
 
 #===========
 ##data
 X = np.arange(-30, 30, 0.5, dtype=np.float32).reshape(-1,1)
 Y = np.zeros(samples, dtype=np.float32)
-print(X[0].reshape(-1,1))
+# print(X[0].reshape(-1,1))
 
 #square wave
 Y[ (X[:,0] >= -10) & (X[:,0] < 10) ] = 1.0
@@ -44,7 +45,8 @@ def _forward(batch, in_offset, out_size, out_offset, act=jax.nn.sigmoid) -> jnp.
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform(_forward))
-opt = optax.sgd(learning_rate=0.01)
+# opt = optax.sgd(learning_rate=0.01)
+opt = optax.adam(learning_rate=0.001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 params = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1), input_offset, output_size, output_offset)
@@ -93,5 +95,9 @@ for step in range(iterations+1):
         plt.plot(X, Y, 'm')
         plt.xlabel('X')
         plt.show()
+
+plt.imshow(params['universe']['w'])
+plt.title("Final Network")
+plt.show()
 
 print("END")
