@@ -18,46 +18,54 @@ def smooth(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
 
-def backward(dtype=jnp.int32):
+def backward(dtype=jnp.int32, norm=False):
     '''
     Returns the backward pass kernel
     '''
     kernel =   [[1, 0, 0],
-                [1, 3, 0],
+                [1, 1, 0],
                 [1, 0, 0]]
+    if norm:
+        kernel[1][1] = 3
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
 
-def forward(dtype=jnp.int32):
+def forward(dtype=jnp.int32, norm=False):
     '''
     Returns the forward pass kernel
     '''
     kernel =   [[0, 0, 1],
-                [0, 3, 1],
+                [0, 1, 1],
                 [0, 0, 1]]
+    if norm:
+        kernel[1][1] = 3
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
     
-def forwardPropagation(dtype=jnp.int32):
+def forwardPropagation(dtype=jnp.int32, norm=False):
     '''
     Returns the forward derivative kernel
     '''
     kernel =   [[0, 0, -1],
-                [0, 3, -1],
+                [0, 1, -1],
                 [0, 0, -1]]
+    if norm:
+        kernel[1][1] = 3
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
 
-def backPropagation(dtype=jnp.int32):
+def backPropagation(dtype=jnp.int32, norm=False):
     '''
     Returns the backward derivative kernel
     '''
     kernel =   [[-1, 0, 0],
-                [-1, 3, 0],
+                [-1, 1, 0],
                 [-1, 0, 0]]
+    if norm:
+        kernel[1][1] = 3
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel

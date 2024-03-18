@@ -17,8 +17,9 @@ class Universe(hk.Module):
         super().__init__(name=name)
         self.N = N
         self.grid_size = (N,N)
-        self.nethood = filters.forward(dtype=jnp.float32) # 8 connected kernel
-        # self.nethood = filters.forwardPropagation(dtype=jnp.float32) # 8 connected kernel
+        self.nethood = filters.forward(dtype=jnp.float32, norm=True) # 8 connected kernel
+        # self.nethood = filters.forwardPropagation(dtype=jnp.float32, norm=False) # 8 connected kernel
+        # print("filter:", self.nethood)
         self.init()
 
     def init(self):
@@ -53,6 +54,9 @@ class Universe(hk.Module):
         #forward pass
         #get weighted sum of neighbors using convolution
         net = jsignal.convolve2d(net, self.nethood, mode='same')
+        #stats, ignoring zeros
+        # avg = jnp.nanmean(jnp.where(x!=0, x, jnp.nan))
+        # var = jnp.nanvar(jnp.where(x!=0, x, jnp.nan))
         #norm
         net = nn.standardize(net, axis=(0,1))
         #excite

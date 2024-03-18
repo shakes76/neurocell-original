@@ -12,9 +12,9 @@ from typing import Mapping, Tuple
 from universe import Universe
 
 #parameters
-N = 6
+N = 8
 samples = 120
-iterations = 200
+iterations = 400
 num_classes = 1
 print("N:", N, "iterations:", iterations)
 
@@ -82,7 +82,7 @@ for step in range(iterations+1):
     for x, y in zip(X, Y):
         params, opt_state = update(params, opt_state, x.reshape(-1,1), y.reshape(-1,1), input_offset, output_size, output_offset)
 
-    if step % 100 == 0:
+    if step % 400 == 0:
         loss_value = 0
         for x, y in zip(X, Y):
             loss_value += loss(params, x.reshape(-1,1), y.reshape(-1,1), input_offset, output_size, output_offset)
