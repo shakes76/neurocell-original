@@ -7,13 +7,15 @@ Integer values are used for the kernels and they are not normalised in general
 """
 import jax.numpy as jnp
 
-def smooth(dtype=jnp.int32):
+def smooth(dtype=jnp.int32, norm=False):
     '''
     Returns the window or smoothing kernel
     '''
     kernel =   [[1, 1, 1],
                 [1, 1, 1],
                 [1, 1, 1]]
+    if norm:
+        kernel[1][1] = 8
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
@@ -66,6 +68,19 @@ def backPropagation(dtype=jnp.int32, norm=False):
                 [-1, 0, 0]]
     if norm:
         kernel[1][1] = 3
+    kernel = jnp.array(kernel, dtype=dtype)
+    # print(kernel.shape)
+    return kernel
+
+def vonNeumann(dtype=jnp.int32, norm=False):
+    '''
+    Returns the backward and forward derivative kernel
+    '''
+    kernel =   [[1, 0, 1],
+                [1, 1, 1],
+                [1, 0, 1]]
+    if norm:
+        kernel[1][1] = 6
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel

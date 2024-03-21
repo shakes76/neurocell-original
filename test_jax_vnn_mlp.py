@@ -12,24 +12,22 @@ from typing import Mapping, Tuple
 from universe import Universe
 
 #parameters
-N = 8
+N = 6
 samples = 120
-iterations = 400
+iterations = 100
 num_classes = 1
 print("N:", N, "iterations:", iterations)
 
 #===========
 ##data
-X = np.arange(-30, 30, 0.5, dtype=np.float32).reshape(-1,1)
+X = np.arange(-30, 30, 0.5, dtype=np.float32).reshape(-1,1) #reshape makes it 1x1 array
 Y = np.zeros(samples, dtype=np.float32)
-# print(X[0].reshape(-1,1))
 
 #square wave
 Y[ (X[:,0] >= -10) & (X[:,0] < 10) ] = 1.0
 
 #locations
 #MLP with 1 input and 1 output, one layer inbetween
-# input_size = (1,1)
 input_offset = (3,2)
 output_size = (num_classes,1)
 output_offset = (3,4)
@@ -71,21 +69,20 @@ def update(
         out_offset
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
-    grads = jax.grad(loss)(params, batch, labels, in_offset, out_size, out_offset)
+    loss_value, grads = jax.value_and_grad(loss)(params, batch, labels, in_offset, out_size, out_offset)
     updates, opt_state = opt.update(grads, opt_state)
     new_params = optax.apply_updates(params, updates)
-    return new_params, opt_state
+    return new_params, opt_state, loss_value
 
 # Train/eval loop.
 for step in range(iterations+1):
     # Do SGD on a batch of training examples.
+    loss_value = 0
     for x, y in zip(X, Y):
-        params, opt_state = update(params, opt_state, x.reshape(-1,1), y.reshape(-1,1), input_offset, output_size, output_offset)
+        params, opt_state, value = update(params, opt_state, x.reshape(-1,1), y.reshape(-1,1), input_offset, output_size, output_offset)
+        loss_value += value
 
-    if step % 400 == 0:
-        loss_value = 0
-        for x, y in zip(X, Y):
-            loss_value += loss(params, x.reshape(-1,1), y.reshape(-1,1), input_offset, output_size, output_offset)
+    if step % 100 == 0:
         print(f"[Step {step}, Loss {loss_value}]")
         # Periodically evaluate on train & test sets.
         Y_pred = []
