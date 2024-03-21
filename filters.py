@@ -57,7 +57,7 @@ def forwardPropagation(dtype=jnp.int32, norm=False):
     # print(kernel.shape)
     return kernel
 
-def backPropagation(dtype=jnp.int32, norm=False):
+def backwardPropagation(dtype=jnp.int32, norm=False):
     '''
     Returns the backward derivative kernel
     '''
