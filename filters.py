@@ -22,7 +22,7 @@ def smooth(dtype=jnp.int32, norm=False):
 
 def backward(dtype=jnp.int32, norm=False):
     '''
-    Returns the backward pass kernel
+    Returns the backward propagation kernel
     '''
     kernel =   [[1, 0, 0],
                 [1, 1, 0],
@@ -35,7 +35,7 @@ def backward(dtype=jnp.int32, norm=False):
 
 def forward(dtype=jnp.int32, norm=False):
     '''
-    Returns the forward pass kernel
+    Returns the forward propagation kernel
     '''
     kernel =   [[0, 0, 1],
                 [0, 1, 1],
@@ -74,7 +74,7 @@ def backwardPropagation(dtype=jnp.int32, norm=False):
 
 def vonNeumann(dtype=jnp.int32, norm=False):
     '''
-    Returns the backward and forward derivative kernel
+    Returns the backward and forward propagation kernel
     '''
     kernel =   [[1, 0, 1],
                 [1, 1, 1],
