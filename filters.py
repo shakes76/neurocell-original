@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Discrete filters module module
+Discrete filters module
+
+Note that convolution is the time reversed correlation with the kernel,
+hence convolution with forward is equivalent to correlation with backward
 
 Notes:
 Integer values are used for the kernels and they are not normalised in general
@@ -43,7 +46,7 @@ def forward(dtype=jnp.int32, norm=False):
     if norm:
         kernel[1][1] = 3
     kernel = jnp.array(kernel, dtype=dtype)
-    # print(kernel.shape)
+    # print(kernel.shape, kernel)
     return kernel
     
 def forwardPropagation(dtype=jnp.int32, norm=False):
