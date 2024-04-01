@@ -14,6 +14,7 @@ N = 7
 samples = 120
 length = 1
 num_classes = 1
+lr = 0.01
 
 #===========
 ##data
@@ -33,48 +34,78 @@ output_size = (num_classes,1)
 output_offset = (3,5)
 universe = jnp.zeros((N,N))
 key = jax.random.key(42)
+depth = output_offset[1]-input_offset[1]
+print("depth:", depth)
 
 #random init
 new_key, subkey = jax.random.split(key)
-noise = 0.1 * jax.random.normal(subkey, universe.shape)
+noise = 1.0 * jax.random.normal(subkey, universe.shape)
 
 #random universe
-# universe += noise
+universe += noise
 
-nethood_backward = filters.backward(dtype=jnp.float32, norm=True) # 8 connected kernel
-nethood_forward = filters.forward(dtype=jnp.float32, norm=True) # 8 connected kernel
+nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
+nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
 # nethood = filters.forwardPropagation(dtype=jnp.float32, norm=True) # 8 connected kernel
 
 universe = jax.lax.dynamic_update_slice(universe, X[0].reshape(-1,1), input_offset)
 print(X[0], Y[0])
 
-#compute convolutions and plot
+#compute convolutions to forward propagate
 #convolution is the time reversed correlation with the kernel.
 #hence convolution with forward is equivalent to correlation with backward
-result1 = jsignal.convolve2d(universe, nethood_forward, mode='same')
-result2 = jsignal.convolve2d(result1, nethood_forward, mode='same')
-result3 = jsignal.convolve2d(result2, nethood_forward, mode='same')
-result4 = jsignal.convolve2d(result3, nethood_forward, mode='same')
+result = jsignal.convolve2d(universe, nethood_forward, mode='same')
+for i in range(depth-1):
+    result = jsignal.convolve2d(result, nethood_forward, mode='same')
 
-output = jax.lax.dynamic_slice(result4, output_offset, output_size)
+output = jax.lax.dynamic_slice(result, output_offset, output_size)
 print(output)
+
+#compute loss
+cost = Y[0].reshape(-1,1)-output
+step = -lr*cost #take negative step
+print("Y:", Y[0], "cost:", cost, "step:", step)
+
+#write step and backprop to get updates to weights required
+backprop = jax.lax.dynamic_update_slice(result, step, output_offset)
+
+# backprop = jsignal.convolve2d(backprop, nethood_backward, mode='same')
+for i in range(depth):
+    backprop = jsignal.convolve2d(backprop, nethood_backward, mode='same')
+
+#apply corrections
+universe_update = universe + backprop
+#restore input (data consistency)
+universe_update = jax.lax.dynamic_update_slice(universe_update, X[0].reshape(-1,1), input_offset)
+
+#forward prop
+result2 = jsignal.convolve2d(universe_update, nethood_forward, mode='same')
+for i in range(depth-1):
+    result2 = jsignal.convolve2d(result2, nethood_forward, mode='same')
+
+output2 = jax.lax.dynamic_slice(result2, output_offset, output_size)
+print(output2)
+
+#recon input
+# recon = jax.lax.dynamic_slice(backprop, input_offset, input_size)
+# print(recon)
 
 plt.imshow(universe)
 plt.title("Initial")
 plt.show()
 
-plt.imshow(result1)
-plt.title("Result 1")
+plt.imshow(result)
+plt.title("Result")
+plt.show()
+
+plt.imshow(backprop)
+plt.title("Backprop")
+plt.show()
+
+plt.imshow(universe_update)
+plt.title("Updated")
 plt.show()
 
 plt.imshow(result2)
-plt.title("Result 2")
-plt.show()
-
-plt.imshow(result3)
-plt.title("Result 3")
-plt.show()
-
-plt.imshow(result4)
-plt.title("Result 4")
+plt.title("Result2")
 plt.show()
