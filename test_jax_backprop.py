@@ -50,7 +50,7 @@ def loss(logits, labels) -> jnp.ndarray:
     '''
     return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits))
 
-#get output
+#set output
 model.set_input_vector(X[0].reshape(-1,1), input_offset)
 model.set_output_vector(Y[0].reshape(-1,1), output_offset)
 # result = model.get_cells()
@@ -62,27 +62,27 @@ result = model.get_cells() #for plot
 loss_value = loss(output, Y[0])
 step = lr*loss_value #take negative step
 print(output, "Y:", Y[0], "loss:", loss_value, "step:", step)
-'''
-#write step and backprop to get updates to weights required
-backprop = jax.lax.dynamic_update_slice(result, step, output_offset)
-backprop = clear_cells(backprop, output_offset, after=True)
 
+#write step and backprop to get updates to weights required
+model.set_output_vector(step.reshape(-1,1), output_offset)
+# backprop = model.get_cells() #for plot
 for i in range(depth):
-    backprop = backward_propagate(backprop)
+    model.backward_propagate(activate=jax.nn.sigmoid)
+backprop = model.get_cells() #for plot
 
 #apply corrections
-universe_update = universe - backprop
-#restore input (data consistency)
-universe_update = jax.lax.dynamic_update_slice(universe_update, X[0].reshape(-1,1), input_offset)
+model.gradient_update(step.reshape(-1,1), depth, output_offset)
+updated = model.get_cells() #for plot
 
-#forward prop
-result2 = forward_propagate(universe_update)
-for i in range(depth-1):
-    result2 = forward_propagate(result2)
-
-output2 = jax.lax.dynamic_slice(result2, output_offset, output_size)
+#set output
+model.set_input_vector(X[0].reshape(-1,1), input_offset)
+model.set_output_vector(Y[0].reshape(-1,1), output_offset)
+# result = model.get_cells()
+model.forward_propagate(activate=jax.nn.sigmoid)
+output2 = model.get_output_vector(output_size, output_offset)
 print(output2)
-'''
+result2 = model.get_cells() #for plot
+
 plt.imshow(result_init)
 plt.title("Initial")
 plt.show()
@@ -90,16 +90,15 @@ plt.show()
 plt.imshow(result)
 plt.title("Result")
 plt.show()
-'''
+
 plt.imshow(backprop)
 plt.title("Backprop")
 plt.show()
 
-plt.imshow(universe_update)
+plt.imshow(updated)
 plt.title("Updated")
 plt.show()
 
 plt.imshow(result2)
 plt.title("Result2")
 plt.show()
-'''

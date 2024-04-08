@@ -79,21 +79,49 @@ class Universe:
             self.out_offset = offset
         return jax.lax.dynamic_slice(self.universe, self.out_offset, output_size)
     
+    def forward(self, cells, activate=nn.sigmoid):
+        #get weighted sum of neighbors using convolution
+        cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
+        #norm
+        cells = jax.nn.standardize(cells, axis=(0,1))
+        #excite and return
+        return activate(cells)
+    
     def forward_propagate(self, activate=nn.sigmoid):
-        #get weighted sum of neighbors using convolution
-        cells = jsignal.convolve2d(self.universe, self.nethood_forward, mode='same')
-        #norm
-        cells = jax.nn.standardize(cells, axis=(0,1))
-        #excite and return
-        self.universe = activate(cells)
+        self.universe = self.forward(self.universe, activate=activate)
 
-    def backward_propagate(self, activate=nn.sigmoid):
+    def backward(self, cells, activate=nn.sigmoid):
         #get weighted sum of neighbors using convolution
-        cells = jsignal.convolve2d(self.universe, self.nethood_backward, mode='same')
+        cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
         #norm
         cells = jax.nn.standardize(cells, axis=(0,1))
         #excite and return
-        self.universe = activate(cells)
+        return activate(cells)
+    
+    def backward_propagate(self, activate=nn.sigmoid):
+        #excite and return
+        self.universe = self.backward(self.universe, activate=activate)
+
+    def gradient_update(self, step, depth, offset=None, activate=nn.sigmoid):
+        '''
+        
+        '''
+        self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
+        if offset:
+            self.out_offset = offset
+
+        #write step and backprop to get updates to weights required
+        cells = jax.lax.dynamic_update_slice(self.universe, step, self.out_offset)
+        cells = self.clear_cells_vertical(cells, self.out_offset, after=True)
+        for i in range(depth):
+            cells = self.backward(cells, activate=activate)
+        print("backprop:", cells)
+
+        #apply corrections
+        self.universe = self.universe - cells
+        #restore input (data consistency)
+        # self.universe = jax.lax.dynamic_update_slice(cells, X[0].reshape(-1,1), input_offset)
+
 
 class UniversePerceptron(hk.Module):
     '''
