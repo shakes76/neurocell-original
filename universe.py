@@ -21,18 +21,26 @@ class Universe:
         self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
         self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
         # print("filter:", self.nethood_forward)
-        self.zero_init()
+        self.zero_init() #universe and prev_universe
 
     def zero_init(self):
         self.universe = jnp.zeros(self.grid_size)
+        self.save_state()
 
     def random_init(self):
         new_key, subkey = jax.random.split(self.key)
         self.new_key = new_key
         self.universe = self.universe + 1.0 * jax.random.normal(subkey, self.grid_size)
+        self.save_state()
 
     def get_cells(self):
         return self.universe
+    
+    def save_state(self):
+        self.previous_universe = self.universe
+        
+    def restore_state(self):
+        self.universe = self.previous_universe
     
     def clear_cells_vertical(self, universe, offset, after=False):
         if after:
@@ -104,7 +112,8 @@ class Universe:
 
     def gradient_update(self, step, depth, offset=None, activate=nn.sigmoid):
         '''
-        
+        Computes the gradient based on the step and backprops it
+        Applies the updates to the saved state
         '''
         self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
         if offset:
@@ -115,13 +124,12 @@ class Universe:
         cells = self.clear_cells_vertical(cells, self.out_offset, after=True)
         for i in range(depth):
             cells = self.backward(cells, activate=activate)
-        print("backprop:", cells)
+        # print("backprop:", cells)
 
         #apply corrections
-        self.universe = self.universe - cells
+        self.universe = self.previous_universe - cells
         #restore input (data consistency)
         # self.universe = jax.lax.dynamic_update_slice(cells, X[0].reshape(-1,1), input_offset)
-
 
 class UniversePerceptron(hk.Module):
     '''

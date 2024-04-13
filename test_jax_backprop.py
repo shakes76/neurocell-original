@@ -41,7 +41,7 @@ model = universe.Universe(N)
 #random init
 # Initialize model
 params = model.random_init()
-result_init = model.get_cells()
+# result_init = model.get_cells()
 
 #loss function
 def loss(logits, labels) -> jnp.ndarray:
@@ -53,7 +53,8 @@ def loss(logits, labels) -> jnp.ndarray:
 #set output
 model.set_input_vector(X[0].reshape(-1,1), input_offset)
 model.set_output_vector(Y[0].reshape(-1,1), output_offset)
-# result = model.get_cells()
+result_init = model.get_cells()
+model.save_state()
 model.forward_propagate(activate=jax.nn.sigmoid)
 output = model.get_output_vector(output_size, output_offset)
 result = model.get_cells() #for plot
@@ -80,7 +81,7 @@ model.set_output_vector(Y[0].reshape(-1,1), output_offset)
 # result = model.get_cells()
 model.forward_propagate(activate=jax.nn.sigmoid)
 output2 = model.get_output_vector(output_size, output_offset)
-print(output2)
+print("Output:", output2)
 result2 = model.get_cells() #for plot
 
 plt.imshow(result_init)
