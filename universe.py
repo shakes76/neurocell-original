@@ -113,14 +113,14 @@ class Universe:
     def gradient_update(self, step, depth, offset=None, activate=nn.sigmoid):
         '''
         Computes the gradient based on the step and backprops it
-        Applies the updates to the saved state
+        Computes and applies the updates to the saved state, assigns to current state
         '''
         self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
         if offset:
             self.out_offset = offset
 
         #write step and backprop to get updates to weights required
-        cells = jax.lax.dynamic_update_slice(self.universe, step, self.out_offset)
+        cells = jax.lax.dynamic_update_slice(self.previous_universe, step, self.out_offset)
         cells = self.clear_cells_vertical(cells, self.out_offset, after=True)
         for i in range(depth):
             cells = self.backward(cells, activate=activate)

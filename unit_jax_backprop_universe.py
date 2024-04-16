@@ -54,19 +54,17 @@ def loss(logits, labels) -> jnp.ndarray:
 model.set_input_vector(X[0].reshape(-1,1), input_offset)
 model.set_output_vector(Y[0].reshape(-1,1), output_offset)
 result_init = model.get_cells()
-model.save_state()
+model.save_state() #save weights
 for i in range(depth):
     model.forward_propagate(activate=jax.nn.sigmoid)
 output = model.get_output_vector(output_size, output_offset)
 result = model.get_cells() #for plot
+model.restore_state() #restore to original weights
 
 #compute loss
 loss_value = loss(output, Y[0])
 step = lr*loss_value #take negative step
 print(output, "Y:", Y[0], "loss:", loss_value, "step:", step)
-
-#restore to original weights
-model.restore_state()
 
 #apply corrections
 model.gradient_update(step.reshape(-1,1), depth, output_offset)
@@ -75,12 +73,13 @@ updated = model.get_cells() #for plot
 #set output
 model.set_input_vector(X[0].reshape(-1,1), input_offset)
 model.set_output_vector(Y[0].reshape(-1,1), output_offset)
-# result = model.get_cells()
+model.save_state() #save weights
 for i in range(depth):
     model.forward_propagate(activate=jax.nn.sigmoid)
 output2 = model.get_output_vector(output_size, output_offset)
 print("Output:", output2)
 result2 = model.get_cells() #for plot
+model.restore_state() #restore to original weights
 
 plt.imshow(result_init)
 plt.title("Initial")
