@@ -11,16 +11,16 @@ from typing import Tuple
 
 #parameters
 samples = 120
-iterations = 5000
+iterations = 2000
 num_classes = 1
 
 #===========
 ##data
-X = np.arange(-30, 30, 0.5, dtype=np.float32).reshape(-1, 1)
+X = np.arange(-1.5, 1.5, 0.025, dtype=np.float32).reshape(-1, 1)
 Y = np.zeros(samples, dtype=np.float32)
 
 #square wave
-Y[ (X[:,0] >= -10) & (X[:,0] < 10) ] = 1.0
+Y[ (X[:,0] >= -0.5) & (X[:,0] < 0.5) ] = 1.0
 
 plt.plot(X, Y)
 plt.show()
@@ -76,23 +76,22 @@ def update(
         labels
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
-    grads = jax.grad(loss)(params, batch, labels)
+    loss_value, grads = jax.value_and_grad(loss)(params, batch, labels)
     updates, opt_state = opt.update(grads, opt_state)
     new_params = optax.apply_updates(params, updates)
-    return new_params, opt_state
+    return new_params, opt_state, loss_value
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 params = network.init(jax.random.PRNGKey(42), X)
 opt_state = opt.init(params)
 
 # Train/eval loop.
-for step in range(iterations):
+for step in range(iterations+1):
     # Do SGD on a batch of training examples.
     for x, y in zip(X, Y):
-        params, opt_state = update(params, opt_state, x, y)
+        params, opt_state, loss_value = update(params, opt_state, x, y)
 
     if step % 1000 == 0:
-        loss_value = loss(params, X, Y)
         print(f"[Step {step}, Loss {loss_value}]")
         # Periodically evaluate on train & test sets.
         Y_pred = network.apply(params, X)

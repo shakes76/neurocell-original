@@ -10,7 +10,7 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 10
+epochs = 1
 samples = 120
 length = 1
 num_classes = 1
@@ -18,11 +18,11 @@ lr = 0.1
 
 #===========
 ##data
-X = np.arange(-30, 30, 0.5, dtype=np.float32).reshape(-1, 1)
+X = np.arange(-1.5, 1.5, 0.025, dtype=np.float32).reshape(-1, 1)
 Y = np.zeros(samples, dtype=np.float32)
 
 #square wave
-Y[ (X[:,0] >= -10) & (X[:,0] < 10) ] = 1.0
+Y[ (X[:,0] >= -0.5) & (X[:,0] < 0.5) ] = 1.0
 
 #helpers
 
@@ -51,38 +51,44 @@ def loss(logits, labels) -> jnp.ndarray:
     '''
     return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits))
 
-for i in range(epochs):
-    #set output
-    model.set_input_vector(X[i].reshape(-1,1), input_offset)
-    model.set_output_vector(Y[i].reshape(-1,1), output_offset)
-    
-    model.save_state()
-    model.forward_propagate(activate=jax.nn.sigmoid)
-    output = model.get_output_vector(output_size, output_offset)
+for j in range(epochs):
+    for i in range(samples):
+        #set output
+        model.set_input_vector(X[i].reshape(-1,1), input_offset)
+        model.set_output_vector(Y[i].reshape(-1,1), output_offset)
+        
+        model.save_state()
+        model.forward_propagate(activate=jax.nn.sigmoid)
+        output = model.get_output_vector(output_size, output_offset)
 
-    #compute loss
-    loss_value = loss(output, Y[i])
-    step = lr*loss_value #take negative step
-    print(output, "Y:", Y[i], "loss:", loss_value, "step:", step)
-    
-    #write step and backprop to get updates to weights required
-    model.set_output_vector(step.reshape(-1,1), output_offset)
-    for i in range(depth):
-        model.backward_propagate(activate=jax.nn.sigmoid)
+        #compute loss
+        loss_value = loss(output, Y[i])
+        step = lr*loss_value #take negative step
+        print(output, "Y:", Y[i], "loss:", loss_value, "step:", step)
+        
+        #write step and backprop to get updates to weights required
+        model.set_output_vector(step.reshape(-1,1), output_offset)
+        for i in range(depth):
+            model.backward_propagate(activate=jax.nn.sigmoid)
 
-    #apply corrections
-    model.gradient_update(step.reshape(-1,1), depth, output_offset)
+        #apply corrections
+        model.gradient_update(step.reshape(-1,1), depth, output_offset)
 
-    #set output
-    model.set_input_vector(X[i].reshape(-1,1), input_offset)
-    model.set_output_vector(Y[i].reshape(-1,1), output_offset)
-    result = model.get_cells() #for plot
-    model.forward_propagate(activate=jax.nn.sigmoid)
-    output2 = model.get_output_vector(output_size, output_offset)
-    print("Output:", output2)
+        #set output
+        model.set_input_vector(X[i].reshape(-1,1), input_offset)
+        model.set_output_vector(Y[i].reshape(-1,1), output_offset)
+        weights = model.get_cells() #for plot
+        model.forward_propagate(activate=jax.nn.sigmoid)
+        result = model.get_cells() #for plot
+        output2 = model.get_output_vector(output_size, output_offset)
+        print("Output:", output2)
 
 plt.imshow(result_init)
 plt.title("Initial")
+plt.show()
+
+plt.imshow(weights)
+plt.title("Weights")
 plt.show()
 
 plt.imshow(result)

@@ -91,7 +91,7 @@ class Universe:
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
         #norm
-        cells = jax.nn.standardize(cells, axis=(0,1))
+        # cells = jax.nn.standardize(cells, axis=(0,1))
         #excite and return
         return activate(cells)
     
@@ -102,7 +102,7 @@ class Universe:
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
         #norm
-        cells = jax.nn.standardize(cells, axis=(0,1))
+        # cells = jax.nn.standardize(cells, axis=(0,1))
         #excite and return
         return activate(cells)
     
@@ -202,7 +202,7 @@ class UniversePerceptron(hk.Module):
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
         #norm
-        cells = jax.nn.standardize(cells, axis=(0,1))
+        # cells = jax.nn.standardize(cells, axis=(0,1))
         #excite and return
         return activate(cells)
 
@@ -210,7 +210,7 @@ class UniversePerceptron(hk.Module):
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
         #norm
-        cells = jax.nn.standardize(cells, axis=(0,1))
+        # cells = jax.nn.standardize(cells, axis=(0,1))
         #excite and return
         return activate(cells)
     
