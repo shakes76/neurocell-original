@@ -55,7 +55,8 @@ model.set_input_vector(X[0].reshape(-1,1), input_offset)
 model.set_output_vector(Y[0].reshape(-1,1), output_offset)
 result_init = model.get_cells()
 model.save_state()
-model.forward_propagate(activate=jax.nn.sigmoid)
+for i in range(depth):
+    model.forward_propagate(activate=jax.nn.sigmoid)
 output = model.get_output_vector(output_size, output_offset)
 result = model.get_cells() #for plot
 
@@ -64,12 +65,8 @@ loss_value = loss(output, Y[0])
 step = lr*loss_value #take negative step
 print(output, "Y:", Y[0], "loss:", loss_value, "step:", step)
 
-#write step and backprop to get updates to weights required
-model.set_output_vector(step.reshape(-1,1), output_offset)
-# backprop = model.get_cells() #for plot
-for i in range(depth):
-    model.backward_propagate(activate=jax.nn.sigmoid)
-backprop = model.get_cells() #for plot
+#restore to original weights
+model.restore_state()
 
 #apply corrections
 model.gradient_update(step.reshape(-1,1), depth, output_offset)
@@ -79,7 +76,8 @@ updated = model.get_cells() #for plot
 model.set_input_vector(X[0].reshape(-1,1), input_offset)
 model.set_output_vector(Y[0].reshape(-1,1), output_offset)
 # result = model.get_cells()
-model.forward_propagate(activate=jax.nn.sigmoid)
+for i in range(depth):
+    model.forward_propagate(activate=jax.nn.sigmoid)
 output2 = model.get_output_vector(output_size, output_offset)
 print("Output:", output2)
 result2 = model.get_cells() #for plot
@@ -90,10 +88,6 @@ plt.show()
 
 plt.imshow(result)
 plt.title("Result")
-plt.show()
-
-plt.imshow(backprop)
-plt.title("Backprop")
 plt.show()
 
 plt.imshow(updated)
