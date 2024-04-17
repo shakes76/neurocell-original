@@ -10,7 +10,7 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 1
+epochs = 10
 samples = 120
 length = 1
 num_classes = 1
@@ -49,7 +49,8 @@ def loss(logits, labels) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
-    return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits))
+    # return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits)) #CE
+    return jnp.mean((labels - logits)**2) #MSE
 
 for j in range(epochs):
     for x, y in zip(X, Y):
@@ -60,7 +61,7 @@ for j in range(epochs):
         #forward pass
         model.save_state() #save weights
         for i in range(depth):
-            model.forward_propagate(activate=jax.nn.sigmoid)
+            model.forward_propagate(activate=jax.nn.tanh)
         output = model.get_output_vector(output_size, output_offset)
         model.restore_state() #restore to original weights
 
@@ -69,7 +70,7 @@ for j in range(epochs):
         step = lr*loss_value #take negative step
 
         #apply corrections
-        model.gradient_update(step.reshape(-1,1), depth, output_offset)
+        model.gradient_update(step.reshape(-1,1), depth, output_offset, activate=jax.nn.tanh)
 
         #set output
         model.set_input_vector(x.reshape(-1,1), input_offset)
@@ -79,7 +80,7 @@ for j in range(epochs):
         #forward pass to check output
         model.save_state() #save weights
         for i in range(depth):
-            model.forward_propagate(activate=jax.nn.sigmoid)
+            model.forward_propagate(activate=jax.nn.tanh)
         result = model.get_cells() #for plot
         output2 = model.get_output_vector(output_size, output_offset)
         model.restore_state() #restore to original weights

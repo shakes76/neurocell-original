@@ -36,19 +36,19 @@ model.set_output_vector(Y, output_offset)
 
 result_init = model.get_cells() #for plot
 
-plt.imshow(result_init)
-plt.title("Initial")
-plt.show()
-
 #forward pass
 model.save_state() #save weights
-for i in range(1):
-    model.forward_propagate(activate=jax.nn.sigmoid)
+for i in range(depth):
+    model.forward_propagate(activate=jax.nn.tanh)
 output = model.get_output_vector(output_size, output_offset)
 result = model.get_cells() #for plot
 model.restore_state() #restore to original weights
 
 print("Output:", output)
+
+plt.imshow(result_init)
+plt.title("Initial")
+plt.show()
 
 plt.imshow(result)
 plt.title("Initial")

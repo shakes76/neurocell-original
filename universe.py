@@ -43,10 +43,13 @@ class Universe:
         self.universe = self.previous_universe
     
     def clear_cells_vertical(self, universe, offset, after=False):
+        '''
+        Clears cells upto and including offset positions
+        '''
         if after:
-            result = universe.at[:,offset[1]+1:].set(0)  #clear cells after
+            result = universe.at[:,offset[1]:].set(0)  #clear cells after
         else:
-            result = universe.at[:,:offset[1]].set(0) #clear cells before
+            result = universe.at[:,:offset[1]+1].set(0) #clear cells before
         return result
 
     def set_input_vector(self, inputs, offset=None):
@@ -56,8 +59,8 @@ class Universe:
         self.in_offset = (self.N//4, self.N//8)
         if offset:
             self.in_offset = offset
-        cells = jax.lax.dynamic_update_slice(self.universe, inputs, self.in_offset)
-        self.universe = self.clear_cells_vertical(cells, self.in_offset, after=False)
+        cells = self.clear_cells_vertical(self.universe, self.in_offset, after=False)
+        self.universe = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
     
     def set_output_vector(self, outputs, offset=None):
         '''
@@ -66,8 +69,8 @@ class Universe:
         self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
         if offset:
             self.out_offset = offset
-        cells = jax.lax.dynamic_update_slice(self.universe, outputs, self.out_offset)
-        self.universe = self.clear_cells_vertical(cells, self.out_offset, after=True)
+        cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
+        self.universe = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
     
     def get_input_vector(self, input_size, offset=None):
         '''
@@ -120,8 +123,8 @@ class Universe:
             self.out_offset = offset
 
         #write step and backprop to get updates to weights required
-        cells = jax.lax.dynamic_update_slice(self.previous_universe, step, self.out_offset)
-        cells = self.clear_cells_vertical(cells, self.out_offset, after=True)
+        cells = self.clear_cells_vertical(self.previous_universe, self.out_offset, after=True)
+        cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
         for i in range(depth):
             cells = self.backward(cells, activate=activate)
         # print("backprop:", cells)
