@@ -21,20 +21,26 @@ class Universe:
         self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
         self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
         # print("filter:", self.nethood_forward)
-        self.zero_init() #universe and prev_universe
+        self.initialize() #universe and prev_universe
 
-    def zero_init(self):
-        self.universe = jnp.zeros(self.grid_size)
-        self.save_state()
-
-    def random_init(self):
+    def initialize(self):
         new_key, subkey = jax.random.split(self.key)
-        self.new_key = new_key
-        self.universe = self.universe + 1.0 * jax.random.normal(subkey, self.grid_size)
+        self.universe = jnp.zeros(self.grid_size)
+        self.weights = 1.0 * jax.random.normal(subkey, self.grid_size)
+        self.key = new_key
         self.save_state()
+
+    # def random_init(self):
+    #     new_key, subkey = jax.random.split(self.key)
+    #     self.new_key = new_key
+    #     self.universe = self.universe + 1.0 * jax.random.normal(subkey, self.grid_size)
+    #     # self.save_state()
 
     def get_cells(self):
         return self.universe
+        
+    def get_weights(self):
+        return self.weights
     
     def save_state(self):
         self.previous_universe = self.universe
@@ -47,9 +53,9 @@ class Universe:
         Clears cells upto and including offset positions
         '''
         if after:
-            result = universe.at[:,offset[1]:].set(0)  #clear cells after
+            result = universe.at[:,offset[1]+1:].set(0)  #clear cells after
         else:
-            result = universe.at[:,:offset[1]+1].set(0) #clear cells before
+            result = universe.at[:,:offset[1]].set(0) #clear cells before
         return result
 
     def set_input_vector(self, inputs, offset=None):
@@ -95,6 +101,8 @@ class Universe:
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
         #norm
         # cells = jax.nn.standardize(cells, axis=(0,1))
+        #apply weights
+        cells = cells * self.weights
         #excite and return
         return activate(cells)
     
@@ -106,6 +114,8 @@ class Universe:
         cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
         #norm
         # cells = jax.nn.standardize(cells, axis=(0,1))
+        #apply weights
+        cells = cells * self.weights
         #excite and return
         return activate(cells)
     
@@ -123,14 +133,14 @@ class Universe:
             self.out_offset = offset
 
         #write step and backprop to get updates to weights required
-        cells = self.clear_cells_vertical(self.previous_universe, self.out_offset, after=True)
+        cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
         for i in range(depth):
             cells = self.backward(cells, activate=activate)
         # print("backprop:", cells)
 
         #apply corrections
-        self.universe = self.previous_universe - cells
+        self.weights = self.weights - cells
         #restore input (data consistency)
         # self.universe = jax.lax.dynamic_update_slice(cells, X[0].reshape(-1,1), input_offset)
 

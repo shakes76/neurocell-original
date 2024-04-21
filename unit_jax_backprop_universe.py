@@ -38,26 +38,25 @@ print("depth:", depth)
 ##create model
 model = universe.Universe(N)
 
-#random init
 # Initialize model
-params = model.random_init()
-# result_init = model.get_cells()
+params = model.initialize()
 
 #loss function
 def loss(logits, labels) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
-    # return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits)) #CE
-    return jnp.mean((labels - logits)**2) #MSE
+    return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits)) #CE
+    # return jnp.mean((labels - logits)**2) #MSE
 
 #set output
 model.set_input_vector(X[0].reshape(-1,1), input_offset)
 model.set_output_vector(Y[0].reshape(-1,1), output_offset)
 result_init = model.get_cells()
+weights_init = model.get_weights()
 model.save_state() #save weights
 for i in range(depth):
-    model.forward_propagate(activate=jax.nn.tanh)
+    model.forward_propagate(activate=jax.nn.sigmoid)
 output = model.get_output_vector(output_size, output_offset)
 result = model.get_cells() #for plot
 model.restore_state() #restore to original weights
@@ -68,15 +67,15 @@ step = lr*loss_value #take negative step
 print(output, "Y:", Y[0], "loss:", loss_value, "step:", step)
 
 #apply corrections
-model.gradient_update(step.reshape(-1,1), depth, output_offset, activate=jax.nn.tanh)
-updated = model.get_cells() #for plot
+model.gradient_update(step.reshape(-1,1), depth, output_offset, activate=jax.nn.sigmoid)
+updated = model.get_weights() #for plot
 
 #set output
 model.set_input_vector(X[0].reshape(-1,1), input_offset)
 model.set_output_vector(Y[0].reshape(-1,1), output_offset)
 model.save_state() #save weights
 for i in range(depth):
-    model.forward_propagate(activate=jax.nn.tanh)
+    model.forward_propagate(activate=jax.nn.sigmoid)
 output2 = model.get_output_vector(output_size, output_offset)
 print("Output:", output2)
 result2 = model.get_cells() #for plot
@@ -86,12 +85,16 @@ plt.imshow(result_init)
 plt.title("Initial")
 plt.show()
 
+plt.imshow(weights_init)
+plt.title("Weights")
+plt.show()
+
 plt.imshow(result)
 plt.title("Result")
 plt.show()
 
 plt.imshow(updated)
-plt.title("Updated")
+plt.title("Updated Weights")
 plt.show()
 
 plt.imshow(result2)

@@ -28,26 +28,31 @@ Y = jnp.full((1,1), 0.5, dtype=jnp.float32)
 model = universe.Universe(N)
 
 # Initialize model
-params = model.zero_init()
+params = model.initialize()
 
 #set output
 model.set_input_vector(X, input_offset)
 model.set_output_vector(Y, output_offset)
 
 result_init = model.get_cells() #for plot
+weights_init = model.get_weights() #for plot
 
 #forward pass
-model.save_state() #save weights
-for i in range(depth):
+# model.save_state() #save weights
+for i in range(1):
     model.forward_propagate(activate=jax.nn.tanh)
 output = model.get_output_vector(output_size, output_offset)
 result = model.get_cells() #for plot
-model.restore_state() #restore to original weights
+# model.restore_state() #restore to original weights
 
 print("Output:", output)
 
 plt.imshow(result_init)
 plt.title("Initial")
+plt.show()
+
+plt.imshow(weights_init)
+plt.title("Weights")
 plt.show()
 
 plt.imshow(result)
