@@ -38,14 +38,14 @@ result_init = model.get_cells() #for plot
 weights_init = model.get_weights() #for plot
 
 #forward pass
-# model.save_state() #save weights
-for i in range(1):
+model.save_state() #save weights
+for i in range(depth):
     model.forward_propagate(activate=jax.nn.tanh)
 output = model.get_output_vector(output_size, output_offset)
 result = model.get_cells() #for plot
-# model.restore_state() #restore to original weights
+model.restore_state() #restore to original weights
 
-print("Output:", output)
+print("Output:", output, "Y:", Y[0])
 
 plt.imshow(result_init)
 plt.title("Initial")

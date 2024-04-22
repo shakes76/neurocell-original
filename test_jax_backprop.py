@@ -10,11 +10,11 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 10
+epochs = 2
 samples = 120
 length = 1
 num_classes = 1
-lr = 0.1
+lr = 0.01
 
 #===========
 ##data
@@ -25,6 +25,13 @@ Y = np.zeros(samples, dtype=np.float32)
 Y[ (X[:,0] >= -0.5) & (X[:,0] < 0.5) ] = 1.0
 
 #helpers
+#loss function
+def loss(logits, labels) -> jnp.ndarray:
+    '''
+    Cross entropy 
+    '''
+    return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits)) #CE
+    # return jnp.mean((labels - logits)**2) #MSE
 
 #===========
 #setup
@@ -34,6 +41,7 @@ output_size = (num_classes,1)
 output_offset = (3,5)
 key = jax.random.key(42)
 depth = output_offset[1]-input_offset[1]
+activation = jax.nn.sigmoid
 print("depth:", depth)
 
 ##create model
@@ -41,28 +49,24 @@ model = universe.Universe(N)
 
 #random init
 # Initialize model
-params = model.random_init()
-result_init = model.get_cells()
+params = model.initialize()
+# result_init = model.get_cells()
+# weights_init = model.get_weights()
 
-#loss function
-def loss(logits, labels) -> jnp.ndarray:
-    '''
-    Cross entropy 
-    '''
-    # return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits)) #CE
-    return jnp.mean((labels - logits)**2) #MSE
-
-for j in range(epochs):
+for epoch in range(epochs):
     for x, y in zip(X, Y):
         #set output
         model.set_input_vector(x.reshape(-1,1), input_offset)
-        model.set_output_vector(y.reshape(-1,1), output_offset)
+        # model.set_output_vector(y.reshape(-1,1), output_offset)
+        result_init = model.get_cells()
+        weights_init = model.get_weights()
         
         #forward pass
         model.save_state() #save weights
         for i in range(depth):
-            model.forward_propagate(activate=jax.nn.tanh)
+            model.forward_propagate(activate=activation)
         output = model.get_output_vector(output_size, output_offset)
+        forward = model.get_cells() #for plot
         model.restore_state() #restore to original weights
 
         #compute loss
@@ -70,31 +74,51 @@ for j in range(epochs):
         step = lr*loss_value #take negative step
 
         #apply corrections
-        model.gradient_update(step.reshape(-1,1), depth, output_offset, activate=jax.nn.tanh)
-
-        #set output
-        model.set_input_vector(x.reshape(-1,1), input_offset)
         model.set_output_vector(y.reshape(-1,1), output_offset)
-        weights = model.get_cells() #for plot
-
-        #forward pass to check output
-        model.save_state() #save weights
-        for i in range(depth):
-            model.forward_propagate(activate=jax.nn.tanh)
-        result = model.get_cells() #for plot
-        output2 = model.get_output_vector(output_size, output_offset)
+        model.gradient_update(step.reshape(-1,1), depth, output_offset, activate=activation)
+        backprop = model.get_cells() #for plot
         model.restore_state() #restore to original weights
 
+        #forward pass to check output
+        #set output
+        model.set_input_vector(x.reshape(-1,1), input_offset)
+        # model.set_output_vector(y.reshape(-1,1), output_offset)
+        model.save_state() #save weights
+        for i in range(depth):
+            model.forward_propagate(activate=activation)
+        result = model.get_cells() #for plot
+        weights = model.get_weights() #for plot
+        output2 = model.get_output_vector(output_size, output_offset)
+        model.restore_state() #restore to original weights
+        # restore = model.get_cells() #for plot
+
         print("X", x, "Y:", y, "Output:", output2, "loss:", loss_value, "step:", step)
+    print(">> Epoch:", epoch, "Loss:", loss_value)
 
 plt.imshow(result_init)
 plt.title("Initial")
 plt.show()
 
-plt.imshow(weights)
-plt.title("Weights")
+plt.imshow(weights_init)
+plt.title("Initial Weights")
+plt.show()
+
+plt.imshow(forward)
+plt.title("Forward")
+plt.show()
+
+plt.imshow(backprop)
+plt.title("Backprop")
 plt.show()
 
 plt.imshow(result)
-plt.title("Result")
+plt.title("Final Result")
 plt.show()
+
+plt.imshow(weights)
+plt.title("Final Weights")
+plt.show()
+
+# plt.imshow(restore)
+# plt.title("Restored")
+# plt.show()

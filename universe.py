@@ -132,15 +132,19 @@ class Universe:
         if offset:
             self.out_offset = offset
 
+        #track updated weights per 'layer'
+        updates = jnp.zeros_like(self.universe)
+
         #write step and backprop to get updates to weights required
         cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
         for i in range(depth):
             cells = self.backward(cells, activate=activate)
+            updates = updates + cells
         # print("backprop:", cells)
 
         #apply corrections
-        self.weights = self.weights - cells
+        self.weights = self.weights - updates
         #restore input (data consistency)
         # self.universe = jax.lax.dynamic_update_slice(cells, X[0].reshape(-1,1), input_offset)
 
