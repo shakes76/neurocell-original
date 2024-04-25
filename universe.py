@@ -13,9 +13,10 @@ class Universe:
     '''
     Represents cellular structured universe of Von Neumann networks
     '''
-    def __init__(self, N):
+    def __init__(self, N, dtype=jnp.float32):
         self.N = N
         self.grid_size = (N,N)
+        self.dtype = dtype
         self.key = jax.random.key(42)
         #filters for spatial derivatives
         self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
@@ -24,17 +25,36 @@ class Universe:
         self.initialize() #universe and prev_universe
 
     def initialize(self):
+        self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
+
         new_key, subkey = jax.random.split(self.key)
+        self.weights = 1.0 * jax.random.normal(subkey, self.grid_size, dtype=self.dtype)
+        self.key = new_key
+
+        self.save_state()
+        
+    def initialize_vertical(self, in_size, out_size, in_offset=None, out_offset=None):
         self.universe = jnp.zeros(self.grid_size)
+
+        new_key, subkey = jax.random.split(self.key)
         self.weights = 1.0 * jax.random.normal(subkey, self.grid_size)
         self.key = new_key
-        self.save_state()
 
-    # def random_init(self):
-    #     new_key, subkey = jax.random.split(self.key)
-    #     self.new_key = new_key
-    #     self.universe = self.universe + 1.0 * jax.random.normal(subkey, self.grid_size)
-    #     # self.save_state()
+        #setup in/out weights
+        self.in_offset = (self.N//4, self.N//8)
+        if in_offset:
+            self.in_offset = in_offset
+        self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
+        if out_offset:
+            self.out_offset = out_offset
+        inputs = jnp.ones(in_size, dtype=self.weights.dtype)
+        outputs = jnp.ones(out_size, dtype=self.weights.dtype)
+        weights = self.clear_cells_vertical(self.weights, self.in_offset, after=False)
+        self.weights = jax.lax.dynamic_update_slice(weights, inputs, self.in_offset)
+        weights = self.clear_cells_vertical(self.weights, self.out_offset, after=True)
+        self.weights = jax.lax.dynamic_update_slice(weights, outputs, self.out_offset)
+
+        self.save_state()
 
     def get_cells(self):
         return self.universe
@@ -47,15 +67,18 @@ class Universe:
         
     def restore_state(self):
         self.universe = self.previous_universe
+        
+    def reset_state(self):
+        self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
     
     def clear_cells_vertical(self, universe, offset, after=False):
         '''
         Clears cells upto and including offset positions
         '''
         if after:
-            result = universe.at[:,offset[1]+1:].set(0)  #clear cells after
+            result = universe.at[:,offset[1]:].set(0)  #clear cells after
         else:
-            result = universe.at[:,:offset[1]].set(0) #clear cells before
+            result = universe.at[:,:offset[1]+1].set(0) #clear cells before
         return result
 
     def set_input_vector(self, inputs, offset=None):
@@ -67,6 +90,8 @@ class Universe:
             self.in_offset = offset
         cells = self.clear_cells_vertical(self.universe, self.in_offset, after=False)
         self.universe = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
+        # weights = self.clear_cells_vertical(self.weights, self.in_offset, after=False)
+        # self.weights = jax.lax.dynamic_update_slice(weights, inputs, self.in_offset)
     
     def set_output_vector(self, outputs, offset=None):
         '''
@@ -77,6 +102,8 @@ class Universe:
             self.out_offset = offset
         cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         self.universe = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
+        # weights = self.clear_cells_vertical(self.weights, self.out_offset, after=True)
+        # self.weights = jax.lax.dynamic_update_slice(weights, outputs, self.out_offset)
     
     def get_input_vector(self, input_size, offset=None):
         '''
@@ -95,6 +122,9 @@ class Universe:
         if offset:
             self.out_offset = offset
         return jax.lax.dynamic_slice(self.universe, self.out_offset, output_size)
+
+    def shift(self, value):
+        self.universe = self.universe - value #account for sigmoid etc.
     
     def forward(self, cells, activate=nn.sigmoid):
         #get weighted sum of neighbors using convolution
@@ -123,28 +153,54 @@ class Universe:
         #excite and return
         self.universe = self.backward(self.universe, activate=activate)
 
-    def gradient_update(self, step, depth, offset=None, activate=nn.sigmoid):
+    def gradient_update(self, lr, step, depth, inputs, input_size, in_offset=None, out_offset=None, activate=nn.sigmoid):
         '''
         Computes the gradient based on the step and backprops it
         Computes and applies the updates to the saved state, assigns to current state
         '''
         self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
-        if offset:
-            self.out_offset = offset
+        if out_offset:
+            self.out_offset = out_offset
 
-        #track updated weights per 'layer'
-        updates = jnp.zeros_like(self.universe)
+        #tracking changes
+        # updates = jnp.zeros_like(self.universe)
 
         #write step and backprop to get updates to weights required
         cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
         for i in range(depth):
             cells = self.backward(cells, activate=activate)
-            updates = updates + cells
+            # cells = cells - 0.5 #account for sigmoid etc.
+            #track updated weights per 'layer'
+            # updates = updates.at[:,self.out_offset[1]-i].add(cells[:,self.out_offset[1]-i])
+            self.universe = self.universe + cells
         # print("backprop:", cells)
+        #copy updates to universe
+        # self.universe = cells.at[:,self.out_offset[1]-depth:self.out_offset[1]].set(updates[:,self.out_offset[1]-depth:self.out_offset[1]])
+        
+        #rescale by predicted input
+        self.in_offset = (self.N//4, self.N//8)
+        if in_offset:
+            self.in_offset = in_offset
+        pred_inputs = jax.lax.dynamic_slice(self.universe, self.in_offset, input_size)
+        scaling = lr*abs(inputs/pred_inputs) #only mag
+        # if scaling > 1.0:
+        #     scaling = jnp.minimum(1.5, scaling)
+        # unity = jnp.ones((1,1), dtype=self.universe.dtype)
+        zero = jnp.zeros((1,1), dtype=self.universe.dtype)
+        self.universe = jax.lax.dynamic_update_slice(self.universe, zero, self.in_offset)
+        # if scaling > 1.0:
+        #     self.universe = scaling*self.universe
+        print("Scaling:", scaling)
+        
+        #L2 norm of weights
+        # jnp.sum(self.universe)
+        # self.universe = self.universe/jnp.abs(self.universe)
 
         #apply corrections
-        self.weights = self.weights - updates
+        # scaling = 1.0
+        self.weights = self.weights - self.universe
+        # self.weights = jax.nn.standardize(self.weights, axis=(0,1))
         #restore input (data consistency)
         # self.universe = jax.lax.dynamic_update_slice(cells, X[0].reshape(-1,1), input_offset)
 

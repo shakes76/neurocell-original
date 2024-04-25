@@ -10,11 +10,11 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 2
+epochs = 1
 samples = 120
 length = 1
 num_classes = 1
-lr = 0.01
+lr = 0.001
 
 #===========
 ##data
@@ -41,7 +41,8 @@ output_size = (num_classes,1)
 output_offset = (3,5)
 key = jax.random.key(42)
 depth = output_offset[1]-input_offset[1]
-activation = jax.nn.sigmoid
+activation = jax.nn.tanh
+final_activation = jax.nn.sigmoid
 print("depth:", depth)
 
 ##create model
@@ -49,7 +50,7 @@ model = universe.Universe(N)
 
 #random init
 # Initialize model
-params = model.initialize()
+model.initialize_vertical(input_size, output_size, input_offset, output_offset)
 # result_init = model.get_cells()
 # weights_init = model.get_weights()
 
@@ -62,37 +63,44 @@ for epoch in range(epochs):
         weights_init = model.get_weights()
         
         #forward pass
-        model.save_state() #save weights
-        for i in range(depth):
+        # model.save_state() #save weights
+        for i in range(depth-1):
             model.forward_propagate(activate=activation)
+        model.forward_propagate(activate=final_activation)
         output = model.get_output_vector(output_size, output_offset)
         forward = model.get_cells() #for plot
-        model.restore_state() #restore to original weights
+        # model.restore_state() #restore to original weights
+        model.reset_state() #reset to zero
 
         #compute loss
         loss_value = loss(output, y)
         step = lr*loss_value #take negative step
+        step = jnp.maximum(1e-8, step)
 
         #apply corrections
         model.set_output_vector(y.reshape(-1,1), output_offset)
-        model.gradient_update(step.reshape(-1,1), depth, output_offset, activate=activation)
+        model.gradient_update(lr, step.reshape(-1,1), depth, x.reshape(-1,1), input_size, input_offset, output_offset, activate=activation)
         backprop = model.get_cells() #for plot
-        model.restore_state() #restore to original weights
+        # model.restore_state() #restore to original weights
+        model.reset_state() #reset to zero
 
         #forward pass to check output
         #set output
         model.set_input_vector(x.reshape(-1,1), input_offset)
         # model.set_output_vector(y.reshape(-1,1), output_offset)
-        model.save_state() #save weights
-        for i in range(depth):
+        # model.save_state() #save weights
+        for i in range(depth-1):
             model.forward_propagate(activate=activation)
+        model.forward_propagate(activate=final_activation)
         result = model.get_cells() #for plot
         weights = model.get_weights() #for plot
         output2 = model.get_output_vector(output_size, output_offset)
-        model.restore_state() #restore to original weights
+        # model.restore_state() #restore to original weights
         # restore = model.get_cells() #for plot
+        model.reset_state() #reset to zero
 
-        print("X", x, "Y:", y, "Output:", output2, "loss:", loss_value, "step:", step)
+        print("X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value, "step:", step)
+        # break
     print(">> Epoch:", epoch, "Loss:", loss_value)
 
 plt.imshow(result_init)
