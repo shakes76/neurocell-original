@@ -10,11 +10,12 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 1
+epochs = 20
 samples = 120
 length = 1
 num_classes = 1
-lr = 0.001
+epsilon = 1e-6
+lr = 0.01
 
 #===========
 ##data
@@ -30,7 +31,7 @@ def loss(logits, labels) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
-    return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits)) #CE
+    return -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1. - labels) * jnp.log(1. - logits + epsilon)) #CE
     # return jnp.mean((labels - logits)**2) #MSE
 
 #===========
@@ -41,7 +42,7 @@ output_size = (num_classes,1)
 output_offset = (3,5)
 key = jax.random.key(42)
 depth = output_offset[1]-input_offset[1]
-activation = jax.nn.tanh
+activation = jax.nn.sigmoid
 final_activation = jax.nn.sigmoid
 print("depth:", depth)
 
@@ -54,8 +55,8 @@ model.initialize_vertical(input_size, output_size, input_offset, output_offset)
 # result_init = model.get_cells()
 # weights_init = model.get_weights()
 
-for epoch in range(epochs):
-    for x, y in zip(X, Y):
+for epoch in range(1, epochs+1):
+    for iteration, (x, y) in enumerate(zip(X, Y)):
         #set output
         model.set_input_vector(x.reshape(-1,1), input_offset)
         # model.set_output_vector(y.reshape(-1,1), output_offset)
@@ -74,12 +75,12 @@ for epoch in range(epochs):
 
         #compute loss
         loss_value = loss(output, y)
-        step = lr*loss_value #take negative step
-        step = jnp.maximum(1e-8, step)
+        # step = lr*loss_value #take negative step
+        # step = jnp.maximum(1e-8, step)
 
         #apply corrections
         model.set_output_vector(y.reshape(-1,1), output_offset)
-        model.gradient_update(lr, step.reshape(-1,1), depth, x.reshape(-1,1), input_size, input_offset, output_offset, activate=activation)
+        model.gradient_update(lr, loss_value.reshape(-1,1), depth, x.reshape(-1,1), input_size, input_offset, output_offset, activate=activation)
         backprop = model.get_cells() #for plot
         # model.restore_state() #restore to original weights
         model.reset_state() #reset to zero
@@ -99,32 +100,39 @@ for epoch in range(epochs):
         # restore = model.get_cells() #for plot
         model.reset_state() #reset to zero
 
-        print("X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value, "step:", step)
+        if iteration%10 == 0:
+            print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value)
         # break
     print(">> Epoch:", epoch, "Loss:", loss_value)
 
 plt.imshow(result_init)
 plt.title("Initial")
+plt.savefig("Initial.png", dpi=150)
 plt.show()
 
 plt.imshow(weights_init)
 plt.title("Initial Weights")
+plt.savefig("Initial_Weights.png", dpi=150)
 plt.show()
 
 plt.imshow(forward)
 plt.title("Forward")
+plt.savefig("Forward.png", dpi=150)
 plt.show()
 
 plt.imshow(backprop)
 plt.title("Backprop")
+plt.savefig("Backprop.png", dpi=150)
 plt.show()
 
 plt.imshow(result)
 plt.title("Final Result")
+plt.savefig("Final_Result.png", dpi=150)
 plt.show()
 
 plt.imshow(weights)
 plt.title("Final Weights")
+plt.savefig("Final_Weights.png", dpi=150)
 plt.show()
 
 # plt.imshow(restore)

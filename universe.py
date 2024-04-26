@@ -163,23 +163,23 @@ class Universe:
             self.out_offset = out_offset
 
         #tracking changes
-        # updates = jnp.zeros_like(self.universe)
+        updates = jnp.zeros_like(self.universe)
 
         #write step and backprop to get updates to weights required
         cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
-        for i in range(depth):
+        for i in range(1,depth+1):
             cells = self.backward(cells, activate=activate)
             # cells = cells - 0.5 #account for sigmoid etc.
             #track updated weights per 'layer'
-            # updates = updates.at[:,self.out_offset[1]-i].add(cells[:,self.out_offset[1]-i])
-            self.universe = self.universe + cells
+            updates = updates.at[:,self.out_offset[1]-i].set(cells[:,self.out_offset[1]-i])
+            # self.universe = self.universe + cells
         # print("backprop:", cells)
         #copy updates to universe
-        # self.universe = cells.at[:,self.out_offset[1]-depth:self.out_offset[1]].set(updates[:,self.out_offset[1]-depth:self.out_offset[1]])
+        self.universe = cells.at[:,self.out_offset[1]-depth:self.out_offset[1]].set(updates[:,self.out_offset[1]-depth:self.out_offset[1]])
         
         #rescale by predicted input
-        self.in_offset = (self.N//4, self.N//8)
+        '''self.in_offset = (self.N//4, self.N//8)
         if in_offset:
             self.in_offset = in_offset
         pred_inputs = jax.lax.dynamic_slice(self.universe, self.in_offset, input_size)
@@ -191,7 +191,12 @@ class Universe:
         self.universe = jax.lax.dynamic_update_slice(self.universe, zero, self.in_offset)
         # if scaling > 1.0:
         #     self.universe = scaling*self.universe
-        print("Scaling:", scaling)
+        self.universe = scaling*self.universe
+        print("Scaling:", scaling)'''
+        #take lr step
+        self.universe = lr*self.universe
+        #rescale changes to be normalised
+        # self.universe = jax.nn.standardize(self.universe, axis=(0,1))
         
         #L2 norm of weights
         # jnp.sum(self.universe)
