@@ -10,12 +10,12 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 20
+epochs = 100
 samples = 120
 length = 1
 num_classes = 1
 epsilon = 1e-6
-lr = 0.01
+lr = 0.1
 
 #===========
 ##data
@@ -56,6 +56,7 @@ model.initialize_vertical(input_size, output_size, input_offset, output_offset)
 # weights_init = model.get_weights()
 
 for epoch in range(1, epochs+1):
+    Y_pred = []
     for iteration, (x, y) in enumerate(zip(X, Y)):
         #set output
         model.set_input_vector(x.reshape(-1,1), input_offset)
@@ -98,6 +99,7 @@ for epoch in range(1, epochs+1):
         output2 = model.get_output_vector(output_size, output_offset)
         # model.restore_state() #restore to original weights
         # restore = model.get_cells() #for plot
+        Y_pred.append(output2.reshape(1))
         model.reset_state() #reset to zero
 
         if iteration%10 == 0:
@@ -135,6 +137,9 @@ plt.title("Final Weights")
 plt.savefig("Final_Weights.png", dpi=150)
 plt.show()
 
-# plt.imshow(restore)
-# plt.title("Restored")
-# plt.show()
+#function plot
+plt.plot(X, Y_pred)
+plt.plot(X, Y, 'm')
+plt.xlabel('X')
+plt.savefig("Plot.png", dpi=150)
+plt.show()

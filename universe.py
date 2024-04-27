@@ -194,7 +194,7 @@ class Universe:
         self.universe = scaling*self.universe
         print("Scaling:", scaling)'''
         #take lr step
-        self.universe = lr*self.universe
+        # self.universe = lr*self.universe
         #rescale changes to be normalised
         # self.universe = jax.nn.standardize(self.universe, axis=(0,1))
         
@@ -204,7 +204,7 @@ class Universe:
 
         #apply corrections
         # scaling = 1.0
-        self.weights = self.weights - self.universe
+        self.weights = self.weights - lr*self.universe
         # self.weights = jax.nn.standardize(self.weights, axis=(0,1))
         #restore input (data consistency)
         # self.universe = jax.lax.dynamic_update_slice(cells, X[0].reshape(-1,1), input_offset)
