@@ -9,6 +9,22 @@ import haiku as hk
 
 import filters #local
 
+#kernels for larger networks
+kernel_backward =  [[1, 0, 0],
+                    [1, 0, 0],
+                    [1, 0, 0],
+                    [1, 0, 0],
+                    [1, 0, 0],
+                    [1, 0, 0],
+                    [1, 0, 0]]
+kernel_forward =   [[0, 0, 1],
+                    [0, 0, 1],
+                    [0, 0, 1],
+                    [0, 0, 1],
+                    [0, 0, 1],
+                    [0, 0, 1],
+                    [0, 0, 1]]
+
 class Universe:
     '''
     Represents cellular structured universe of Von Neumann networks
@@ -19,8 +35,10 @@ class Universe:
         self.dtype = dtype
         self.key = jax.random.key(42)
         #filters for spatial derivatives
-        self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
-        self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
+        self.nethood_forward = jnp.array(kernel_forward, dtype=dtype) # 8 connected kernel
+        # self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        # self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.initialize() #universe and prev_universe
 
@@ -130,7 +148,7 @@ class Universe:
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
         #norm
-        # cells = jax.nn.standardize(cells, axis=(0,1))
+        cells = jax.nn.standardize(cells, axis=(0,1))
         #apply weights
         cells = cells * self.weights
         #excite and return
@@ -143,7 +161,7 @@ class Universe:
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
         #norm
-        # cells = jax.nn.standardize(cells, axis=(0,1))
+        cells = jax.nn.standardize(cells, axis=(0,1))
         #apply weights
         cells = cells * self.weights
         #excite and return

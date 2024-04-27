@@ -10,7 +10,7 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 100
+epochs = 10
 samples = 120
 length = 1
 num_classes = 1
@@ -42,7 +42,7 @@ output_size = (num_classes,1)
 output_offset = (3,5)
 key = jax.random.key(42)
 depth = output_offset[1]-input_offset[1]
-activation = jax.nn.sigmoid
+activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 print("depth:", depth)
 
