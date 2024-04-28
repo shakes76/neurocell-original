@@ -144,32 +144,35 @@ class Universe:
     def shift(self, value):
         self.universe = self.universe - value #account for sigmoid etc.
     
-    def forward(self, cells, activate=nn.sigmoid):
+    def forward(self, cells, activate=nn.sigmoid, norm=True):
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
-        #norm
-        cells = jax.nn.standardize(cells, axis=(0,1))
         #apply weights
         cells = cells * self.weights
+        if norm:
+            #norm
+            cells = jax.nn.standardize(cells, axis=(0,1))
         #excite and return
         return activate(cells)
     
-    def forward_propagate(self, activate=nn.sigmoid):
-        self.universe = self.forward(self.universe, activate=activate)
+    def forward_propagate(self, activate=nn.sigmoid, norm=True):
+        self.universe = self.forward(self.universe, activate=activate, norm=norm)
 
-    def backward(self, cells, activate=nn.sigmoid):
-        #get weighted sum of neighbors using convolution
-        cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
-        #norm
-        cells = jax.nn.standardize(cells, axis=(0,1))
+    def backward(self, cells, activate=nn.sigmoid, norm=True):
+        #run the network in reverse
+        #excite
+        cells = activate(cells)
+        if norm:
+            #norm
+            cells = jax.nn.standardize(cells, axis=(0,1))
         #apply weights
         cells = cells * self.weights
-        #excite and return
-        return activate(cells)
+        #get weighted sum of neighbors using convolution
+        return jsignal.convolve2d(cells, self.nethood_backward, mode='same')
     
-    def backward_propagate(self, activate=nn.sigmoid):
+    def backward_propagate(self, activate=nn.sigmoid, norm=True):
         #excite and return
-        self.universe = self.backward(self.universe, activate=activate)
+        self.universe = self.backward(self.universe, activate=activate, norm=norm)
 
     def gradient_update(self, lr, step, depth, inputs, input_size, in_offset=None, out_offset=None, activate=nn.sigmoid):
         '''
@@ -186,7 +189,8 @@ class Universe:
         #write step and backprop to get updates to weights required
         cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
-        for i in range(1,depth+1):
+        cells = self.backward(cells, activate=nn.sigmoid, norm=False)
+        for i in range(1,depth):
             cells = self.backward(cells, activate=activate)
             # cells = cells - 0.5 #account for sigmoid etc.
             #track updated weights per 'layer'

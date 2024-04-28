@@ -68,7 +68,7 @@ for epoch in range(1, epochs+1):
         # model.save_state() #save weights
         for i in range(depth-1):
             model.forward_propagate(activate=activation)
-        model.forward_propagate(activate=final_activation)
+        model.forward_propagate(activate=final_activation, norm=False)
         output = model.get_output_vector(output_size, output_offset)
         forward = model.get_cells() #for plot
         # model.restore_state() #restore to original weights
@@ -93,7 +93,7 @@ for epoch in range(1, epochs+1):
         # model.save_state() #save weights
         for i in range(depth-1):
             model.forward_propagate(activate=activation)
-        model.forward_propagate(activate=final_activation)
+        model.forward_propagate(activate=final_activation, norm=False)
         result = model.get_cells() #for plot
         weights = model.get_weights() #for plot
         output2 = model.get_output_vector(output_size, output_offset)
