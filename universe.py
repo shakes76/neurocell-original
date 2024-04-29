@@ -171,12 +171,12 @@ class Universe:
         '''
         #run the network in reverse
         #excite
-        cells = activate(cells)
+        # cells = activate(cells)
         if norm:
             #norm
             cells = jax.nn.standardize(cells, axis=(0,1))
         #apply weights
-        cells = cells * self.weights
+        cells = cells / (self.weights+1e-8)
         #get weighted sum of neighbors using convolution
         return jsignal.convolve2d(cells, self.nethood_backward, mode='same')
     
@@ -196,14 +196,14 @@ class Universe:
         #tracking changes
         updates = jnp.zeros_like(self.universe)
         #write step and backprop to get updates to weights required
-        updates = jax.lax.dynamic_update_slice(updates, step, self.out_offset) #include out
+        # updates = jax.lax.dynamic_update_slice(updates, step, self.out_offset) #include out
 
         #write step and backprop to get updates to weights required
         cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
         cells = self.backward(cells, activate=nn.sigmoid, norm=False)
         updates = updates.at[:,self.out_offset[1]-1].set(cells[:,self.out_offset[1]-1])
-        for i in range(2,depth+1): #+1 includes in
+        for i in range(2,depth): #+1 includes in
             cells = self.backward(cells, activate=activate, norm=False)
             # cells = cells - 0.5 #account for sigmoid etc.
             #track updated weights per 'layer'
@@ -211,7 +211,7 @@ class Universe:
             # self.universe = self.universe + cells
         # print("backprop:", cells)
         #copy updates to universe
-        self.universe = cells.at[:,self.out_offset[1]-depth:self.out_offset[1]+1].set(updates[:,self.out_offset[1]-depth:self.out_offset[1]+1])
+        self.universe = cells.at[:,(self.out_offset[1]-depth):(self.out_offset[1])].set(updates[:,(self.out_offset[1]-depth):(self.out_offset[1])])
         
         #rescale by predicted input
         '''self.in_offset = (self.N//4, self.N//8)
