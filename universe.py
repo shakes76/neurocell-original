@@ -35,10 +35,10 @@ class Universe:
         self.dtype = dtype
         self.key = jax.random.key(42)
         #filters for spatial derivatives
-        self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
-        self.nethood_forward = jnp.array(kernel_forward, dtype=dtype) # 8 connected kernel
-        # self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
-        # self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        # self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
+        # self.nethood_forward = jnp.array(kernel_forward, dtype=dtype) # 8 connected kernel
+        self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.initialize() #universe and prev_universe
 
@@ -159,6 +159,16 @@ class Universe:
         self.universe = self.forward(self.universe, activate=activate, norm=norm)
 
     def backward(self, cells, activate=nn.sigmoid, norm=True):
+        '''#get weighted sum of neighbors using convolution
+        cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
+        #apply weights
+        cells = cells * self.weights
+        if norm:
+            #norm
+            cells = jax.nn.standardize(cells, axis=(0,1))
+        #excite and return
+        return activate(cells)
+        '''
         #run the network in reverse
         #excite
         cells = activate(cells)
@@ -185,20 +195,23 @@ class Universe:
 
         #tracking changes
         updates = jnp.zeros_like(self.universe)
+        #write step and backprop to get updates to weights required
+        updates = jax.lax.dynamic_update_slice(updates, step, self.out_offset) #include out
 
         #write step and backprop to get updates to weights required
         cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
         cells = self.backward(cells, activate=nn.sigmoid, norm=False)
-        for i in range(1,depth):
-            cells = self.backward(cells, activate=activate)
+        updates = updates.at[:,self.out_offset[1]-1].set(cells[:,self.out_offset[1]-1])
+        for i in range(2,depth+1): #+1 includes in
+            cells = self.backward(cells, activate=activate, norm=False)
             # cells = cells - 0.5 #account for sigmoid etc.
             #track updated weights per 'layer'
             updates = updates.at[:,self.out_offset[1]-i].set(cells[:,self.out_offset[1]-i])
             # self.universe = self.universe + cells
         # print("backprop:", cells)
         #copy updates to universe
-        self.universe = cells.at[:,self.out_offset[1]-depth:self.out_offset[1]].set(updates[:,self.out_offset[1]-depth:self.out_offset[1]])
+        self.universe = cells.at[:,self.out_offset[1]-depth:self.out_offset[1]+1].set(updates[:,self.out_offset[1]-depth:self.out_offset[1]+1])
         
         #rescale by predicted input
         '''self.in_offset = (self.N//4, self.N//8)

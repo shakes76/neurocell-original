@@ -15,7 +15,7 @@ samples = 120
 length = 1
 num_classes = 1
 epsilon = 1e-6
-lr = 0.1
+lr = 0.01
 
 #===========
 ##data
@@ -66,8 +66,8 @@ for epoch in range(1, epochs+1):
         
         #forward pass
         # model.save_state() #save weights
-        for i in range(depth-1):
-            model.forward_propagate(activate=activation)
+        for i in range(1, depth):
+            model.forward_propagate(activate=activation, norm=False)
         model.forward_propagate(activate=final_activation, norm=False)
         output = model.get_output_vector(output_size, output_offset)
         forward = model.get_cells() #for plot
@@ -91,8 +91,8 @@ for epoch in range(1, epochs+1):
         model.set_input_vector(x.reshape(-1,1), input_offset)
         # model.set_output_vector(y.reshape(-1,1), output_offset)
         # model.save_state() #save weights
-        for i in range(depth-1):
-            model.forward_propagate(activate=activation)
+        for i in range(1, depth):
+            model.forward_propagate(activate=activation, norm=False)
         model.forward_propagate(activate=final_activation, norm=False)
         result = model.get_cells() #for plot
         weights = model.get_weights() #for plot
