@@ -75,17 +75,23 @@ for epoch in range(1, epochs+1):
         model.reset_state() #reset to zero
 
         #compute loss
-        loss_value = loss(output, y)
+        # loss_value = loss(output, y)
         # step = lr*loss_value #take negative step
         # step = jnp.maximum(1e-8, step)
 
+        #grad
+        # loss_value2, grads = jax.value_and_grad(loss)(output, y)
+        # loss_value2, grads = model.value_and_grad(depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
+        loss_value, grads, weights = model.value_and_grad_update(lr, depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
+        # forward = model.get_cells() #for plot
+        '''
         #apply corrections
         model.set_output_vector(y.reshape(-1,1), output_offset)
         model.gradient_update(lr, loss_value.reshape(-1,1), depth, x.reshape(-1,1), input_size, input_offset, output_offset, activate=activation)
         backprop = model.get_cells() #for plot
         # model.restore_state() #restore to original weights
         model.reset_state() #reset to zero
-
+        '''
         #forward pass to check output
         #set output
         model.set_input_vector(x.reshape(-1,1), input_offset)
@@ -95,15 +101,17 @@ for epoch in range(1, epochs+1):
             model.forward_propagate(activate=activation, norm=False)
         model.forward_propagate(activate=final_activation, norm=False)
         result = model.get_cells() #for plot
-        weights = model.get_weights() #for plot
+        # weights = model.get_weights() #for plot
         output2 = model.get_output_vector(output_size, output_offset)
         # model.restore_state() #restore to original weights
         # restore = model.get_cells() #for plot
         Y_pred.append(output2.reshape(1))
         model.reset_state() #reset to zero
-
+        
         if iteration%10 == 0:
+            # print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value, "loss2:", loss_value2)
             print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value)
+            # print("i:", iteration, "X", x, "Y:", y, "loss2:", loss_value2)
         # break
     print(">> Epoch:", epoch, "Loss:", loss_value)
 
@@ -122,11 +130,16 @@ plt.title("Forward")
 plt.savefig("Forward.png", dpi=150)
 plt.show()
 
+plt.imshow(grads)
+plt.title("Grads")
+plt.savefig("Grads.png", dpi=150)
+plt.show()
+'''
 plt.imshow(backprop)
 plt.title("Backprop")
 plt.savefig("Backprop.png", dpi=150)
 plt.show()
-
+'''
 plt.imshow(result)
 plt.title("Final Result")
 plt.savefig("Final_Result.png", dpi=150)

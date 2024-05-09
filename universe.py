@@ -30,6 +30,7 @@ class Universe:
     Represents cellular structured universe of Von Neumann networks
     '''
     def __init__(self, N, dtype=jnp.float32):
+        self.epsilon = 1e-6
         self.N = N
         self.grid_size = (N,N)
         self.dtype = dtype
@@ -159,7 +160,7 @@ class Universe:
         self.universe = self.forward(self.universe, activate=activate, norm=norm)
 
     def backward(self, cells, activate=nn.sigmoid, norm=True):
-        '''#get weighted sum of neighbors using convolution
+        #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
         #apply weights
         cells = cells * self.weights
@@ -171,18 +172,44 @@ class Universe:
         '''
         #run the network in reverse
         #excite
-        # cells = activate(cells)
+        cells = activate(cells)
         if norm:
             #norm
             cells = jax.nn.standardize(cells, axis=(0,1))
         #apply weights
         cells = cells / (self.weights+1e-8)
         #get weighted sum of neighbors using convolution
-        return jsignal.convolve2d(cells, self.nethood_backward, mode='same')
+        return jsignal.convolve2d(cells, self.nethood_backward, mode='same')'''
     
     def backward_propagate(self, activate=nn.sigmoid, norm=True):
         #excite and return
         self.universe = self.backward(self.universe, activate=activate, norm=norm)
+
+    def loss(self, cells, depth, labels, inputs, in_offset, output_size, out_offset, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
+        '''
+        Cross entropy 
+        '''
+        #set input
+        # cells = self.clear_cells_vertical(cells, in_offset, after=False)
+        cells = jax.lax.dynamic_update_slice(cells, inputs, in_offset)
+        #forward
+        for i in range(1, depth):
+            cells = self.forward(cells, activate=activate, norm=norm)
+        cells = self.forward(cells, activate=final_activate, norm=norm)
+        # self.universe = cells
+        #read output
+        logits = jax.lax.dynamic_slice(cells, out_offset, output_size)
+        return -1 * jnp.mean(labels * jnp.log(logits + self.epsilon) + (1. - labels) * jnp.log(1. - logits + self.epsilon)) #CE
+        # return jnp.mean((labels - logits)**2) #MSE
+
+    def value_and_grad(self, depth, labels, inputs, in_offset, out_size, out_offset):
+        return jax.value_and_grad(self.loss)(self.universe, depth, labels, inputs, in_offset, out_size, out_offset, norm=False)
+
+    def value_and_grad_update(self, lr, depth, labels, inputs, in_offset, out_size, out_offset):
+        self.loss_value, self.grads = self.value_and_grad(depth, labels, inputs, in_offset, out_size, out_offset)
+        #apply corrections
+        self.weights = self.weights - lr*self.grads
+        return self.loss_value, self.grads, self.weights
 
     def gradient_update(self, lr, step, depth, inputs, input_size, in_offset=None, out_offset=None, activate=nn.sigmoid):
         '''
@@ -201,9 +228,14 @@ class Universe:
         #write step and backprop to get updates to weights required
         cells = self.clear_cells_vertical(self.universe, self.out_offset, after=True)
         cells = jax.lax.dynamic_update_slice(cells, step, self.out_offset)
-        cells = self.backward(cells, activate=nn.sigmoid, norm=False)
+        # cells = nn.sigmoid(cells)
+        #apply weights
+        # cells = cells / (self.weights+1e-8)
+        updates = updates.at[:,self.out_offset[1]].set(cells[:,self.out_offset[1]])
+
+        cells = self.backward(cells, activate=activate, norm=False)
         updates = updates.at[:,self.out_offset[1]-1].set(cells[:,self.out_offset[1]-1])
-        for i in range(2,depth): #+1 includes in
+        for i in range(2,depth+1): #+1 includes in
             cells = self.backward(cells, activate=activate, norm=False)
             # cells = cells - 0.5 #account for sigmoid etc.
             #track updated weights per 'layer'
@@ -211,7 +243,7 @@ class Universe:
             # self.universe = self.universe + cells
         # print("backprop:", cells)
         #copy updates to universe
-        self.universe = cells.at[:,(self.out_offset[1]-depth):(self.out_offset[1])].set(updates[:,(self.out_offset[1]-depth):(self.out_offset[1])])
+        self.universe = cells.at[:,(self.out_offset[1]-depth):(self.out_offset[1]+1)].set(updates[:,(self.out_offset[1]-depth):(self.out_offset[1]+1)])
         
         #rescale by predicted input
         '''self.in_offset = (self.N//4, self.N//8)

@@ -27,9 +27,9 @@ def backward(dtype=jnp.int32, norm=False):
     '''
     Returns the backward propagation kernel
     '''
-    kernel =   [[1, 0, 0],
-                [1, 0, 0],
-                [1, 0, 0]]
+    kernel =   [[-1, 0, 0],
+                [1, 1, 0],
+                [-1, 0, 0]]
     if norm:
         kernel[1][1] = 3
     kernel = jnp.array(kernel, dtype=dtype)
@@ -41,7 +41,7 @@ def forward(dtype=jnp.int32, norm=False):
     Returns the forward propagation kernel
     '''
     kernel =   [[0, 0, 1],
-                [0, 0, 1],
+                [0, 1, 1],
                 [0, 0, 1]]
     if norm:
         kernel[1][1] = 3
