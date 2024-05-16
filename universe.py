@@ -196,17 +196,64 @@ class Universe:
         for i in range(1, depth):
             cells = self.forward(cells, activate=activate, norm=norm)
         cells = self.forward(cells, activate=final_activate, norm=norm)
-        # self.universe = cells
         #read output
         logits = jax.lax.dynamic_slice(cells, out_offset, output_size)
         return -1 * jnp.mean(labels * jnp.log(logits + self.epsilon) + (1. - labels) * jnp.log(1. - logits + self.epsilon)) #CE
         # return jnp.mean((labels - logits)**2) #MSE
+        
+    def loss_perturb(self, cells, deltas, labels, inputs, in_offset, output_size, out_offset, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
+        '''
+        Cross entropy 
+        We use the perturbation trick, so get the layer by layer grad values for the overall loss
+        See https://github.com/google/jax/discussions/5336#discussioncomment-269983 
+        '''
+        depth = len(deltas)
+        #set input
+        # cells = self.clear_cells_vertical(cells, in_offset, after=False)
+        cells = jax.lax.dynamic_update_slice(cells, inputs, in_offset)
+        #forward
+        activations = []
+        for i in range(1, depth):
+            cells = self.forward(cells, activate=activate, norm=norm)
+            cells = cells + deltas[i-1] #have grad return layer grad
+            activations.append(cells) #save layer grad
+        cells = self.forward(cells, activate=final_activate, norm=norm)
+        cells = cells + deltas[depth-1]
+        activations.append(cells)
+        # print("activations size:", len(activations))
+
+        #read output
+        logits = jax.lax.dynamic_slice(cells, out_offset, output_size)
+        loss_value = -1 * jnp.mean(labels * jnp.log(logits + self.epsilon) + (1. - labels) * jnp.log(1. - logits + self.epsilon)) #CE
+
+        return loss_value, activations
 
     def value_and_grad(self, depth, labels, inputs, in_offset, out_size, out_offset):
         return jax.value_and_grad(self.loss)(self.universe, depth, labels, inputs, in_offset, out_size, out_offset, norm=False)
+        
+    def value_and_grad_perturb(self, depth, labels, inputs, in_offset, out_size, out_offset):
+        '''
+        We use delta values to perturb the grad of the loss function
+        Setting delta to zero means the grad will return the gradient of that layer
+        '''
+        deltas = []
+        for i in range(1,depth+1):
+            deltas.append(0.0)
+        deltas = tuple(deltas)
+        # print("deltas:", deltas)
+        return jax.value_and_grad(self.loss_perturb, (0,1), has_aux=True)(self.universe, deltas, labels, inputs, in_offset, out_size, out_offset, norm=False)
 
     def value_and_grad_update(self, lr, depth, labels, inputs, in_offset, out_size, out_offset):
-        self.loss_value, self.grads = self.value_and_grad(depth, labels, inputs, in_offset, out_size, out_offset)
+        (self.loss_value, self.layer_grads), self.grads_output = self.value_and_grad_perturb(depth, labels, inputs, in_offset, out_size, out_offset)
+        # print("loss_value", self.loss_value)
+        # print("layer grads", len(self.layer_grads), self.layer_grads[0].shape)
+
+        #compose per layer grads
+        # self.grads = self.layer_grads[1]
+        self.grads = jnp.zeros_like(self.universe)
+        for i in range(1,depth):
+            self.grads = self.grads.at[:,self.out_offset[1]-i].set(self.layer_grads[depth-i-1][:,self.out_offset[1]-i])
+
         #apply corrections
         self.weights = self.weights - lr*self.grads
         return self.loss_value, self.grads, self.weights
