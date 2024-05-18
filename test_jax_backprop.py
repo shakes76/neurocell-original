@@ -11,7 +11,7 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 1000
+epochs = 1
 samples = 120
 length = 1
 num_classes = 1
@@ -41,6 +41,8 @@ input_size = (length,1)
 input_offset = (3,1)
 output_size = (num_classes,1)
 output_offset = (3,5)
+layer_size = (5,1)
+layer_offset = (1,3)
 key = jax.random.key(42)
 depth = output_offset[1]-input_offset[1]
 activation = jax.nn.tanh
@@ -53,8 +55,10 @@ model = universe.Universe(N)
 #random init
 # Initialize model
 model.initialize_vertical(input_size, output_size, input_offset, output_offset)
+model.set_layer_vertical(layer_size, layer_offset)
 # result_init = model.get_cells()
 # weights_init = model.get_weights()
+states_init = model.get_states()
 
 time_s = process_time()
 for epoch in range(1, epochs+1):
@@ -128,6 +132,11 @@ plt.show()
 plt.imshow(weights_init)
 plt.title("Initial Weights")
 plt.savefig("Initial_Weights.png", dpi=150)
+plt.show()
+
+plt.imshow(states_init)
+plt.title("Initial States")
+plt.savefig("Initial_States.png", dpi=150)
 plt.show()
 
 # plt.imshow(forward)

@@ -34,6 +34,7 @@ class Universe:
         self.N = N
         self.grid_size = (N,N)
         self.dtype = dtype
+        self.states_dtype = jnp.uint8
         self.key = jax.random.key(42)
         #filters for spatial derivatives
         # self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
@@ -45,6 +46,7 @@ class Universe:
 
     def initialize(self):
         self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
+        self.states = jnp.zeros(self.grid_size, dtype=self.states_dtype)
 
         new_key, subkey = jax.random.split(self.key)
         self.weights = 1.0 * jax.random.normal(subkey, self.grid_size, dtype=self.dtype)
@@ -53,7 +55,8 @@ class Universe:
         self.save_state()
         
     def initialize_vertical(self, in_size, out_size, in_offset=None, out_offset=None):
-        self.universe = jnp.zeros(self.grid_size)
+        self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
+        self.states = jnp.zeros(self.grid_size, dtype=self.states_dtype)
 
         new_key, subkey = jax.random.split(self.key)
         self.weights = 1.0 * jax.random.normal(subkey, self.grid_size)
@@ -66,12 +69,16 @@ class Universe:
         self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
         if out_offset:
             self.out_offset = out_offset
+        in_passives = jnp.ones(in_size, dtype=self.states_dtype)
+        out_passives = jnp.ones(in_size, dtype=self.states_dtype)
         inputs = jnp.ones(in_size, dtype=self.weights.dtype)
         outputs = jnp.ones(out_size, dtype=self.weights.dtype)
         weights = self.clear_cells_vertical(self.weights, self.in_offset, after=False)
         self.weights = jax.lax.dynamic_update_slice(weights, inputs, self.in_offset)
+        states = jax.lax.dynamic_update_slice(self.states, in_passives, self.in_offset)
         weights = self.clear_cells_vertical(self.weights, self.out_offset, after=True)
         self.weights = jax.lax.dynamic_update_slice(weights, outputs, self.out_offset)
+        self.states = jax.lax.dynamic_update_slice(states, out_passives, self.out_offset)
 
         self.save_state()
 
@@ -80,6 +87,9 @@ class Universe:
         
     def get_weights(self):
         return self.weights
+    
+    def get_states(self):
+        return self.states
     
     def save_state(self):
         self.previous_universe = self.universe
@@ -123,6 +133,10 @@ class Universe:
         self.universe = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
         # weights = self.clear_cells_vertical(self.weights, self.out_offset, after=True)
         # self.weights = jax.lax.dynamic_update_slice(weights, outputs, self.out_offset)
+
+    def set_layer_vertical(self, layer_size, offset=None):
+        passives = jnp.ones(layer_size, dtype=self.states_dtype)
+        self.states = jax.lax.dynamic_update_slice(self.states, passives, offset)
     
     def get_input_vector(self, input_size, offset=None):
         '''
@@ -148,13 +162,20 @@ class Universe:
     def forward(self, cells, activate=nn.sigmoid, norm=True):
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
-        #apply weights
-        cells = cells * self.weights
         if norm:
             #norm
             cells = jax.nn.standardize(cells, axis=(0,1))
+        #check states
+        #if passive apply activation, else signal state so weight
+        cells = jnp.where(self.states==1, activate(cells), cells*self.weights) #respond per state
+        #apply weights
+        # cells = cells * self.weights
+        # if norm:
+        #     #norm
+        #     cells = jax.nn.standardize(cells, axis=(0,1))
         #excite and return
-        return activate(cells)
+        # return activate(cells)
+        return cells
     
     def forward_propagate(self, activate=nn.sigmoid, norm=True):
         self.universe = self.forward(self.universe, activate=activate, norm=norm)
