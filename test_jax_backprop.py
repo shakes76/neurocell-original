@@ -5,12 +5,13 @@ import jax
 import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from time import process_time
 
 import universe #local
 
 #parameters
 N = 7
-epochs = 100
+epochs = 1000
 samples = 120
 length = 1
 num_classes = 1
@@ -55,6 +56,7 @@ model.initialize_vertical(input_size, output_size, input_offset, output_offset)
 # result_init = model.get_cells()
 # weights_init = model.get_weights()
 
+time_s = process_time()
 for epoch in range(1, epochs+1):
     Y_pred = []
     for iteration, (x, y) in enumerate(zip(X, Y)):
@@ -65,14 +67,14 @@ for epoch in range(1, epochs+1):
         weights_init = model.get_weights()
         
         #forward pass
-        # model.save_state() #save weights
-        for i in range(1, depth):
-            model.forward_propagate(activate=activation, norm=False)
-        model.forward_propagate(activate=final_activation, norm=False)
-        output = model.get_output_vector(output_size, output_offset)
-        forward = model.get_cells() #for plot
-        # model.restore_state() #restore to original weights
-        model.reset_state() #reset to zero
+        # # model.save_state() #save weights
+        # for i in range(1, depth):
+        #     model.forward_propagate(activate=activation, norm=False)
+        # model.forward_propagate(activate=final_activation, norm=False)
+        # output = model.get_output_vector(output_size, output_offset)
+        # forward = model.get_cells() #for plot
+        # # model.restore_state() #restore to original weights
+        # model.reset_state() #reset to zero
 
         #compute loss
         # loss_value = loss(output, y)
@@ -110,10 +112,13 @@ for epoch in range(1, epochs+1):
         
         if iteration%10 == 0:
             # print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value, "loss2:", loss_value2)
-            print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value)
+            # print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value)
+            print("i:", iteration, "X", x, "Y:", y, "Update Out:", output2, "loss:", loss_value)
             # print("i:", iteration, "X", x, "Y:", y, "loss2:", loss_value2)
         # break
     print(">> Epoch:", epoch, "Loss:", loss_value)
+elapsed_time = process_time() - time_s
+print("Training time:", elapsed_time, "s or ", elapsed_time/60.0, "mins")
 
 plt.imshow(result_init)
 plt.title("Initial")
@@ -125,10 +130,10 @@ plt.title("Initial Weights")
 plt.savefig("Initial_Weights.png", dpi=150)
 plt.show()
 
-plt.imshow(forward)
-plt.title("Forward")
-plt.savefig("Forward.png", dpi=150)
-plt.show()
+# plt.imshow(forward)
+# plt.title("Forward")
+# plt.savefig("Forward.png", dpi=150)
+# plt.show()
 
 plt.imshow(grads)
 plt.title("Grads")

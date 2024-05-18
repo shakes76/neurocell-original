@@ -251,9 +251,9 @@ class Universe:
         #compose per layer grads
         # self.grads = self.layer_grads[1]
         self.grads = jnp.zeros_like(self.universe)
-        for i in range(0,depth):
+        for i in range(1,depth):
             self.grads = self.grads.at[:,self.out_offset[1]-i].set(self.layer_grads[depth-i-1][:,self.out_offset[1]-i])
-        self.grads = self.grads.at[:,self.in_offset[1]].set(self.grads_output[0][:,self.in_offset[1]])
+        # self.grads = self.grads.at[:,self.in_offset[1]].set(self.grads_output[0][:,self.in_offset[1]])
 
         #apply corrections
         self.weights = self.weights - lr*self.grads
