@@ -11,12 +11,12 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 1
+epochs = 100
 samples = 120
 length = 1
 num_classes = 1
 epsilon = 1e-6
-lr = 0.1
+lr = 0.01
 
 #===========
 ##data
