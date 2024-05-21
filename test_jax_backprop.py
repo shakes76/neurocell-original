@@ -8,10 +8,13 @@ import matplotlib.pyplot as plt
 from time import process_time
 
 import universe #local
+import utils #local
+
+utils.jax_status()
 
 #parameters
 N = 7
-epochs = 200
+epochs = 45
 samples = 120
 length = 1
 num_classes = 1
@@ -146,7 +149,7 @@ plt.show()
 
 plt.imshow(bias_grads)
 plt.title("Bias Grads")
-plt.savefig("Grads.png", dpi=150)
+plt.savefig("Bias_Grads.png", dpi=150)
 plt.show()
 
 plt.imshow(grads)
