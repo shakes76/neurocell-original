@@ -37,10 +37,10 @@ class Universe:
         self.states_dtype = jnp.uint8
         self.key = jax.random.key(42)
         #filters for spatial derivatives
-        # self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
-        # self.nethood_forward = jnp.array(kernel_forward, dtype=dtype) # 8 connected kernel
-        self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
-        self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
+        self.nethood_forward = jnp.array(kernel_forward, dtype=dtype) # 8 connected kernel
+        # self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        # self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.initialize() #universe and prev_universe
 
@@ -60,6 +60,7 @@ class Universe:
 
         new_key, subkey = jax.random.split(self.key)
         self.weights = 1.0 * jax.random.normal(subkey, self.grid_size)
+        self.biases = jnp.zeros(self.grid_size, dtype=self.dtype)
         self.key = new_key
 
         #setup in/out weights
@@ -161,7 +162,7 @@ class Universe:
     def shift(self, value):
         self.universe = self.universe - value #account for sigmoid etc.
     
-    def forward(self, cells, activate=nn.sigmoid, norm=True):
+    def forward(self, cells, weights, biases, activate=nn.sigmoid, norm=True):
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
         if norm:
@@ -169,8 +170,8 @@ class Universe:
             cells = jax.nn.standardize(cells, axis=(0,1))
         #check states
         #if passive apply activation, else signal state so weight
-        cells = jnp.where(self.states==1, cells*self.weights, cells) #weight if signal
-        cells = jnp.where(self.states==2, activate(cells), cells) #activate if passive
+        cells = jnp.where(self.states==1, cells*weights, cells) #weight if signal
+        cells = jnp.where(self.states==2, activate(cells+biases), cells) #activate if passive
         #apply weights
         # cells = cells * self.weights
         # if norm:
@@ -181,7 +182,7 @@ class Universe:
         return cells
     
     def forward_propagate(self, activate=nn.sigmoid, norm=True):
-        self.universe = self.forward(self.universe, activate=activate, norm=norm)
+        self.universe = self.forward(self.universe, self.weights, self.biases, activate=activate, norm=norm)
 
     def backward(self, cells, activate=nn.sigmoid, norm=True):
         #get weighted sum of neighbors using convolution
@@ -225,32 +226,30 @@ class Universe:
         return -1 * jnp.mean(labels * jnp.log(logits + self.epsilon) + (1. - labels) * jnp.log(1. - logits + self.epsilon)) #CE
         # return jnp.mean((labels - logits)**2) #MSE
         
-    def loss_perturb(self, cells, deltas, labels, inputs, in_offset, output_size, out_offset, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
+    def loss_perturb(self, params, deltas, labels, inputs, in_offset, output_size, out_offset, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
         '''
         Cross entropy 
         We use the perturbation trick, so get the layer by layer grad values for the overall loss
         See https://github.com/google/jax/discussions/5336#discussioncomment-269983 
         '''
         depth = len(deltas)
+        weights, biases = params
         #set input
         # cells = self.clear_cells_vertical(cells, in_offset, after=False)
-        cells = jax.lax.dynamic_update_slice(cells, inputs, in_offset)
+        cells = jax.lax.dynamic_update_slice(self.universe, inputs, in_offset)
         #forward
-        activations = []
         for i in range(1, depth):
-            cells = self.forward(cells, activate=activate, norm=norm)
-            cells = cells + deltas[i-1] #have grad return layer grad
-            activations.append(cells) #save layer grad
-        cells = self.forward(cells, activate=final_activate, norm=norm)
-        cells = cells + deltas[depth-1]
-        activations.append(cells)
+            cells = self.forward(cells, weights, biases, activate=activate, norm=norm)
+            # cells = cells + deltas[i-1] #have grad return layer grad
+        cells = self.forward(cells, weights, biases, activate=final_activate, norm=norm)
+        # cells = cells + deltas[depth-1]
         # print("activations size:", len(activations))
 
         #read output
         logits = jax.lax.dynamic_slice(cells, out_offset, output_size)
         loss_value = -1 * jnp.mean(labels * jnp.log(logits + self.epsilon) + (1. - labels) * jnp.log(1. - logits + self.epsilon)) #CE
 
-        return loss_value, activations
+        return loss_value
 
     def value_and_grad(self, depth, labels, inputs, in_offset, out_size, out_offset):
         return jax.value_and_grad(self.loss)(self.universe, depth, labels, inputs, in_offset, out_size, out_offset, norm=False)
@@ -265,23 +264,30 @@ class Universe:
             deltas.append(0.0)
         deltas = tuple(deltas)
         # print("deltas:", deltas)
-        return jax.value_and_grad(self.loss_perturb, (0,1), has_aux=True)(self.universe, deltas, labels, inputs, in_offset, out_size, out_offset, norm=False)
+        params = [self.weights, self.biases]
+        return jax.value_and_grad(self.loss_perturb)(params, deltas, labels, inputs, in_offset, out_size, out_offset, norm=False)
 
     def value_and_grad_update(self, lr, depth, labels, inputs, in_offset, out_size, out_offset):
-        (self.loss_value, self.layer_grads), self.grads_output = self.value_and_grad_perturb(depth, labels, inputs, in_offset, out_size, out_offset)
+        self.loss_value, self.grads_output = self.value_and_grad_perturb(depth, labels, inputs, in_offset, out_size, out_offset)
         # print("loss_value", self.loss_value)
         # print("layer grads", len(self.layer_grads), self.layer_grads[0].shape)
+        # print("grads", len(self.grads_output), self.grads_output)
+        # print("grads", len(self.grads_output[0]), self.grads_output[0])
+        # print("grads", len(self.grads_output[1]), self.grads_output[1])
 
         #compose per layer grads
-        # self.grads = self.layer_grads[1]
-        self.grads = jnp.zeros_like(self.universe)
-        for i in range(1,depth):
-            self.grads = self.grads.at[:,self.out_offset[1]-i].set(self.layer_grads[depth-i-1][:,self.out_offset[1]-i])
+        self.grads = self.grads_output[0]
+        self.bias_grads = self.grads_output[1]
+        # self.grads = jnp.zeros_like(self.universe)
+        # for i in range(1,depth):
+        #     self.grads = self.grads.at[:,self.out_offset[1]-i].set(self.layer_grads[depth-i-1][:,self.out_offset[1]-i])
         # self.grads = self.grads.at[:,self.in_offset[1]].set(self.grads_output[0][:,self.in_offset[1]])
 
         #apply corrections
         self.weights = self.weights - lr*self.grads
-        return self.loss_value, self.grads, self.weights
+        self.biases = self.biases - lr*self.bias_grads
+
+        return self.loss_value, self.grads, self.bias_grads, self.weights
 
     def gradient_update(self, lr, step, depth, inputs, input_size, in_offset=None, out_offset=None, activate=nn.sigmoid):
         '''

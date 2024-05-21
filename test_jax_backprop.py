@@ -11,12 +11,12 @@ import universe #local
 
 #parameters
 N = 7
-epochs = 100
+epochs = 200
 samples = 120
 length = 1
 num_classes = 1
 epsilon = 1e-6
-lr = 0.01
+lr = 0.1
 
 #===========
 ##data
@@ -88,7 +88,7 @@ for epoch in range(1, epochs+1):
         #grad
         # loss_value2, grads = jax.value_and_grad(loss)(output, y)
         # loss_value2, grads = model.value_and_grad(depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
-        loss_value, grads, weights = model.value_and_grad_update(lr, depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
+        loss_value, grads, bias_grads, weights = model.value_and_grad_update(lr, depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
         # forward = model.get_cells() #for plot
         '''
         #apply corrections
@@ -143,6 +143,11 @@ plt.show()
 # plt.title("Forward")
 # plt.savefig("Forward.png", dpi=150)
 # plt.show()
+
+plt.imshow(bias_grads)
+plt.title("Bias Grads")
+plt.savefig("Grads.png", dpi=150)
+plt.show()
 
 plt.imshow(grads)
 plt.title("Grads")
