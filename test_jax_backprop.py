@@ -4,6 +4,8 @@ Unit test for effect of filters
 import jax
 import numpy as np
 import jax.numpy as jnp
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 from time import process_time
 
@@ -14,7 +16,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 45
+epochs = 750
 samples = 120
 length = 1
 num_classes = 1
@@ -130,17 +132,17 @@ print("Training time:", elapsed_time, "s or ", elapsed_time/60.0, "mins")
 plt.imshow(result_init)
 plt.title("Initial")
 plt.savefig("Initial.png", dpi=150)
-plt.show()
+#plt.show()
 
 plt.imshow(weights_init)
 plt.title("Initial Weights")
 plt.savefig("Initial_Weights.png", dpi=150)
-plt.show()
+#plt.show()
 
 plt.imshow(states_init)
 plt.title("Initial States")
 plt.savefig("Initial_States.png", dpi=150)
-plt.show()
+#plt.show()
 
 # plt.imshow(forward)
 # plt.title("Forward")
@@ -150,12 +152,12 @@ plt.show()
 plt.imshow(bias_grads)
 plt.title("Bias Grads")
 plt.savefig("Bias_Grads.png", dpi=150)
-plt.show()
+#plt.show()
 
 plt.imshow(grads)
 plt.title("Grads")
 plt.savefig("Grads.png", dpi=150)
-plt.show()
+#plt.show()
 '''
 plt.imshow(backprop)
 plt.title("Backprop")
@@ -165,16 +167,18 @@ plt.show()
 plt.imshow(result)
 plt.title("Final Result")
 plt.savefig("Final_Result.png", dpi=150)
-plt.show()
+#plt.show()
 
 plt.imshow(weights)
 plt.title("Final Weights")
 plt.savefig("Final_Weights.png", dpi=150)
-plt.show()
+#plt.show()
 
 #function plot
+fig = plt.figure()
 plt.plot(X, Y_pred)
 plt.plot(X, Y, 'm')
 plt.xlabel('X')
 plt.savefig("Plot.png", dpi=150)
-plt.show()
+#plt.show()
+

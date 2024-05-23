@@ -37,10 +37,10 @@ class Universe:
         self.states_dtype = jnp.uint8
         self.key = jax.random.key(42)
         #filters for spatial derivatives
-        self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
-        self.nethood_forward = jnp.array(kernel_forward, dtype=dtype) # 8 connected kernel
-        # self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
-        # self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        #self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
+        #self.nethood_forward = jnp.array(kernel_forward, dtype=dtype) # 8 connected kernel
+        self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.initialize() #universe and prev_universe
 
