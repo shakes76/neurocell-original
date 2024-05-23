@@ -3,9 +3,8 @@ Unit test for effect of filters
 '''
 import jax
 import numpy as np
-import jax.numpy as jnp
-import matplotlib as mpl
-mpl.use('Agg')
+# import matplotlib as mpl
+# mpl.use('Agg')
 import matplotlib.pyplot as plt
 from time import process_time
 
@@ -16,7 +15,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 750
+epochs = 3
 samples = 120
 length = 1
 num_classes = 1
@@ -30,15 +29,6 @@ Y = np.zeros(samples, dtype=np.float32)
 
 #square wave
 Y[ (X[:,0] >= -0.5) & (X[:,0] < 0.5) ] = 1.0
-
-#helpers
-#loss function
-def loss(logits, labels) -> jnp.ndarray:
-    '''
-    Cross entropy 
-    '''
-    return -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1. - labels) * jnp.log(1. - logits + epsilon)) #CE
-    # return jnp.mean((labels - logits)**2) #MSE
 
 #===========
 #setup
@@ -85,36 +75,22 @@ for epoch in range(1, epochs+1):
         # # model.restore_state() #restore to original weights
         # model.reset_state() #reset to zero
 
-        #compute loss
-        # loss_value = loss(output, y)
-        # step = lr*loss_value #take negative step
-        # step = jnp.maximum(1e-8, step)
-
         #grad
         # loss_value2, grads = jax.value_and_grad(loss)(output, y)
         # loss_value2, grads = model.value_and_grad(depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
         loss_value, grads, bias_grads, weights = model.value_and_grad_update(lr, depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
         # forward = model.get_cells() #for plot
-        '''
-        #apply corrections
-        model.set_output_vector(y.reshape(-1,1), output_offset)
-        model.gradient_update(lr, loss_value.reshape(-1,1), depth, x.reshape(-1,1), input_size, input_offset, output_offset, activate=activation)
-        backprop = model.get_cells() #for plot
-        # model.restore_state() #restore to original weights
-        model.reset_state() #reset to zero
-        '''
+
         #forward pass to check output
         #set output
         model.set_input_vector(x.reshape(-1,1), input_offset)
         # model.set_output_vector(y.reshape(-1,1), output_offset)
-        # model.save_state() #save weights
         for i in range(1, depth):
             model.forward_propagate(activate=activation, norm=False)
         model.forward_propagate(activate=final_activation, norm=False)
         result = model.get_cells() #for plot
         # weights = model.get_weights() #for plot
         output2 = model.get_output_vector(output_size, output_offset)
-        # model.restore_state() #restore to original weights
         # restore = model.get_cells() #for plot
         Y_pred.append(output2.reshape(1))
         model.reset_state() #reset to zero
@@ -128,6 +104,9 @@ for epoch in range(1, epochs+1):
     print(">> Epoch:", epoch, "Loss:", loss_value)
 elapsed_time = process_time() - time_s
 print("Training time:", elapsed_time, "s or ", elapsed_time/60.0, "mins")
+
+#save models
+model.save("cells.npz")
 
 plt.imshow(result_init)
 plt.title("Initial")
@@ -158,12 +137,7 @@ plt.imshow(grads)
 plt.title("Grads")
 plt.savefig("Grads.png", dpi=150)
 #plt.show()
-'''
-plt.imshow(backprop)
-plt.title("Backprop")
-plt.savefig("Backprop.png", dpi=150)
-plt.show()
-'''
+
 plt.imshow(result)
 plt.title("Final Result")
 plt.savefig("Final_Result.png", dpi=150)
@@ -172,7 +146,7 @@ plt.savefig("Final_Result.png", dpi=150)
 plt.imshow(weights)
 plt.title("Final Weights")
 plt.savefig("Final_Weights.png", dpi=150)
-#plt.show()
+plt.show()
 
 #function plot
 fig = plt.figure()
@@ -180,5 +154,4 @@ plt.plot(X, Y_pred)
 plt.plot(X, Y, 'm')
 plt.xlabel('X')
 plt.savefig("Plot.png", dpi=150)
-#plt.show()
-
+plt.show()

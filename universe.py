@@ -91,6 +91,9 @@ class Universe:
     def get_weights(self):
         return self.weights
     
+    def get_biases(self):
+        return self.biases
+    
     def get_states(self):
         return self.states
     
@@ -324,20 +327,6 @@ class Universe:
         self.universe = cells.at[:,(self.out_offset[1]-depth):(self.out_offset[1]+1)].set(updates[:,(self.out_offset[1]-depth):(self.out_offset[1]+1)])
         
         #rescale by predicted input
-        '''self.in_offset = (self.N//4, self.N//8)
-        if in_offset:
-            self.in_offset = in_offset
-        pred_inputs = jax.lax.dynamic_slice(self.universe, self.in_offset, input_size)
-        scaling = lr*abs(inputs/pred_inputs) #only mag
-        # if scaling > 1.0:
-        #     scaling = jnp.minimum(1.5, scaling)
-        # unity = jnp.ones((1,1), dtype=self.universe.dtype)
-        zero = jnp.zeros((1,1), dtype=self.universe.dtype)
-        self.universe = jax.lax.dynamic_update_slice(self.universe, zero, self.in_offset)
-        # if scaling > 1.0:
-        #     self.universe = scaling*self.universe
-        self.universe = scaling*self.universe
-        print("Scaling:", scaling)'''
         #take lr step
         # self.universe = lr*self.universe
         #rescale changes to be normalised
@@ -353,6 +342,19 @@ class Universe:
         # self.weights = jax.nn.standardize(self.weights, axis=(0,1))
         #restore input (data consistency)
         # self.universe = jax.lax.dynamic_update_slice(cells, X[0].reshape(-1,1), input_offset)
+
+    def save(self, model_name):
+        jnp.savez(model_name, weights=self.weights, biases=self.biases, states=self.states, allow_pickle=False)
+
+    def load(self, filename):
+        with jnp.load(filename, allow_pickle=False) as data:
+            self.weights = data['weights']
+            self.biases = data['biases']
+            self.states = data['states']
+        self.N = self.weights.shape[0]
+        self.grid_size = self.weights.shape
+        self.dtype = self.weights.dtype
+        self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
 
 class UniversePerceptron(hk.Module):
     '''
