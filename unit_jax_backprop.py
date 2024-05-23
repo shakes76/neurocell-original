@@ -3,130 +3,155 @@ Unit test for effect of filters
 '''
 import jax
 import numpy as np
-import jax.numpy as jnp
-import jax.scipy.signal as jsignal
+# import matplotlib as mpl
+# mpl.use('Agg')
 import matplotlib.pyplot as plt
+from time import process_time
 
-import filters #local
+import universe #local
+import utils #local
+
+utils.jax_status()
 
 #parameters
 N = 7
+epochs = 3
 samples = 120
 length = 1
 num_classes = 1
+epsilon = 1e-6
 lr = 0.1
 
 #===========
 ##data
-X = np.arange(-30, 30, 0.5, dtype=np.float32).reshape(-1, 1)
+X = np.arange(-1.5, 1.5, 0.025, dtype=np.float32).reshape(-1, 1)
 Y = np.zeros(samples, dtype=np.float32)
 
 #square wave
-Y[ (X[:,0] >= -10) & (X[:,0] < 10) ] = 1.0
-
-plt.plot(X, Y)
-plt.show()
-
-#helpers
-def forward_propagate(cells):
-    cells = jsignal.convolve2d(cells, nethood_forward, mode='same')
-    cells = jax.nn.standardize(cells, axis=(0,1))
-    return jax.nn.sigmoid(cells)
-
-def backward_propagate(cells):
-    cells = jsignal.convolve2d(cells, nethood_backward, mode='same')
-    cells = jax.nn.standardize(cells, axis=(0,1))
-    return jax.nn.sigmoid(cells)
-
-def clear_cells(universe, offset, after=False):
-    if after:
-        result = universe.at[:,offset[1]+1:].set(0)  #clear cells after
-    else:
-        result = universe.at[:,:offset[1]].set(0) #clear cells before
-    return result
+Y[ (X[:,0] >= -0.5) & (X[:,0] < 0.5) ] = 1.0
 
 #===========
+#setup
 input_size = (length,1)
 input_offset = (3,1)
 output_size = (num_classes,1)
 output_offset = (3,5)
-universe = jnp.zeros((N,N))
+layer_size = (5,1)
+layer_offset = (1,3)
 key = jax.random.key(42)
 depth = output_offset[1]-input_offset[1]
+activation = jax.nn.tanh
+final_activation = jax.nn.sigmoid
 print("depth:", depth)
 
+##create model
+model = universe.Universe(N)
+
 #random init
-new_key, subkey = jax.random.split(key)
-noise = 1.0 * jax.random.normal(subkey, universe.shape)
+# Initialize model
+model.initialize_vertical(input_size, output_size, input_offset, output_offset)
+model.set_layer_vertical(layer_size, layer_offset)
+# result_init = model.get_cells()
+# weights_init = model.get_weights()
+states_init = model.get_states()
 
-#random universe
-universe += noise
+time_s = process_time()
+for epoch in range(1, epochs+1):
+    Y_pred = []
+    for iteration, (x, y) in enumerate(zip(X, Y)):
+        #set output
+        model.set_input_vector(x.reshape(-1,1), input_offset)
+        # model.set_output_vector(y.reshape(-1,1), output_offset)
+        result_init = model.get_cells()
+        weights_init = model.get_weights()
+        
+        #forward pass
+        # # model.save_state() #save weights
+        # for i in range(1, depth):
+        #     model.forward_propagate(activate=activation, norm=False)
+        # model.forward_propagate(activate=final_activation, norm=False)
+        # output = model.get_output_vector(output_size, output_offset)
+        # forward = model.get_cells() #for plot
+        # # model.restore_state() #restore to original weights
+        # model.reset_state() #reset to zero
 
-#filters for spatial derivatives
-nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
-nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
-# nethood = filters.forwardPropagation(dtype=jnp.float32, norm=True) # 8 connected kernel
+        #grad
+        # loss_value2, grads = jax.value_and_grad(loss)(output, y)
+        # loss_value2, grads = model.value_and_grad(depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
+        loss_value, grads, bias_grads, weights = model.value_and_grad_update(lr, depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
+        # forward = model.get_cells() #for plot
 
-universe = jax.lax.dynamic_update_slice(universe, X[0].reshape(-1,1), input_offset)
-# universe = universe.at[:,:input_offset[1]].set(0) #clear cells before
-universe = clear_cells(universe, input_offset, after=False)
-universe = jax.lax.dynamic_update_slice(universe, Y[0].reshape(-1,1), output_offset)
-# universe = universe.at[:,output_offset[1]+1:].set(0)  #clear cells after
-universe = clear_cells(universe, output_offset, after=True)
-print(X[0], Y[0])
+        #forward pass to check output
+        #set output
+        model.set_input_vector(x.reshape(-1,1), input_offset)
+        # model.set_output_vector(y.reshape(-1,1), output_offset)
+        for i in range(1, depth):
+            model.forward_propagate(activate=activation, norm=False)
+        model.forward_propagate(activate=final_activation, norm=False)
+        result = model.get_cells() #for plot
+        # weights = model.get_weights() #for plot
+        output2 = model.get_output_vector(output_size, output_offset)
+        # restore = model.get_cells() #for plot
+        Y_pred.append(output2.reshape(1))
+        model.reset_state() #reset to zero
+        
+        if iteration%10 == 0:
+            # print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value, "loss2:", loss_value2)
+            # print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value)
+            print("i:", iteration, "X", x, "Y:", y, "Update Out:", output2, "loss:", loss_value)
+            # print("i:", iteration, "X", x, "Y:", y, "loss2:", loss_value2)
+        # break
+    print(">> Epoch:", epoch, "Loss:", loss_value)
+elapsed_time = process_time() - time_s
+print("Training time:", elapsed_time, "s or ", elapsed_time/60.0, "mins")
 
-#compute convolutions to forward propagate
-#convolution is the time reversed correlation with the kernel.
-#hence convolution with forward is equivalent to correlation with backward
-result = forward_propagate(universe)
-for i in range(depth-1):
-    result = forward_propagate(result)
+#save models
+model.save("cells.npz")
 
-#get output
-output = jax.lax.dynamic_slice(result, output_offset, output_size)
-print(output)
-
-#compute loss
-cost = Y[0].reshape(-1,1)-output
-step = lr*cost #take negative step
-print("Y:", Y[0], "cost:", cost, "step:", step)
-
-#write step and backprop to get updates to weights required
-backprop = jax.lax.dynamic_update_slice(result, step, output_offset)
-backprop = clear_cells(backprop, output_offset, after=True)
-
-for i in range(depth):
-    backprop = backward_propagate(backprop)
-
-#apply corrections
-universe_update = universe - backprop
-#restore input (data consistency)
-universe_update = jax.lax.dynamic_update_slice(universe_update, X[0].reshape(-1,1), input_offset)
-
-#forward prop
-result2 = forward_propagate(universe_update)
-for i in range(depth-1):
-    result2 = forward_propagate(result2)
-
-output2 = jax.lax.dynamic_slice(result2, output_offset, output_size)
-print(output2)
-
-plt.imshow(universe)
+plt.imshow(result_init)
 plt.title("Initial")
-plt.show()
+plt.savefig("Initial.png", dpi=150)
+#plt.show()
+
+plt.imshow(weights_init)
+plt.title("Initial Weights")
+plt.savefig("Initial_Weights.png", dpi=150)
+#plt.show()
+
+plt.imshow(states_init)
+plt.title("Initial States")
+plt.savefig("Initial_States.png", dpi=150)
+#plt.show()
+
+# plt.imshow(forward)
+# plt.title("Forward")
+# plt.savefig("Forward.png", dpi=150)
+# plt.show()
+
+plt.imshow(bias_grads)
+plt.title("Bias Grads")
+plt.savefig("Bias_Grads.png", dpi=150)
+#plt.show()
+
+plt.imshow(grads)
+plt.title("Grads")
+plt.savefig("Grads.png", dpi=150)
+#plt.show()
 
 plt.imshow(result)
-plt.title("Result")
+plt.title("Final Result")
+plt.savefig("Final_Result.png", dpi=150)
+#plt.show()
+
+plt.imshow(weights)
+plt.title("Final Weights")
+plt.savefig("Final_Weights.png", dpi=150)
 plt.show()
 
-plt.imshow(backprop)
-plt.title("Backprop")
-plt.show()
-
-plt.imshow(universe_update)
-plt.title("Updated")
-plt.show()
-
-plt.imshow(result2)
-plt.title("Result2")
+#function plot
+fig = plt.figure()
+plt.plot(X, Y_pred)
+plt.plot(X, Y, 'm')
+plt.xlabel('X')
+plt.savefig("Plot.png", dpi=150)
 plt.show()

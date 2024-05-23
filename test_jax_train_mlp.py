@@ -51,9 +51,6 @@ model = universe.Universe(N)
 # Initialize model
 model.initialize_vertical(input_size, output_size, input_offset, output_offset)
 model.set_layer_vertical(layer_size, layer_offset)
-# result_init = model.get_cells()
-# weights_init = model.get_weights()
-states_init = model.get_states()
 
 time_s = process_time()
 for epoch in range(1, epochs+1):
@@ -62,21 +59,8 @@ for epoch in range(1, epochs+1):
         #set output
         model.set_input_vector(x.reshape(-1,1), input_offset)
         # model.set_output_vector(y.reshape(-1,1), output_offset)
-        result_init = model.get_cells()
-        weights_init = model.get_weights()
         
-        #forward pass
-        # # model.save_state() #save weights
-        # for i in range(1, depth):
-        #     model.forward_propagate(activate=activation, norm=False)
-        # model.forward_propagate(activate=final_activation, norm=False)
-        # output = model.get_output_vector(output_size, output_offset)
-        # forward = model.get_cells() #for plot
-        # # model.restore_state() #restore to original weights
-        # model.reset_state() #reset to zero
-
         #grad
-        # loss_value2, grads = jax.value_and_grad(loss)(output, y)
         # loss_value2, grads = model.value_and_grad(depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
         loss_value, grads, bias_grads, weights = model.value_and_grad_update(lr, depth, y.reshape(-1,1), x.reshape(-1,1), input_offset, output_size, output_offset)
         # forward = model.get_cells() #for plot
@@ -99,7 +83,6 @@ for epoch in range(1, epochs+1):
             # print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value, "loss2:", loss_value2)
             # print("i:", iteration, "X", x, "Y:", y, "Forward Out:", output, "Update Out:", output2, "loss:", loss_value)
             print("i:", iteration, "X", x, "Y:", y, "Update Out:", output2, "loss:", loss_value)
-            # print("i:", iteration, "X", x, "Y:", y, "loss2:", loss_value2)
         # break
     print(">> Epoch:", epoch, "Loss:", loss_value)
 elapsed_time = process_time() - time_s
@@ -107,26 +90,6 @@ print("Training time:", elapsed_time, "s or ", elapsed_time/60.0, "mins")
 
 #save models
 model.save("cells.npz")
-
-plt.imshow(result_init)
-plt.title("Initial")
-plt.savefig("Initial.png", dpi=150)
-#plt.show()
-
-plt.imshow(weights_init)
-plt.title("Initial Weights")
-plt.savefig("Initial_Weights.png", dpi=150)
-#plt.show()
-
-plt.imshow(states_init)
-plt.title("Initial States")
-plt.savefig("Initial_States.png", dpi=150)
-#plt.show()
-
-# plt.imshow(forward)
-# plt.title("Forward")
-# plt.savefig("Forward.png", dpi=150)
-# plt.show()
 
 plt.imshow(bias_grads)
 plt.title("Bias Grads")
