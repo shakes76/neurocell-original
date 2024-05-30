@@ -1,6 +1,8 @@
 '''
 Universe object for Von Neumann networks
 '''
+from collections.abc import Sequence
+
 import jax
 import jax.numpy as jnp
 import jax.nn as nn
@@ -356,93 +358,152 @@ class Universe:
         self.dtype = self.weights.dtype
         self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
 
-class UniversePerceptron(hk.Module):
+class VerticalCells(hk.initializers.Initializer):
+    """Initializes by sampling from a normal distribution and setting verticval cells."""
+
+    def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False):
+        """
+        Constructs a :class:`RandomNormal` initializer with vertical cells.
+        """
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.is_states = is_states
+
+    def clear_cells_vertical(self, cells, offset, after=False):
+        '''
+        Clears cells upto and including offset positions
+        '''
+        if after:
+            result = cells.at[:,offset[1]:].set(0)  #clear cells after
+        else:
+            result = cells.at[:,:offset[1]+1].set(0) #clear cells before
+        return result
+
+    def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
+        if self.is_states:
+            cells = jnp.ones(shape, dtype=dtype)
+            inputs = jnp.full(self.in_size, 2, dtype=dtype)
+            outputs = jnp.full(self.in_size, 2, dtype=dtype)
+        else:
+            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+            inputs = jnp.ones(self.in_size, dtype=dtype)
+            outputs = jnp.ones(self.out_size, dtype=dtype)
+        cells = self.clear_cells_vertical(cells, self.in_offset, after=False)
+        cells = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
+        cells = self.clear_cells_vertical(cells, self.out_offset, after=True)
+        cells = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
+        return cells
+
+class UniverseMLP(hk.Module):
     '''
-    Represents cellular structured universe of Von Neumann networks
+    Represents cellular structured universe of Von Neumann networks as a multi-layered perceptron (MLP)
     '''
-    def __init__(self, N, name=None):
+    def __init__(self, N, in_size, out_size, in_offset, out_offset, layer_size, layer_offset, dtype=jnp.float32, name=None):
         super().__init__(name=name)
         self.N = N
         self.grid_size = (N,N)
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.layer_size = layer_size
+        self.layer_offset = layer_offset
+        self.depth = self.out_offset[1]-self.in_offset[1]
+        self.dtype = dtype
+        self.states_dtype = jnp.uint8
         #filters for spatial derivatives
         self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
         self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
         # print("filter:", self.nethood_forward)
-        self.init()
+        self.initialize(self.in_size, self.out_size, self.in_offset, self.out_offset, self.layer_size, self.layer_offset)
 
-    def init(self):
-        # w_init = jnp.zeros
-        w_init = hk.initializers.RandomNormal()
-        self.universe = hk.get_parameter("w", shape=self.grid_size, dtype=jnp.float32, init=w_init)
+    def initialize(self, in_size, out_size, in_offset, out_offset, layer_size, layer_offset):
+        self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
 
+        #init states (integers)
+        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True)
+        states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        passives = jnp.full(layer_size, 2, dtype=self.states_dtype)
+        self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
+        # self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # print("States:", self.states)
+
+        #init weights (random)
+        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False)
+        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+
+        #init biases
+        self.b_init = jnp.zeros
+        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+    
     def get_cells(self):
         return self.universe
     
-    def clear_cells_vertical(self, universe, offset, after=False):
-        if after:
-            result = universe.at[:,offset[1]+1:].set(0)  #clear cells after
-        else:
-            result = universe.at[:,:offset[1]].set(0) #clear cells before
-        return result
+    # def clear_cells_vertical(self, universe, offset, after=False):
+    #     if after:
+    #         result = universe.at[:,offset[1]+1:].set(0)  #clear cells after
+    #     else:
+    #         result = universe.at[:,:offset[1]].set(0) #clear cells before
+    #     return result
 
-    def set_input_vector(self, inputs, offset=None):
+    def set_input_vector(self, inputs):
         '''
         Set in vector at address with size
         '''
-        self.in_offset = (self.N//4, self.N//8)
-        if offset:
-            self.in_offset = offset
-        self.universe = jax.lax.dynamic_update_slice(self.universe, inputs, self.in_offset)
-        return self.clear_cells_vertical(self.universe, self.in_offset, after=False)
+        return jax.lax.dynamic_update_slice(self.universe, inputs, self.in_offset)
     
-    def set_output_vector(self, outputs, offset=None):
+    def set_output_vector(self, outputs):
         '''
         Write out vector from address with size
         '''
-        self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
-        if offset:
-            self.out_offset = offset
-        self.universe = jax.lax.dynamic_update_slice(self.universe, outputs, self.out_offset)
-        return self.clear_cells_vertical(self.universe, self.out_offset, after=True)
+        return jax.lax.dynamic_update_slice(self.universe, outputs, self.out_offset)
     
-    def get_input_vector(self, input_size, offset=None):
+    def get_input_vector(self, input_size):
         '''
         Read in vector from address with size
         '''
-        self.in_offset = (self.N//4, self.N//8)
-        if offset:
-            self.in_offset = offset
         return jax.lax.dynamic_slice(self.universe, self.in_offset, input_size)
     
-    def get_output_vector(self, output_size, offset=None):
+    def get_output_vector(self, output_size):
         '''
         Read out vector from address with size
         '''
-        self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
-        if offset:
-            self.out_offset = offset
         return jax.lax.dynamic_slice(self.universe, self.out_offset, output_size)
     
-    def forward_propagate(self, cells, activate=nn.sigmoid):
+    def forward(self, cells, weights, biases, states, activate=nn.sigmoid, norm=True):
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
-        #norm
-        # cells = jax.nn.standardize(cells, axis=(0,1))
-        #excite and return
-        return activate(cells)
 
-    def backward_propagate(self, cells, activate=nn.sigmoid):
-        #get weighted sum of neighbors using convolution
-        cells = jsignal.convolve2d(cells, self.nethood_backward, mode='same')
-        #norm
-        # cells = jax.nn.standardize(cells, axis=(0,1))
-        #excite and return
-        return activate(cells)
+        if norm:
+            #norm
+            cells = jax.nn.standardize(cells, axis=(0,1))
+
+        #check states
+        #if passive apply activation, else signal state so weight
+        cells = jnp.where(states==1, cells*weights, cells) #weight if signal
+        cells = jnp.where(states==2, activate(cells+biases), cells) #activate if passive
+
+        return cells
+
+    def forward_propagate(self, activate=nn.sigmoid, norm=True):
+        self.universe = self.forward(self.universe, self.weights, self.biases, activate=activate, norm=norm)
     
-    def __call__(self, x, in_offset, output_size, out_offset, activate=nn.sigmoid):
-        #input
-        net = self.set_input_vector(x, in_offset)
-        #forward pass
-        self.universe = self.forward_propagate(net, activate)
+    def __call__(self, inputs, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
+        # get params
+        states = self.states
+        # states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+        biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        #set input
+        cells = jax.lax.dynamic_update_slice(self.universe, inputs, self.in_offset)
+
+        #forward
+        for i in range(1, self.depth):
+            cells = self.forward(cells, weights, biases, states, activate=activate, norm=norm)
+        cells = self.forward(cells, weights, biases, states, activate=final_activate, norm=norm)
+
         #read output
-        return self.get_output_vector(output_size, out_offset)
+        return jax.lax.dynamic_slice(cells, self.out_offset, self.out_size)
