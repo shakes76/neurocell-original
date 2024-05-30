@@ -16,7 +16,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 1
+epochs = 150
 samples = 120
 length = 1
 num_classes = 1
@@ -61,7 +61,7 @@ opt = optax.sgd(learning_rate=0.1)
 # Initialize network and optimiser; note we draw an input to get shapes.
 params = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
 opt_state = opt.init(params)
-print(params)
+# print(params)
 
 #loss function
 def loss(params: hk.Params, batch, labels) -> jnp.ndarray:
@@ -92,8 +92,9 @@ for step in range(epochs+1):
         params, opt_state, value = update(params, opt_state, x.reshape(-1,1), y.reshape(-1,1))
         loss_value += value
 
-    if step % 100 == 0:
-        print(f"[Step {step}, Loss {loss_value}]")
+    print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
+    if step % 100 == 0 and step > 0:
+        # print(f"[Step {step}, Loss {loss_value}]")
         # Periodically evaluate on train & test sets.
         Y_pred = []
         for x, y in zip(X, Y):
@@ -104,7 +105,22 @@ for step in range(epochs+1):
         plt.show()
 
 plt.imshow(params['universe_mlp']['w'])
-plt.title("Final Network")
+plt.title("Final Weights")
+plt.savefig("vnn_mlp_weights.png", dpi=150)
+plt.show()
+
+plt.imshow(params['universe_mlp']['b'])
+plt.title("Final Biases")
+plt.savefig("vnn_mlp_biases.png", dpi=150)
+plt.show()
+
+Y_pred = []
+for x, y in zip(X, Y):
+    Y_pred.append(network.apply(params, x.reshape(-1,1))[0])
+plt.plot(X, Y_pred)
+plt.plot(X, Y, 'm')
+plt.xlabel('X')
+plt.savefig("vnn_mlp_plot.png", dpi=150)
 plt.show()
 
 print("END")
