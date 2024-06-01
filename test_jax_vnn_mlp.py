@@ -8,6 +8,7 @@ import haiku as hk
 import optax
 import matplotlib.pyplot as plt
 from typing import Tuple
+import time
 
 from universe import UniverseMLP #local
 import utils #local
@@ -16,7 +17,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 15
+epochs = 20
 samples = 120
 length = 1
 num_classes = 1
@@ -87,15 +88,18 @@ def update(
     return new_params, opt_state, loss_value, state
 
 # Train/eval loop.
-for step in range(epochs+1):
+start = time.time() #time generation
+for step in range(1, epochs+1):
     # Do SGD on a batch of training examples.
     loss_value = 0
     for x, y in zip(X, Y):
+        # break
         params, opt_state, value, state = update(params, opt_state, state, x.reshape(-1,1), y.reshape(-1,1))
         loss_value += value
+        # break
 
     print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
-    if step % 100 == 0 and step > 0:
+    if step % 100 == 0:
         # print(f"[Step {step}, Loss {loss_value}]")
         # Periodically evaluate on train & test sets.
         Y_pred = []
@@ -106,6 +110,10 @@ for step in range(epochs+1):
         plt.plot(X, Y, 'm')
         plt.xlabel('X')
         plt.show()
+    # break
+end = time.time()
+elapsed = end - start
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
 plt.imshow(params['universe_mlp']['w'])
 plt.title("Final Weights")
