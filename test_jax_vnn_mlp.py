@@ -16,7 +16,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 150
+epochs = 15
 samples = 120
 length = 1
 num_classes = 1
@@ -54,42 +54,44 @@ def _forward(batch) -> jnp.ndarray:
     return mlp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
-network = hk.without_apply_rng(hk.transform(_forward))
+network = hk.without_apply_rng(hk.transform_with_state(_forward))
 opt = optax.sgd(learning_rate=0.1)
 # opt = optax.adam(learning_rate=0.001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
-params = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
+params, state = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
 opt_state = opt.init(params)
 # print(params)
+# print(state)
 
 #loss function
-def loss(params: hk.Params, batch, labels) -> jnp.ndarray:
+def loss(params: hk.Params, state, batch, labels) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
-    logits = network.apply(params, batch)
-    return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits))
+    logits, state = network.apply(params, state, batch)
+    return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits)), state
 
 # @jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,
+        state,
         batch,
         labels
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
-    loss_value, grads = jax.value_and_grad(loss)(params, batch, labels)
+    (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
     updates, opt_state = opt.update(grads, opt_state)
     new_params = optax.apply_updates(params, updates)
-    return new_params, opt_state, loss_value
+    return new_params, opt_state, loss_value, state
 
 # Train/eval loop.
 for step in range(epochs+1):
     # Do SGD on a batch of training examples.
     loss_value = 0
     for x, y in zip(X, Y):
-        params, opt_state, value = update(params, opt_state, x.reshape(-1,1), y.reshape(-1,1))
+        params, opt_state, value, state = update(params, opt_state, state, x.reshape(-1,1), y.reshape(-1,1))
         loss_value += value
 
     print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
@@ -98,7 +100,8 @@ for step in range(epochs+1):
         # Periodically evaluate on train & test sets.
         Y_pred = []
         for x, y in zip(X, Y):
-            Y_pred.append(network.apply(params, x.reshape(-1,1))[0])
+            logits, state_test = network.apply(params, state, x.reshape(-1,1))
+            Y_pred.append(logits[0])
         plt.plot(X, Y_pred)
         plt.plot(X, Y, 'm')
         plt.xlabel('X')
@@ -116,7 +119,8 @@ plt.show()
 
 Y_pred = []
 for x, y in zip(X, Y):
-    Y_pred.append(network.apply(params, x.reshape(-1,1))[0])
+    logits, state_test = network.apply(params, state, x.reshape(-1,1))
+    Y_pred.append(logits[0])
 plt.plot(X, Y_pred)
 plt.plot(X, Y, 'm')
 plt.xlabel('X')

@@ -414,13 +414,16 @@ class UniverseMLP(hk.Module):
         self.dtype = dtype
         self.states_dtype = jnp.uint8
         #filters for spatial derivatives
+        # self.nethood_backward = jnp.array(kernel_backward, dtype=dtype) # 8 connected kernel
+        # self.nethood_forward = jnp.array(kernel_forward, dtype=dtype) # 8 connected kernel
         self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
         self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.initialize(self.in_size, self.out_size, self.in_offset, self.out_offset, self.layer_size, self.layer_offset)
 
     def initialize(self, in_size, out_size, in_offset, out_offset, layer_size, layer_offset):
-        self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
 
         #init states (integers)
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True)
@@ -437,9 +440,14 @@ class UniverseMLP(hk.Module):
         #init biases
         self.b_init = jnp.zeros
         self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        return hk.get_state("universe")
     
-    def get_cells(self):
-        return self.universe
+    # def get_cells(self):
+    #     return self.universe
+
+    def get_state(self):
+        return hk.get_state("universe")
     
     # def clear_cells_vertical(self, universe, offset, after=False):
     #     if after:
@@ -448,31 +456,32 @@ class UniverseMLP(hk.Module):
     #         result = universe.at[:,:offset[1]].set(0) #clear cells before
     #     return result
 
-    def set_input_vector(self, inputs):
-        '''
-        Set in vector at address with size
-        '''
-        return jax.lax.dynamic_update_slice(self.universe, inputs, self.in_offset)
+    # def set_input_vector(self, inputs):
+    #     '''
+    #     Set in vector at address with size
+    #     '''
+    #     return jax.lax.dynamic_update_slice(self.universe, inputs, self.in_offset)
     
-    def set_output_vector(self, outputs):
-        '''
-        Write out vector from address with size
-        '''
-        return jax.lax.dynamic_update_slice(self.universe, outputs, self.out_offset)
+    # def set_output_vector(self, outputs):
+    #     '''
+    #     Write out vector from address with size
+    #     '''
+    #     return jax.lax.dynamic_update_slice(self.universe, outputs, self.out_offset)
     
-    def get_input_vector(self, input_size):
-        '''
-        Read in vector from address with size
-        '''
-        return jax.lax.dynamic_slice(self.universe, self.in_offset, input_size)
+    # def get_input_vector(self, input_size):
+    #     '''
+    #     Read in vector from address with size
+    #     '''
+    #     return jax.lax.dynamic_slice(self.universe, self.in_offset, input_size)
     
-    def get_output_vector(self, output_size):
-        '''
-        Read out vector from address with size
-        '''
-        return jax.lax.dynamic_slice(self.universe, self.out_offset, output_size)
+    # def get_output_vector(self, output_size):
+    #     '''
+    #     Read out vector from address with size
+    #     '''
+    #     return jax.lax.dynamic_slice(self.universe, self.out_offset, output_size)
     
-    def forward(self, cells, weights, biases, states, activate=nn.sigmoid, norm=True):
+    def forward(self, weights, biases, states, activate=nn.sigmoid, norm=True):
+        cells = hk.get_state("universe")
         #get weighted sum of neighbors using convolution
         cells = jsignal.convolve2d(cells, self.nethood_forward, mode='same')
 
@@ -482,13 +491,13 @@ class UniverseMLP(hk.Module):
 
         #check states
         #if passive apply activation, else signal state so weight
-        cells = jnp.where(states==1, cells*weights, cells) #weight if signal
-        cells = jnp.where(states==2, activate(cells+biases), cells) #activate if passive
+        cells = jnp.where(jnp.logical_and(states==1,cells!=0), cells*weights, cells) #weight if signal
+        cells = jnp.where(jnp.logical_and(states==2,cells!=0), activate(cells+biases), cells) #activate if passive
 
         return cells
 
-    def forward_propagate(self, activate=nn.sigmoid, norm=True):
-        self.universe = self.forward(self.universe, self.weights, self.biases, activate=activate, norm=norm)
+    # def forward_propagate(self, activate=nn.sigmoid, norm=True):
+    #     self.universe = self.forward(self.universe, self.weights, self.biases, activate=activate, norm=norm)
     
     def __call__(self, inputs, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
         # get params
@@ -497,13 +506,20 @@ class UniverseMLP(hk.Module):
         weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
         biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
 
+        #reset cells
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
+
         #set input
-        cells = jax.lax.dynamic_update_slice(self.universe, inputs, self.in_offset)
+        cells = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
+        hk.set_state("universe", cells)
 
         #forward
         for i in range(1, self.depth):
-            cells = self.forward(cells, weights, biases, states, activate=activate, norm=norm)
-        cells = self.forward(cells, weights, biases, states, activate=final_activate, norm=norm)
+            cells = self.forward(weights, biases, states, activate=activate, norm=norm)
+            hk.set_state("universe", cells)
+        cells = self.forward(weights, biases, states, activate=final_activate, norm=norm)
+        hk.set_state("universe", cells)
 
         #read output
         return jax.lax.dynamic_slice(cells, self.out_offset, self.out_size)
