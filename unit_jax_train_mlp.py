@@ -9,6 +9,7 @@ import jax.scipy.signal as jsignal
 # mpl.use('Agg')
 import matplotlib.pyplot as plt
 from time import process_time
+from functools import partial
 
 import filters #local
 import utils #local
@@ -17,7 +18,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 1
+epochs = 2
 samples = 120
 length = 1
 num_classes = 1
@@ -35,9 +36,10 @@ Y = np.zeros(samples, dtype=np.float32)
 Y[ (X[:,0] >= -0.5) & (X[:,0] < 0.5) ] = 1.0
 
 #funcs
-def forward(cells, weights, biases, states, activate=jax.nn.sigmoid, norm=True):
+@partial(jax.jit, static_argnums=(5,6))
+def forward(cells, weights, biases, states, nethood, activate=jax.nn.sigmoid, norm=True):
     #get weighted sum of neighbors using convolution
-    cells = jsignal.convolve2d(cells, nethood_forward, mode='same')
+    cells = jsignal.convolve2d(cells, nethood, mode='same')
 
     if norm:
         #norm
@@ -50,7 +52,7 @@ def forward(cells, weights, biases, states, activate=jax.nn.sigmoid, norm=True):
     return cells
 
 def forward_propagate(universe, weights, biases, states, activate=jax.nn.sigmoid, norm=True):
-    return forward(universe, weights, biases, states, activate=activate, norm=norm)
+    return forward(universe, weights, biases, states, nethood_forward, activate=activate, norm=norm)
 
 def loss_perturb(params, cells, states, depth, labels, inputs, in_offset, output_size, out_offset, activate=jax.nn.tanh, final_activate=jax.nn.sigmoid, norm=True):
     '''
@@ -64,9 +66,9 @@ def loss_perturb(params, cells, states, depth, labels, inputs, in_offset, output
     cells = jax.lax.dynamic_update_slice(cells, inputs, in_offset)
     #forward
     for i in range(1, depth):
-        cells = forward(cells, weights, biases, states, activate=activate, norm=norm)
+        cells = forward(cells, weights, biases, states, nethood_forward, activate=activate, norm=norm)
         # cells = cells + deltas[i-1] #have grad return layer grad
-    cells = forward(cells, weights, biases, states, activate=final_activate, norm=norm)
+    cells = forward(cells, weights, biases, states, nethood_forward, activate=final_activate, norm=norm)
     # cells = cells + deltas[depth-1]
     # print("activations size:", len(activations))
 
