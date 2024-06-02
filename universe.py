@@ -557,6 +557,19 @@ class UniverseMLP(hk.Module):
         #read output
         return jax.lax.dynamic_slice(cells, self.out_offset, self.out_size)
 
+    def save(self, model_name):
+        jnp.savez(model_name, weights=self.weights, biases=self.biases, states=self.states, allow_pickle=False)
+
+    def load(self, filename):
+        with jnp.load(filename, allow_pickle=False) as data:
+            self.weights = data['weights']
+            self.biases = data['biases']
+            self.states = data['states']
+        self.N = self.weights.shape[0]
+        self.grid_size = self.weights.shape
+        self.dtype = self.weights.dtype
+        self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
+
 from functools import partial
 
 @partial(jax.jit, static_argnums=(5,6,7))

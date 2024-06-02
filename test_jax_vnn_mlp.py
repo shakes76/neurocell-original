@@ -115,6 +115,12 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
+jnp.savez("mlp_cells.npz", 
+            weights=params['universe_mlp']['w'], 
+            biases=params['universe_mlp']['b'], 
+        #   states=self.states, 
+            allow_pickle=False)
+
 plt.imshow(params['universe_mlp']['w'])
 plt.title("Final Weights")
 plt.savefig("vnn_mlp_weights.png", dpi=150)
