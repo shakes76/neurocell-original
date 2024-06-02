@@ -172,7 +172,7 @@ class Universe:
         #check states
         #if passive apply activation, else signal state so weight
         cells = jnp.where(self.states==1, cells*weights, cells) #weight if signal
-        cells = jnp.where(self.states==2, activate(cells+biases), cells) #activate if passive
+        cells = jnp.where(jnp.logical_and(self.states==2,cells!=0), activate(cells+biases), cells) #activate if passive
         #apply weights
         # cells = cells * self.weights
         # if norm:
@@ -385,11 +385,11 @@ class VerticalCells(hk.initializers.Initializer):
             outputs = jnp.full(self.in_size, 2, dtype=dtype)
         else:
             # real_dtype = jnp.finfo(dtype).dtype
-            stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
+            # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
             # upper = 3.0
             # lower = -3.0
             # cells = stddev * jax.random.truncated_normal(hk.next_rng_key(), lower, upper, shape, real_dtype)
-            cells = stddev * jax.random.normal(hk.next_rng_key(), shape)
+            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
             inputs = jnp.ones(self.in_size, dtype=dtype)
             outputs = jnp.ones(self.out_size, dtype=dtype)
 
@@ -419,10 +419,10 @@ class UniverseMLP(hk.Module):
         self.dtype = dtype
         self.states_dtype = jnp.uint8
         #filters for spatial derivatives
-        self.nethood_backward = jnp.array(kernel_backward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
-        self.nethood_forward = jnp.array(kernel_forward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
-        # self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
-        # self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
+        # self.nethood_backward = jnp.array(kernel_backward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
+        # self.nethood_forward = jnp.array(kernel_forward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
+        self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.img_shape = (1,N,N,1)
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape

@@ -177,7 +177,7 @@ params = [weights, biases]
 
 time_s = process_time()
 for epoch in range(1, epochs+1):
-    # Y_pred = []
+    Y_pred = []
     for iteration, (x, y) in enumerate(zip(X, Y)):
         #set output
         universe = set_input_vector(universe, x.reshape(-1,1), input_offset)
@@ -188,14 +188,14 @@ for epoch in range(1, epochs+1):
         # universe = reset_cells(N) #reset to zero
 
         #forward pass to check output
-        # #set output
-        # universe = set_input_vector(universe, x.reshape(-1,1), input_offset)
-        # # model.set_output_vector(y.reshape(-1,1), output_offset)
-        # for i in range(1, depth):
-        #     universe = forward_propagate(universe, weights, biases, states, activate=activation, norm=False)
-        # universe = forward_propagate(universe, weights, biases, states, activate=final_activation, norm=False)
-        # output2 = jax.lax.dynamic_slice(universe, output_offset, output_size)
-        # Y_pred.append(output2.reshape(1))
+        weights, biases = params
+        #set output
+        universe = set_input_vector(universe, x.reshape(-1,1), input_offset)
+        for i in range(1, depth):
+            universe = forward_propagate(universe, weights, biases, states, activate=activation, norm=False)
+        universe = forward_propagate(universe, weights, biases, states, activate=final_activation, norm=False)
+        output2 = jax.lax.dynamic_slice(universe, output_offset, output_size)
+        Y_pred.append(output2.reshape(1))
         universe = reset_cells(N) #reset to zero
         
         if iteration%10 == 0:
@@ -210,16 +210,16 @@ print("Training time:", elapsed_time, "s or ", elapsed_time/60.0, "mins")
 # model.save("cells.npz")
 
 #set output
-weights, biases = params
-Y_pred = []
-for iteration, (x, y) in enumerate(zip(X, Y)):
-    universe = set_input_vector(universe, x.reshape(-1,1), input_offset)
-    for i in range(1, depth):
-        universe = forward_propagate(universe, weights, biases, states, activate=activation, norm=False)
-    universe = forward_propagate(universe, weights, biases, states, activate=final_activation, norm=False)
-    output2 = jax.lax.dynamic_slice(universe, output_offset, output_size)
-    Y_pred.append(output2.reshape(1))
-    universe = reset_cells(N) #reset to zero
+# weights, biases = params
+# Y_pred = []
+# for iteration, (x, y) in enumerate(zip(X, Y)):
+#     universe = set_input_vector(universe, x.reshape(-1,1), input_offset)
+#     for i in range(1, depth):
+#         universe = forward_propagate(universe, weights, biases, states, activate=activation, norm=False)
+#     universe = forward_propagate(universe, weights, biases, states, activate=final_activation, norm=False)
+#     output2 = jax.lax.dynamic_slice(universe, output_offset, output_size)
+#     Y_pred.append(output2.reshape(1))
+#     universe = reset_cells(N) #reset to zero
 
 plt.imshow(universe)
 plt.title("Final Result")
