@@ -17,7 +17,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 20
+epochs = 100
 samples = 120
 length = 1
 num_classes = 1
@@ -56,7 +56,7 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
-opt = optax.sgd(learning_rate=0.1)
+opt = optax.sgd(learning_rate=0.01)
 # opt = optax.adam(learning_rate=0.001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
@@ -129,6 +129,11 @@ plt.show()
 plt.imshow(params['universe_mlp']['b'])
 plt.title("Final Biases")
 plt.savefig("vnn_mlp_biases.png", dpi=150)
+plt.show()
+
+plt.imshow(params['universe_mlp']['f'][0,:,:,0])
+plt.title("Final Filter")
+plt.savefig("vnn_mlp_filter.png", dpi=75)
 plt.show()
 
 Y_pred = []
