@@ -8,7 +8,7 @@ import jax.scipy.signal as jsignal
 # import matplotlib as mpl
 # mpl.use('Agg')
 import matplotlib.pyplot as plt
-from time import process_time
+import time
 from functools import partial
 
 import filters #local
@@ -18,7 +18,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 2
+epochs = 10
 samples = 120
 length = 1
 num_classes = 1
@@ -47,7 +47,7 @@ def forward(cells, weights, biases, states, nethood, activate=jax.nn.sigmoid, no
     #check states
     #if passive apply activation, else signal state so weight
     cells = jnp.where(states==1, cells*weights, cells) #weight if signal
-    cells = jnp.where(states==2, activate(cells+biases), cells) #activate if passive
+    cells = jnp.where(jnp.logical_and(states==2,cells!=0), activate(cells+biases), cells) #activate if passive
 
     return cells
 
@@ -177,7 +177,7 @@ states = set_layer_vertical(states, layer_size, layer_offset)
 params = [weights, biases]
 # final_params = {"w":weights, "b":biases}
 
-time_s = process_time()
+start = time.time() #time generation
 for epoch in range(1, epochs+1):
     Y_pred = []
     for iteration, (x, y) in enumerate(zip(X, Y)):
@@ -189,6 +189,7 @@ for epoch in range(1, epochs+1):
         # forward = model.get_cells() #for plot
         # universe = reset_cells(N) #reset to zero
 
+    # for iteration, (x, y) in enumerate(zip(X, Y)): #without this we are leaking data, fits for each point used.
         #forward pass to check output
         weights, biases = params
         #set output
@@ -200,28 +201,28 @@ for epoch in range(1, epochs+1):
         Y_pred.append(output2.reshape(1))
         universe = reset_cells(N) #reset to zero
         
-        if iteration%10 == 0:
-            # print("i:", iteration, "X", x, "Y:", y, "Output:", output2, "loss:", loss_value)
-            print("i:", iteration, "X", x, "Y:", y, "loss:", loss_value)
+        # if iteration%10 == 0:
+        #     print("i:", iteration, "X", x, "Y:", y, "loss:", loss_value)
         # break
     print(">> Epoch:", epoch, "Loss:", loss_value)
-elapsed_time = process_time() - time_s
-print("Training time:", elapsed_time, "s or ", elapsed_time/60.0, "mins")
+end = time.time()
+elapsed = end - start
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
 #save models
 # model.save("cells.npz")
 
 #set output
-# weights, biases = params
-# Y_pred = []
-# for iteration, (x, y) in enumerate(zip(X, Y)):
-#     universe = set_input_vector(universe, x.reshape(-1,1), input_offset)
-#     for i in range(1, depth):
-#         universe = forward_propagate(universe, weights, biases, states, activate=activation, norm=False)
-#     universe = forward_propagate(universe, weights, biases, states, activate=final_activation, norm=False)
-#     output2 = jax.lax.dynamic_slice(universe, output_offset, output_size)
-#     Y_pred.append(output2.reshape(1))
-#     universe = reset_cells(N) #reset to zero
+weights, biases = params
+Y_pred_test = []
+for iteration, (x, y) in enumerate(zip(X, Y)):
+    universe = set_input_vector(universe, x.reshape(-1,1), input_offset)
+    for i in range(1, depth):
+        universe = forward_propagate(universe, weights, biases, states, activate=activation, norm=False)
+    universe = forward_propagate(universe, weights, biases, states, activate=final_activation, norm=False)
+    output2 = jax.lax.dynamic_slice(universe, output_offset, output_size)
+    Y_pred_test.append(output2.reshape(1))
+    universe = reset_cells(N) #reset to zero
 
 plt.imshow(universe)
 plt.title("Final Result")
@@ -245,6 +246,7 @@ plt.show()
 
 #function plot
 fig = plt.figure()
+plt.plot(X, Y_pred_test, "r")
 plt.plot(X, Y_pred)
 plt.plot(X, Y, 'm')
 plt.xlabel('X')
