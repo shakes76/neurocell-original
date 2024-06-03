@@ -173,13 +173,6 @@ class Universe:
         #if passive apply activation, else signal state so weight
         cells = jnp.where(self.states==1, cells*weights, cells) #weight if signal
         cells = jnp.where(jnp.logical_and(self.states==2,cells!=0), activate(cells+biases), cells) #activate if passive
-        #apply weights
-        # cells = cells * self.weights
-        # if norm:
-        #     #norm
-        #     cells = jax.nn.standardize(cells, axis=(0,1))
-        #excite and return
-        # return activate(cells)
         return cells
     
     def forward_propagate(self, activate=nn.sigmoid, norm=True):
@@ -269,7 +262,7 @@ class Universe:
         return jax.value_and_grad(self.loss_perturb)(params, deltas, labels, inputs, in_offset, out_size, out_offset, norm=False)
 
     def value_and_grad_update(self, lr, depth, labels, inputs, in_offset, out_size, out_offset):
-        self.loss_value, self.grads_output = self.value_and_grad_perturb(depth, labels, inputs, in_offset, out_size, out_offset)
+        self.loss_value, grads_output = self.value_and_grad_perturb(depth, labels, inputs, in_offset, out_size, out_offset)
         # print("loss_value", self.loss_value)
         # print("layer grads", len(self.layer_grads), self.layer_grads[0].shape)
         # print("grads", len(self.grads_output), self.grads_output)
@@ -277,8 +270,8 @@ class Universe:
         # print("grads", len(self.grads_output[1]), self.grads_output[1])
 
         #compose per layer grads
-        self.grads = self.grads_output[0]
-        self.bias_grads = self.grads_output[1]
+        self.grads = grads_output[0]
+        self.bias_grads = grads_output[1]
         # self.grads = jnp.zeros_like(self.universe)
         # for i in range(1,depth):
         #     self.grads = self.grads.at[:,self.out_offset[1]-i].set(self.layer_grads[depth-i-1][:,self.out_offset[1]-i])
@@ -288,7 +281,7 @@ class Universe:
         self.weights = self.weights - lr*self.grads
         self.biases = self.biases - lr*self.bias_grads
 
-        return self.loss_value, self.grads, self.bias_grads, self.weights
+        return self.loss_value, self.grads, self.bias_grads
 
     def gradient_update(self, lr, step, depth, inputs, input_size, in_offset=None, out_offset=None, activate=nn.sigmoid):
         '''
