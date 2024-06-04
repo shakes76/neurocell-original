@@ -1,7 +1,6 @@
 '''
 Universe object for Von Neumann networks
 '''
-# from collections.abc import Sequence
 from typing import Sequence
 
 import jax

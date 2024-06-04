@@ -19,10 +19,11 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 300
+epochs = 1000
 samples = 120
 length = 1
 num_classes = 1
+epsilon = 1e-8
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -58,7 +59,7 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
-opt = optax.sgd(learning_rate=0.01)
+opt = optax.sgd(learning_rate=0.005)
 # opt = optax.adam(learning_rate=0.001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
@@ -68,13 +69,13 @@ opt_state = opt.init(params)
 # print(state)
 
 #loss function
-def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
+def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-4) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
     #CE loss
     logits, state = network.apply(params, state, batch)
-    ce = -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits))
+    ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
 
     #L2 norm of weights loss
     filters = params['universe_mlp']['f']
