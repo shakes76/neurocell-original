@@ -6,6 +6,8 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 import optax
+# import matplotlib as mpl
+# mpl.use('Agg')
 import matplotlib.pyplot as plt
 from typing import Tuple
 import time
@@ -17,7 +19,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 100
+epochs = 300
 samples = 120
 length = 1
 num_classes = 1
@@ -66,12 +68,19 @@ opt_state = opt.init(params)
 # print(state)
 
 #loss function
-def loss(params: hk.Params, state, batch, labels) -> jnp.ndarray:
+def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
+    #CE loss
     logits, state = network.apply(params, state, batch)
-    return -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits)), state
+    ce = -1 * jnp.mean(labels * jnp.log(logits) + (1 - labels) * jnp.log(1. - logits))
+
+    #L2 norm of weights loss
+    filters = params['universe_mlp']['f']
+    l2 = jnp.mean(filters**2)
+
+    return ce + l2*l2_scaling, state
 
 # @jax.jit
 def update(
@@ -99,17 +108,16 @@ for step in range(1, epochs+1):
         # break
 
     print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
-    if step % 100 == 0:
-        # print(f"[Step {step}, Loss {loss_value}]")
-        # Periodically evaluate on train & test sets.
-        Y_pred = []
-        for x, y in zip(X, Y):
-            logits, state_test = network.apply(params, state, x.reshape(-1,1))
-            Y_pred.append(logits[0])
-        plt.plot(X, Y_pred)
-        plt.plot(X, Y, 'm')
-        plt.xlabel('X')
-        plt.show()
+    # if step % 100 == 0:
+    #     # Periodically evaluate on train & test sets.
+    #     Y_pred = []
+    #     for x, y in zip(X, Y):
+    #         logits, state_test = network.apply(params, state, x.reshape(-1,1))
+    #         Y_pred.append(logits[0])
+    #     plt.plot(X, Y_pred)
+    #     plt.plot(X, Y, 'm')
+    #     plt.xlabel('X')
+    #     plt.show()
     # break
 end = time.time()
 elapsed = end - start
@@ -118,6 +126,7 @@ print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins i
 jnp.savez("mlp_cells.npz", 
             weights=params['universe_mlp']['w'], 
             biases=params['universe_mlp']['b'], 
+            filters=params['universe_mlp']['f'], 
         #   states=self.states, 
             allow_pickle=False)
 
@@ -136,6 +145,8 @@ plt.title("Final Filter")
 plt.savefig("vnn_mlp_filter.png", dpi=75)
 plt.show()
 
+#function plot
+fig = plt.figure()
 Y_pred = []
 for x, y in zip(X, Y):
     logits, state_test = network.apply(params, state, x.reshape(-1,1))
