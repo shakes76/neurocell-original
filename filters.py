@@ -7,6 +7,8 @@ hence convolution with forward is equivalent to correlation with backward
 
 Notes:
 Integer values are used for the kernels and they are not normalised in general
+
+See: https://en.wikipedia.org/wiki/Kernel_(image_processing) 
 """
 import jax.numpy as jnp
 
@@ -175,7 +177,7 @@ def haar(dtype=jnp.int32):
     # print(kernel.shape)
     return kernel
     
-def sharpen(dtype=jnp.int32):
+def sharpen(dtype=jnp.int32, norm=False):
     '''
     Returns the sharpen kernel, usually used for edge enhancement
     [[0, -1, 0],
@@ -186,6 +188,8 @@ def sharpen(dtype=jnp.int32):
                 [-1, 5, -1],
                 [0, -1, 0]]
     kernel = jnp.array(kernel, dtype=dtype)
+    if norm:
+        kernel = kernel / 5.
     # print(kernel.shape)
     return kernel
 

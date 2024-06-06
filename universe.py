@@ -431,6 +431,8 @@ class UniverseMLP(hk.Module):
         # self.nethood_forward = jnp.array(kernel_forward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
         # self.nethood_backward = filters.backward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         # self.nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.smooth_filter = filters.smooth(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.sharpen_filter = filters.sharpen(dtype=jnp.float32, norm=True)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.img_shape = (1,N,N,1)
         self.initialize(self.in_size, self.out_size, self.in_offset, self.out_offset, self.layer_size, self.layer_offset)
@@ -535,6 +537,7 @@ class UniverseMLP(hk.Module):
 
         #reset cells
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        # cells = cells.at[:,:].set(0.)  #clear cells after
         # hk.set_state("universe", cells)
 
         #set input
@@ -544,6 +547,9 @@ class UniverseMLP(hk.Module):
         #process input
         # cells = jnp.where(jnp.logical_and(states==2,cells!=0), activate(cells+biases), cells) #activate if passive
         hk.set_state("universe", cells)
+
+        #smooth/sharpen weights
+        weights = _smooth(weights, self.sharpen_filter, self.dn)
 
         #forward
         # for i in range(0, self.depth):
@@ -589,6 +595,9 @@ from functools import partial
 
 @partial(jax.jit, static_argnums=(5,6,7))
 def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
+    '''
+    Compute the forward pass by computing each neuron depending on its state.
+    '''
     #get weighted sum of neighbors using convolution
     cells = jax.lax.conv_general_dilated(cells[jnp.newaxis,:,:,jnp.newaxis], # lhs = NHWC image tensor
                                         nethood,  # rhs = OHWI conv kernel tensor
@@ -610,3 +619,18 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
     # cells = jnp.where(states==2, activate(cells+biases), cells) #activate if passive, faster
 
     return cells
+
+@partial(jax.jit, static_argnums=(2))
+def _smooth(cells, nethood, dn):
+    '''
+    Smooth the array provided by filter provided.
+    '''
+    #get weighted sum of neighbors using convolution
+    cells = jax.lax.conv_general_dilated(cells[jnp.newaxis,:,:,jnp.newaxis], # lhs = NHWC image tensor
+                                        nethood,  # rhs = OHWI conv kernel tensor
+                                        (1,1),  # window strides
+                                        'SAME', # padding mode
+                                        (1,1),  # lhs/image dilation
+                                        (1,1),  # rhs/kernel dilation
+                                        dn)     # dimension_numbers = lhs, rhs, out dimension permutation
+    return cells[0,:,:,0] # NHWC
