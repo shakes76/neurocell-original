@@ -19,7 +19,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 1000
+epochs = 300
 samples = 120
 length = 1
 num_classes = 1
@@ -59,8 +59,8 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
-opt = optax.sgd(learning_rate=0.005)
-# opt = optax.adam(learning_rate=0.001)
+# opt = optax.sgd(learning_rate=0.005)
+opt = optax.adam(learning_rate=0.001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 params, state = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
