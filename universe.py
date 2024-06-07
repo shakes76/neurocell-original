@@ -399,13 +399,13 @@ class FiltersCells(hk.initializers.Initializer):
         self.is_forward = is_forward
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
-        if not self.is_forward:
-            nethood = filters.backward(dtype=dtype, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
-        else:
-            nethood = filters.forward(dtype=dtype, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        # if not self.is_forward:
+        #     nethood = filters.backward(dtype=dtype, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        # else:
+        #     nethood = filters.forward(dtype=dtype, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
 
         # nethood = nethood + 0.1 * jax.random.normal(hk.next_rng_key(), nethood.shape)
-        nethood = 1.0 * jax.random.normal(hk.next_rng_key(), nethood.shape)
+        nethood = 1.0 * jax.random.normal(hk.next_rng_key(), shape, dtype)
 
         return nethood
 
@@ -413,7 +413,7 @@ class UniverseMLP(hk.Module):
     '''
     Represents cellular structured universe of Von Neumann networks as a multi-layered perceptron (MLP)
     '''
-    def __init__(self, N, in_size, out_size, in_offset, out_offset, layer_size, layer_offset, dtype=jnp.float32, name=None):
+    def __init__(self, N, in_size, out_size, in_offset, out_offset, layer_size, layer_offset, kernel_size=(3,3), dtype=jnp.float32, name=None):
         super().__init__(name=name)
         self.N = N
         self.grid_size = (N,N)
@@ -423,6 +423,7 @@ class UniverseMLP(hk.Module):
         self.out_offset = out_offset
         self.layer_size = layer_size
         self.layer_offset = layer_offset
+        self.kernel_size = kernel_size
         self.depth = self.out_offset[1]-self.in_offset[1]
         self.dtype = dtype
         self.states_dtype = jnp.uint8
@@ -435,9 +436,9 @@ class UniverseMLP(hk.Module):
         self.sharpen_filter = filters.sharpen(dtype=jnp.float32, norm=True)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.img_shape = (1,N,N,1)
-        self.initialize(self.in_size, self.out_size, self.in_offset, self.out_offset, self.layer_size, self.layer_offset)
+        self.initialize(self.in_size, self.out_size, self.in_offset, self.out_offset, self.layer_size, self.layer_offset, self.kernel_size)
 
-    def initialize(self, in_size, out_size, in_offset, out_offset, layer_size, layer_offset):
+    def initialize(self, in_size, out_size, in_offset, out_offset, layer_size, layer_offset, kernel_size):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
@@ -460,7 +461,7 @@ class UniverseMLP(hk.Module):
         #init filters
         self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
-        self.filters = hk.get_parameter("f", shape=(1,3,3,1), dtype=self.dtype, init=self.f_init)
+        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],1), dtype=self.dtype, init=self.f_init)
 
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
                                 self.filters.shape,  # only ndim matters, not shape 
@@ -507,7 +508,7 @@ class UniverseMLP(hk.Module):
     
     def forward(self, weights, biases, states, activate, norm):
         cells = hk.get_state("universe")
-        filters = hk.get_parameter("f", shape=(1,3,3,1), dtype=self.dtype, init=self.f_init)
+        filters = hk.get_parameter("f", shape=(1,self.kernel_size[0],self.kernel_size[1],1), dtype=self.dtype, init=self.f_init)
         #check backward or forward based on definition of conv in library
         return _forward(cells, weights, biases, states, filters, activate, norm, self.dn)
         # cells = hk.get_state("universe")

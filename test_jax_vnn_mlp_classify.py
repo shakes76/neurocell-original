@@ -42,6 +42,7 @@ output_size = (num_classes,1)
 output_offset = (5,8)
 layer_size = (11,1)
 layer_offset = (1,6)
+kernel_size = (7,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 depth = output_offset[1]-input_offset[1]
@@ -53,7 +54,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = UniverseMLP(N, input_size, output_size, input_offset, output_offset, layer_size, layer_offset)
+    mlp = UniverseMLP(N, input_size, output_size, input_offset, output_offset, layer_size, layer_offset, kernel_size)
     return mlp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
