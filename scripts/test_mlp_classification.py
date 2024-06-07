@@ -45,7 +45,7 @@ class MLP(hk.Module):
         '''
         #define layers
         net=hk.Flatten()(x)
-        net=hk.Linear(2)(net)
+        net=hk.Linear(6)(net)
         net=jax.nn.relu(net)
         net=hk.Linear(self.output_size)(net)
         # net=jax.nn.softmax(net)
@@ -61,7 +61,7 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimiser.
 network = hk.without_apply_rng(hk.transform(_forward))
-opt = optax.sgd(learning_rate=0.1)
+opt = optax.sgd(learning_rate=0.01)
 
 #loss function
 def loss(params: hk.Params, batch, labels) -> jnp.ndarray:
