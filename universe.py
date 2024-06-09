@@ -449,6 +449,7 @@ class UniverseMLP(hk.Module):
         self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
         # self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # print("States:", self.states)
+        hk.set_state("states", self.states)
 
         #init weights (random)
         self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)

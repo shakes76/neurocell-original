@@ -69,7 +69,7 @@ opt_state = opt.init(params)
 # print(state)
 
 #loss function
-def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-4) -> jnp.ndarray:
+def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
@@ -80,11 +80,10 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-4) -> jnp.ndarra
     ce = -jnp.sum(labels * jax.nn.log_softmax(jnp.squeeze(logits, axis=-1)))
 
     #L2 norm of weights loss
-    # filters = params['universe_mlp']['f']
-    # l2 = jnp.mean(filters**2)
+    filters = params['universe_mlp']['f']
+    l2 = jnp.mean(filters**2)
 
-    # return ce + l2*l2_scaling, state
-    return ce, state
+    return ce + l2*l2_scaling, state
 
 # @jax.jit
 def update(
@@ -128,7 +127,7 @@ jnp.savez("mlp_classify_cells.npz",
             weights=params['universe_mlp']['w'], 
             biases=params['universe_mlp']['b'], 
             filters=params['universe_mlp']['f'], 
-        #   states=self.states, 
+            states=state['universe_mlp']['states'], 
             allow_pickle=False)
 
 plt.imshow(params['universe_mlp']['w'])
