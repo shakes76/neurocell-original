@@ -128,6 +128,9 @@ jnp.savez("mlp_classify_cells.npz",
             biases=params['universe_mlp']['b'], 
             filters=params['universe_mlp']['f'], 
             states=state['universe_mlp']['states'], 
+            N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
+            input_offset=input_offset, output_offset=output_offset,
+            layer_size=layer_size, layer_offset=layer_offset, kernel_size=kernel_size,
             allow_pickle=False)
 
 plt.imshow(params['universe_mlp']['w'])
