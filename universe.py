@@ -473,6 +473,18 @@ class UniverseMLP(hk.Module):
     # def get_cells(self):
     #     return self.universe
 
+    def get_weights(self):
+        return self.weights
+    
+    def get_biases(self):
+        return self.biases
+    
+    def get_states(self):
+        return self.states
+    
+    def get_filters(self):
+        return self.filters
+
     def get_state(self):
         return hk.get_state("universe")
     
@@ -588,6 +600,7 @@ class UniverseMLP(hk.Module):
             self.weights = data['weights']
             self.biases = data['biases']
             self.states = data['states']
+            self.filters = data['filters']
         self.N = self.weights.shape[0]
         self.grid_size = self.weights.shape
         self.dtype = self.weights.dtype
