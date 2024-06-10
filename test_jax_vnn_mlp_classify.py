@@ -148,6 +148,11 @@ plt.title("Final Filter")
 plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
 plt.show()
 
+plt.imshow(state['universe_mlp']['states'])
+plt.title("Final States")
+plt.savefig("vnn_mlp_classify_states.png", dpi=75)
+plt.show()
+
 #function plot
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
