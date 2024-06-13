@@ -19,7 +19,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 2
+epochs = 20
 architecture_filename = "patterns/Sprite-CLP13.png"
 start_state = 1 #set None for random state
 
@@ -63,7 +63,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     clp = UniverseLP(N)
-    clp.initialize_clp(input_coords, output_coords, neuron_coords, kernel_size)
+    clp.initialize_clp(input_coords, output_coords, neuron_coords, depth, kernel_size)
     return clp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard

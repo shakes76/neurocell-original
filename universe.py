@@ -420,8 +420,6 @@ class CoordinateCells(hk.initializers.Initializer):
         n = len(self.in_coords)
         if self.is_states:
             cells = jnp.ones(shape, dtype=dtype)
-            # inputs = jnp.full(n, 2, dtype=dtype)
-            # outputs = jnp.full(n, 2, dtype=dtype)
             inputs = 2
             outputs = 2
         else:
@@ -431,8 +429,6 @@ class CoordinateCells(hk.initializers.Initializer):
             # lower = -3.0
             # cells = stddev * jax.random.truncated_normal(hk.next_rng_key(), lower, upper, shape, real_dtype)
             cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
-            # inputs = jnp.ones(n, dtype=dtype)
-            # outputs = jnp.ones(n, dtype=dtype)
             inputs = 1
             outputs = 1
 
@@ -527,19 +523,22 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
     
-    def initialize_clp(self, in_coords, out_coords, layer_coords, kernel_size=(3,3)):
+    def initialize_clp(self, in_coords, out_coords, layer_coords, depth=None, kernel_size=(3,3)):
         self.in_coords = in_coords
         self.out_coords = out_coords
         self.layer_coords = layer_coords
         self.kernel_size = kernel_size
         self.type_CLP = True
-        self.in_row_coord = self.in_coords[:, 0].min() #top most in
-        self.out_row_coord = self.out_coords[:, 0].min() #top most out
-        self.in_col_coord = self.in_coords[:, 1].min() #far left
-        self.out_col_coord = self.out_coords[:, 1].max() #far right
-        self.depth_row = self.out_row_coord - self.in_row_coord
-        self.depth_col = self.out_col_coord - self.in_col_coord
-        self.depth = max(self.depth_row, self.depth_col)
+        if depth is None:
+            in_row_coord = self.in_coords[:, 0].min() #top most in
+            out_row_coord = self.out_coords[:, 0].min() #top most out
+            in_col_coord = self.in_coords[:, 1].min() #far left
+            out_col_coord = self.out_coords[:, 1].max() #far right
+            depth_row = out_row_coord - in_row_coord
+            depth_col = out_col_coord - in_col_coord
+            self.depth = max(depth_row, depth_col)
+        else:
+            self.depth = depth
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
