@@ -79,7 +79,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-4) -> jnp.ndarra
     ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
 
     #L2 norm of weights loss
-    filters = params['universe_mlp']['f']
+    filters = params['universe_lp']['f']
     l2 = jnp.mean(filters**2)
 
     return ce + l2*l2_scaling, state
@@ -126,23 +126,23 @@ elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
 jnp.savez("mlp_cells.npz", 
-            weights=params['universe_mlp']['w'], 
-            biases=params['universe_mlp']['b'], 
-            filters=params['universe_mlp']['f'], 
+            weights=params['universe_lp']['w'], 
+            biases=params['universe_lp']['b'], 
+            filters=params['universe_lp']['f'], 
         #   states=self.states, 
             allow_pickle=False)
 
-plt.imshow(params['universe_mlp']['w'])
+plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
 plt.savefig("vnn_mlp_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_mlp']['b'])
+plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
 plt.savefig("vnn_mlp_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_mlp']['f'][0,:,:,0])
+plt.imshow(params['universe_lp']['f'][0,:,:,0])
 plt.title("Final Filter")
 plt.savefig("vnn_mlp_filter.png", dpi=75)
 plt.show()

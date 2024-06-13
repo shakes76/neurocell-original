@@ -351,7 +351,7 @@ class VerticalCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting vertical cells."""
     def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, clear=True):
         """
-        Constructs a :class:`RandomNormal` initializer with vertical cells.
+        Constructs a :class:`RandomNormal` like initializer with vertical cells.
         """
         self.in_size = in_size
         self.out_size = out_size
@@ -391,6 +391,58 @@ class VerticalCells(hk.initializers.Initializer):
         
         cells = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
         cells = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
+        return cells
+    
+class CoordinateCells(hk.initializers.Initializer):
+    """Initializes by sampling from a normal distribution and setting cells through coordinates provided."""
+    def __init__(self, in_coords, out_coords, is_states=False, clear=True):
+        """
+        Constructs a :class:`RandomNormal` like initializer with cells with coordinates.
+        """
+        self.in_coords = in_coords
+        self.out_coords = out_coords
+        self.is_states = is_states
+        self.clear = clear
+        self.min_coord = in_coords[:, 1].min()
+        self.max_coord = out_coords[:, 1].max()
+
+    def clear_cells_outside(self, cells, coord, after=False):
+        '''
+        Clears cells upto and including offset positions
+        '''
+        if after:
+            result = cells.at[:,coord].set(0)  #clear cells after
+        else:
+            result = cells.at[:,coord].set(0) #clear cells before
+        return result
+
+    def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
+        n = len(self.in_coords)
+        if self.is_states:
+            cells = jnp.ones(shape, dtype=dtype)
+            # inputs = jnp.full(n, 2, dtype=dtype)
+            # outputs = jnp.full(n, 2, dtype=dtype)
+            inputs = 2
+            outputs = 2
+        else:
+            # real_dtype = jnp.finfo(dtype).dtype
+            # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
+            # upper = 3.0
+            # lower = -3.0
+            # cells = stddev * jax.random.truncated_normal(hk.next_rng_key(), lower, upper, shape, real_dtype)
+            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+            # inputs = jnp.ones(n, dtype=dtype)
+            # outputs = jnp.ones(n, dtype=dtype)
+            inputs = 1
+            outputs = 1
+
+        if self.clear:
+            cells = self.clear_cells_outside(cells, self.min_coord, after=False)
+            cells = self.clear_cells_outside(cells, self.max_coord, after=True)
+        
+        cells = cells.at[self.in_coords[:, 0], self.in_coords[:, 1]].set(inputs)
+        cells = cells.at[self.out_coords[:, 0], self.out_coords[:, 1]].set(outputs)
+
         return cells
 
 class FiltersCells(hk.initializers.Initializer):
@@ -440,6 +492,7 @@ class UniverseLP(hk.Module):
         self.layer_offset = layer_offset
         self.kernel_size = kernel_size
         self.depth = self.out_offset[1]-self.in_offset[1]
+        self.type_MLP = True
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -455,6 +508,45 @@ class UniverseLP(hk.Module):
 
         #init weights (random)
         self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
+        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+
+        #init biases
+        self.b_init = jnp.zeros
+        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        #init filters
+        self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
+        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],1), dtype=self.dtype, init=self.f_init)
+
+        self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
+                                self.filters.shape,  # only ndim matters, not shape 
+                                ('NHWC', 'IHWO', 'NHWC'))  # the important bit
+
+        return hk.get_state("universe")
+    
+    def initialize_clp(self, in_coords, out_coords, layer_coords, kernel_size=(3,3)):
+        self.in_coords = in_coords
+        self.out_coords = out_coords
+        self.layer_coords = layer_coords
+        self.type_CLP = True
+        self.min_in_coord = self.in_coords[:, 0].min()
+        self.min_out_coord = self.out_coords[:, 0].min()
+        self.depth = self.min_out_coord - self.min_in_coord
+
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
+
+        #init states (integers)
+        self.s_init = CoordinateCells(self.in_coords, self.out_coords, is_states=True, clear=True)
+        states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        self.states = states.at[self.layer_coords[:, 0], self.layer_coords[:, 1]].set(2)
+        # self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # print("States:", self.states)
+        hk.set_state("states", self.states)
+
+        #init weights (random)
+        self.w_init = CoordinateCells(self.in_coords, self.out_coords, is_states=False, clear=True)
         self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
 
         #init biases
@@ -509,7 +601,10 @@ class UniverseLP(hk.Module):
         # hk.set_state("universe", cells)
 
         #set input
-        cells = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
+        if self.type_MLP:
+            cells = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
+        else:
+            cells = cells.at[self.in_coords[:, 0], self.in_coords[:, 1]].set(inputs)
         # hk.set_state("universe", cells)
 
         #process input

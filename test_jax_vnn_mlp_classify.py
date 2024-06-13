@@ -20,7 +20,7 @@ utils.jax_status()
 
 #parameters
 N = 13
-epochs = 200
+epochs = 150
 samples = 128
 length = 3
 num_classes = 3
@@ -81,7 +81,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     ce = -jnp.sum(labels * jax.nn.log_softmax(jnp.squeeze(logits, axis=-1)))
 
     #L2 norm of weights loss
-    filters = params['universe_mlp']['f']
+    filters = params['universe_lp']['f']
     l2 = jnp.mean(filters**2)
 
     return ce + l2*l2_scaling, state
@@ -125,31 +125,31 @@ elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
 jnp.savez("mlp_classify_cells.npz", 
-            weights=params['universe_mlp']['w'], 
-            biases=params['universe_mlp']['b'], 
-            filters=params['universe_mlp']['f'], 
-            states=state['universe_mlp']['states'], 
+            weights=params['universe_lp']['w'], 
+            biases=params['universe_lp']['b'], 
+            filters=params['universe_lp']['f'], 
+            states=state['universe_lp']['states'], 
             N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             layer_size=layer_size, layer_offset=layer_offset, kernel_size=kernel_size,
             allow_pickle=False)
 
-plt.imshow(params['universe_mlp']['w'])
+plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
 plt.savefig("vnn_mlp_classify_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_mlp']['b'])
+plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
 plt.savefig("vnn_mlp_classify_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_mlp']['f'][0,:,:,0])
+plt.imshow(params['universe_lp']['f'][0,:,:,0])
 plt.title("Final Filter")
 plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
 plt.show()
 
-plt.imshow(state['universe_mlp']['states'])
+plt.imshow(state['universe_lp']['states'])
 plt.title("Final States")
 plt.savefig("vnn_mlp_classify_states.png", dpi=75)
 plt.show()
