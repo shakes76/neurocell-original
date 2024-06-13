@@ -409,22 +409,16 @@ class FiltersCells(hk.initializers.Initializer):
 
         return nethood
 
-class UniverseMLP(hk.Module):
+class UniverseLP(hk.Module):
     '''
-    Represents cellular structured universe of Von Neumann networks as a multi-layered perceptron (MLP)
+    Represents cellular structured universe of Von Neumann networks as a layered perceptron (LP)
+
+    You must use the initialize_* members to create the type of layered perceptron, e.g. MLP etc.
     '''
-    def __init__(self, N, in_size, out_size, in_offset, out_offset, layer_size, layer_offset, kernel_size=(3,3), dtype=jnp.float32, name=None):
+    def __init__(self, N, dtype=jnp.float32, name=None):
         super().__init__(name=name)
         self.N = N
         self.grid_size = (N,N)
-        self.in_size = in_size
-        self.out_size = out_size
-        self.in_offset = in_offset
-        self.out_offset = out_offset
-        self.layer_size = layer_size
-        self.layer_offset = layer_offset
-        self.kernel_size = kernel_size
-        self.depth = self.out_offset[1]-self.in_offset[1]
         self.dtype = dtype
         self.states_dtype = jnp.uint8
         #filters for spatial derivatives
@@ -436,9 +430,17 @@ class UniverseMLP(hk.Module):
         self.sharpen_filter = filters.sharpen(dtype=jnp.float32, norm=True)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         # print("filter:", self.nethood_forward)
         self.img_shape = (1,N,N,1)
-        self.initialize(self.in_size, self.out_size, self.in_offset, self.out_offset, self.layer_size, self.layer_offset, self.kernel_size)
 
-    def initialize(self, in_size, out_size, in_offset, out_offset, layer_size, layer_offset, kernel_size):
+    def initialize_mlp(self, in_size, out_size, in_offset, out_offset, layer_size, layer_offset, kernel_size=(3,3)):
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.layer_size = layer_size
+        self.layer_offset = layer_offset
+        self.kernel_size = kernel_size
+        self.depth = self.out_offset[1]-self.in_offset[1]
+
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 

@@ -13,7 +13,7 @@ import time
 
 from sklearn import datasets
 
-from universe import UniverseMLP #local
+from universe import UniverseLP #local
 import utils #local
 
 utils.jax_status()
@@ -54,7 +54,8 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = UniverseMLP(N, input_size, output_size, input_offset, output_offset, layer_size, layer_offset, kernel_size)
+    mlp = UniverseLP(N)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, layer_size, layer_offset, kernel_size)
     return mlp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
