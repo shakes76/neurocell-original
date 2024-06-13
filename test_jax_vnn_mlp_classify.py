@@ -164,7 +164,7 @@ for x, y in zip(X, Y):
 Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
 print("After", Y_pred.shape, Y_pred)
 accuracy = jnp.mean(Y_pred == Y)
-print(f"[Accuracy {accuracy}]")
+print(f"[Final Accuracy {accuracy}]")
 ax.scatter(X[:, 0], X[:, 1], X[:, 2], marker="o", c=Y_pred, s=25, edgecolor="k")
 plt.savefig("vnn_mlp_classify_plot.png", dpi=150)
 plt.show()

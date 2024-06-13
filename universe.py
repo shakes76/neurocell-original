@@ -408,12 +408,12 @@ class CoordinateCells(hk.initializers.Initializer):
 
     def clear_cells_outside(self, cells, coord, after=False):
         '''
-        Clears cells upto and including offset positions
+        Clears cells upto and including coords positions padded by 1
         '''
         if after:
-            result = cells.at[:,coord].set(0)  #clear cells after
+            result = cells.at[:,coord+2:].set(0)  #clear cells after
         else:
-            result = cells.at[:,coord].set(0) #clear cells before
+            result = cells.at[:,:coord-1].set(0) #clear cells before
         return result
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
@@ -473,6 +473,8 @@ class UniverseLP(hk.Module):
         self.grid_size = (N,N)
         self.dtype = dtype
         self.states_dtype = jnp.uint8
+        self.type_MLP = False
+        self.type_CLP = False
         #filters for spatial derivatives
         # self.nethood_backward = jnp.array(kernel_backward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
         # self.nethood_forward = jnp.array(kernel_forward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
@@ -529,10 +531,15 @@ class UniverseLP(hk.Module):
         self.in_coords = in_coords
         self.out_coords = out_coords
         self.layer_coords = layer_coords
+        self.kernel_size = kernel_size
         self.type_CLP = True
-        self.min_in_coord = self.in_coords[:, 0].min()
-        self.min_out_coord = self.out_coords[:, 0].min()
-        self.depth = self.min_out_coord - self.min_in_coord
+        self.in_row_coord = self.in_coords[:, 0].min() #top most in
+        self.out_row_coord = self.out_coords[:, 0].min() #top most out
+        self.in_col_coord = self.in_coords[:, 1].min() #far left
+        self.out_col_coord = self.out_coords[:, 1].max() #far right
+        self.depth_row = self.out_row_coord - self.in_row_coord
+        self.depth_col = self.out_col_coord - self.in_col_coord
+        self.depth = max(self.depth_row, self.depth_col)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -622,7 +629,13 @@ class UniverseLP(hk.Module):
         hk.set_state("universe", cells)
 
         #read output
-        return jax.lax.dynamic_slice(cells, self.out_offset, self.out_size)
+        if self.type_MLP:
+            return jax.lax.dynamic_slice(cells, self.out_offset, self.out_size)
+        else:
+            # value = cells[self.out_coords[:, 0], self.out_coords[:, 1]]
+            # print("out:", value)
+            # return value
+            return cells[self.out_coords[:, 0], self.out_coords[:, 1]]
 
     def save(self, model_name):
         jnp.savez(model_name, weights=self.weights, biases=self.biases, states=self.states, allow_pickle=False)
