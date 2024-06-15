@@ -13,6 +13,7 @@ import time
 
 from sklearn import datasets
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 
 from universe import UniverseLP #local
 import utils #local
@@ -20,7 +21,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 30
+epochs = 50
 architecture_filename = "patterns/Sprite-CLP13-C.png"
 start_state = 1 #set None for random state
 
@@ -28,15 +29,17 @@ start_state = 1 #set None for random state
 ##data
 data_dict = datasets.load_wine(return_X_y=False)
 X_raw = data_dict['data']
-Y = data_dict['target']
+Y_raw = data_dict['target']
 length = len(data_dict['feature_names'])
-samples = len(data_dict['target'])
+samples = len(Y_raw)
 num_classes = len(data_dict['target_names'])
 print("Data Shape:", X_raw.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
 
 #scaling
 scaler = StandardScaler()
-X = scaler.fit_transform(X_raw)
+X_preproc = scaler.fit_transform(X_raw)
+
+X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
 
 #===========
 #load network architecture
@@ -131,7 +134,7 @@ for step in range(1, epochs+1):
             Y_pred.append(logits)
         Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
         accuracy = jnp.mean(Y_pred == Y)
-        print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Accuracy {accuracy}]")
+        print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Train Accuracy {accuracy}]")
     else:
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
 end = time.time()
@@ -167,13 +170,13 @@ plt.title("Final States")
 plt.savefig("vnn_clp_classify_states.png", dpi=75)
 plt.show()
 
-#function plot
+#test performance
 Y_pred = []
-for x, y in zip(X, Y):
+for x, y in zip(X_test, Y_test):
     logits, state_test = network.apply(params, state, x)
     Y_pred.append(logits)
 Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-accuracy = jnp.mean(Y_pred == Y)
+accuracy = jnp.mean(Y_pred == Y_test)
 print(f"[Final Accuracy {accuracy}]")
 
 print("END")
