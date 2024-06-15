@@ -544,7 +544,7 @@ class UniverseLP(hk.Module):
         hk.set_state("universe", cells)
 
         #init states (integers)
-        self.s_init = CoordinateCells(self.in_coords, self.out_coords, is_states=True, clear=True)
+        self.s_init = CoordinateCells(self.in_coords, self.out_coords, is_states=True, clear=False)
         states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         self.states = states.at[self.layer_coords[:, 0], self.layer_coords[:, 1]].set(2)
         # self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
@@ -552,7 +552,7 @@ class UniverseLP(hk.Module):
         hk.set_state("states", self.states)
 
         #init weights (random)
-        self.w_init = CoordinateCells(self.in_coords, self.out_coords, is_states=False, clear=True)
+        self.w_init = CoordinateCells(self.in_coords, self.out_coords, is_states=False, clear=False)
         self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
 
         #init biases

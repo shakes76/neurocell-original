@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 20
+epochs = 30
 architecture_filename = "patterns/Sprite-CLP13-C.png"
 start_state = 1 #set None for random state
 
