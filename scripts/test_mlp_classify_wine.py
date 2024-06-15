@@ -44,9 +44,9 @@ class MLP(hk.Module):
         '''
         #define layers
         net=hk.Flatten()(x)
-        net=hk.Linear(16)(net)
+        net=hk.Linear(12)(net)
         net=jax.nn.relu(net)
-        net=hk.Linear(8)(net)
+        net=hk.Linear(6)(net)
         net=jax.nn.relu(net)
         net=hk.Linear(self.output_size)(net)
 
