@@ -411,9 +411,9 @@ class CoordinateCells(hk.initializers.Initializer):
         Clears cells upto and including coords positions padded by 1
         '''
         if after:
-            result = cells.at[:,coord+2:].set(0)  #clear cells after
+            result = cells.at[:,coord+1:].set(0)  #clear cells after
         else:
-            result = cells.at[:,:coord-1].set(0) #clear cells before
+            result = cells.at[:,:coord].set(0) #clear cells before
         return result
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
@@ -674,7 +674,10 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
     #check states
     #if passive apply activation, else signal state so weight
     cells = jnp.where(states==1, cells*weights, cells) #weight if signal
-    cells = jnp.where(jnp.logical_and(states==2,cells!=0), activate(cells+biases), cells) #activate if passive, more accurate
+    if activate == None:
+        cells = jnp.where(jnp.logical_and(states==2,cells!=0), cells+biases, cells) #activate if passive, more accurate
+    else:
+        cells = jnp.where(jnp.logical_and(states==2,cells!=0), activate(cells+biases), cells) #activate if passive, more accurate
     # cells = jnp.where(states==2, activate(cells+biases), cells) #activate if passive, faster
 
     return cells

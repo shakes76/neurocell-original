@@ -4,7 +4,7 @@ Load model architecture from Sprite image
 import imageio as iio
 import jax.numpy as jnp
 
-model_sprite = iio.imread("patterns/Sprite-CLP13.png")
+model_sprite = iio.imread("patterns/Sprite-CLP13-C.png")
 N = max(model_sprite.shape[0], model_sprite.shape[1])
 print("N:", N)
 

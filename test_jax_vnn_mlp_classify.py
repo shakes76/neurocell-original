@@ -44,7 +44,7 @@ layer_size = (11,1)
 layer_offset = (1,6)
 kernel_size = (7,3)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+final_activation = None
 depth = output_offset[1]-input_offset[1]
 print("depth:", depth)
 

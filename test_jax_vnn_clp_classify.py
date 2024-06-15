@@ -12,6 +12,7 @@ from typing import Tuple
 import time
 
 from sklearn import datasets
+from sklearn.preprocessing import StandardScaler
 
 from universe import UniverseLP #local
 import utils #local
@@ -20,19 +21,24 @@ utils.jax_status()
 
 #parameters
 epochs = 20
-architecture_filename = "patterns/Sprite-CLP13.png"
+architecture_filename = "patterns/Sprite-CLP13-C.png"
 start_state = 1 #set None for random state
 
 #===========
 ##data
 data_dict = datasets.load_wine(return_X_y=False)
-X = data_dict['data']
+X_raw = data_dict['data']
 Y = data_dict['target']
 length = len(data_dict['feature_names'])
 samples = len(data_dict['target'])
 num_classes = len(data_dict['target_names'])
-print("Samples:", samples, "Input Length:", length, "Classes:", num_classes)
+print("Data Shape:", X_raw.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
 
+#scaling
+scaler = StandardScaler()
+X = scaler.fit_transform(X_raw)
+
+#===========
 #load network architecture
 N, input_coords, neuron_coords, output_coords = utils.load_sprite(architecture_filename)
 input_coords = jnp.array(input_coords)
@@ -45,7 +51,7 @@ print("N:", N, "Epochs:", epochs)
 #setup
 kernel_size = (3,3)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+final_activation = None
 #depth
 in_row_coord = input_coords[:, 0].min() #top most in
 out_row_coord = output_coords[:, 0].min() #top most out
@@ -122,7 +128,7 @@ for step in range(1, epochs+1):
         Y_pred = []
         for x, y in zip(X, Y):
             logits, state_test = network.apply(params, state, x)
-            Y_pred.append(jnp.squeeze(logits, axis=-1))
+            Y_pred.append(logits)
         Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
         accuracy = jnp.mean(Y_pred == Y)
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Accuracy {accuracy}]")
