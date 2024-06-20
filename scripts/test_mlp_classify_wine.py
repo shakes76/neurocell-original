@@ -1,5 +1,5 @@
 '''
-Simple MLP trained as a coordinate transform to approximate a mathematical function
+Simple MLP trained as a classify network for a very simple dataset - Wine
 '''
 import jax
 import jax.numpy as jnp
