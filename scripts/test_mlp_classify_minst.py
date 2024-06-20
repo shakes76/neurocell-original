@@ -11,9 +11,10 @@ from typing import Tuple
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from sklearn.utils import check_random_state
 
 #parameters
-iterations = 2
+iterations = 4
 
 #===========
 ##data
@@ -30,6 +31,14 @@ print("Y raw:", Y_raw.dtype, Y_raw[:10])
 scaler = StandardScaler()
 X_preproc = scaler.fit_transform(X_raw)
 
+#shuffle
+random_state = check_random_state(0)
+permutation = random_state.permutation(X_preproc.shape[0])
+X_preproc = X_preproc[permutation]
+Y_raw = Y_raw[permutation]
+X_preproc = X_preproc.reshape((X_preproc.shape[0], -1))
+
+#split
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
 
 #===========
@@ -68,7 +77,7 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimiser.
 network = hk.without_apply_rng(hk.transform(_forward))
-opt = optax.sgd(learning_rate=0.01)
+opt = optax.sgd(learning_rate=0.005)
 # opt = optax.adam(learning_rate=0.001)
 
 #loss function
