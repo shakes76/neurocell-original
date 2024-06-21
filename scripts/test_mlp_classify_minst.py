@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import check_random_state
 
 #parameters
-iterations = 4
+iterations = 6
 
 #===========
 ##data
@@ -77,8 +77,8 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimiser.
 network = hk.without_apply_rng(hk.transform(_forward))
-opt = optax.sgd(learning_rate=0.005)
-# opt = optax.adam(learning_rate=0.001)
+# opt = optax.sgd(learning_rate=0.005)
+opt = optax.adam(learning_rate=0.0001)
 
 #loss function
 def loss(params: hk.Params, batch, labels) -> jnp.ndarray:

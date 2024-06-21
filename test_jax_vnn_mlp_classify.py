@@ -20,7 +20,7 @@ utils.jax_status()
 
 #parameters
 N = 13
-epochs = 150
+epochs = 200
 samples = 128
 length = 3
 num_classes = 3
