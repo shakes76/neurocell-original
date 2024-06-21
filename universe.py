@@ -374,7 +374,7 @@ class VerticalCells(hk.initializers.Initializer):
         if self.is_states:
             cells = jnp.ones(shape, dtype=dtype)
             inputs = jnp.full(self.in_size, 2, dtype=dtype)
-            outputs = jnp.full(self.in_size, 2, dtype=dtype)
+            outputs = jnp.full(self.out_size, 2, dtype=dtype)
         else:
             # real_dtype = jnp.finfo(dtype).dtype
             # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
@@ -498,10 +498,54 @@ class UniverseLP(hk.Module):
         #init states (integers)
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
         states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
-        passives = jnp.full(layer_size, 2, dtype=self.states_dtype)
+        passives = jnp.full((layer_size,1), 2, dtype=self.states_dtype)
         self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
         # self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # print("States:", self.states)
+        hk.set_state("states", self.states)
+
+        #init weights (random)
+        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
+        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+
+        #init biases
+        self.b_init = jnp.zeros
+        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        #init filters
+        self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
+        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],1), dtype=self.dtype, init=self.f_init)
+
+        self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
+                                self.filters.shape,  # only ndim matters, not shape 
+                                ('NHWC', 'IHWO', 'NHWC'))  # the important bit
+
+        return hk.get_state("universe")
+    
+    def initialize_mlp_full(self, in_size, out_size, in_offset, out_offset, layer_sizes, kernel_size=(3,3)):
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.layer_sizes = layer_sizes
+        self.kernel_size = kernel_size
+        self.depth = self.out_offset[1]-self.in_offset[1]
+        self.type_MLP = True
+
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
+
+        #init states (integers)
+        #set input and output states
+        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
+        self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        #set layers
+        center = self.N//2
+        for index, layer_size in enumerate(self.layer_sizes):
+            passives = jnp.full((layer_size,1), 2, dtype=self.states_dtype)
+            layer_offset = (center-layer_size//2, in_offset[1]+2*(index+1))
+            self.states = jax.lax.dynamic_update_slice(self.states, passives, layer_offset)
         hk.set_state("states", self.states)
 
         #init weights (random)
