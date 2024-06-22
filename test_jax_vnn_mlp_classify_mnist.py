@@ -24,7 +24,7 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 2
+epochs = 3
 num_classes = 10
 layers = 3
 print("N:", N, "Epochs:", epochs)
@@ -103,6 +103,7 @@ def loss(params: hk.Params, state, batch, labels) -> jnp.ndarray:
     '''
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
+    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     return -jnp.sum(labels * jax.nn.log_softmax(logits)), state
 
 @jax.jit
@@ -126,15 +127,17 @@ for step in range(epochs+1):
     for x, y in zip(X, Y):
         params, opt_state, loss_value, state = update(params, opt_state, state, x.reshape(-1,1), y)
 
-    if step % 1 == 0:
+    if step % 2 == 0:
         # Periodically evaluate on train & test sets.
         Y_pred = []
         for x in X:
-            logits, state_test = network.apply(params, state, x.reshape(-1,1))
-            Y_pred.append(logits)
+            logits, state_test = network.apply(params, state, x.reshape(-1,1)) #if reshaped, use squeeze
+            Y_pred.append(jnp.squeeze(logits, axis=-1))
         Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
         accuracy = jnp.mean(Y_pred == Y)
         print(f"[Step {step}, Loss {loss_value}, Train Accuracy {accuracy}]")
+    else:
+        print(f"[Step {step}, Loss {loss_value}]")
 end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
@@ -173,7 +176,7 @@ plt.show()
 Y_pred = []
 for x, y in zip(X_test, Y_test):
     logits, state_test = network.apply(params, state, x.reshape(-1,1))
-    Y_pred.append(logits)
+    Y_pred.append(jnp.squeeze(logits, axis=-1))
 Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
 accuracy = jnp.mean(Y_pred == Y_test)
 print(f"[Final Test Accuracy {accuracy}]")
