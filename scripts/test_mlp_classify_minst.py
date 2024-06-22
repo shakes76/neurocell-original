@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import haiku as hk
 import optax
 from typing import Tuple
+import time
 
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import StandardScaler
@@ -14,7 +15,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import check_random_state
 
 #parameters
-iterations = 6
+epochs = 4
 
 #===========
 ##data
@@ -107,7 +108,8 @@ params = network.init(jax.random.PRNGKey(42), X)
 opt_state = opt.init(params)
 
 # Train/eval loop.
-for step in range(iterations+1):
+start = time.time() #time generation
+for step in range(epochs+1):
     # Do SGD on a batch of training examples.
     for x, y in zip(X, Y):
         params, opt_state, loss_value = update(params, opt_state, x, y)
@@ -117,6 +119,9 @@ for step in range(iterations+1):
         Y_pred = network.apply(params, X)
         accuracy = jnp.mean(jnp.argmax(Y_pred, axis=-1) == Y)
         print(f"[Step {step}, Loss {loss_value}, Train Accuracy {accuracy}]")
+end = time.time()
+elapsed = end - start
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
 #test performance
 Y_pred = []
@@ -125,6 +130,6 @@ for x, y in zip(X_test, Y_test):
     Y_pred.append(logits)
 Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
 accuracy = jnp.mean(Y_pred == Y_test)
-print(f"[Final Accuracy {accuracy}]")
+print(f"[Final Test Accuracy {accuracy}]")
 
 print("END")

@@ -24,10 +24,9 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 20
+epochs = 2
 num_classes = 10
 layers = 3
-start_state = 1 #set None for random state
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -97,9 +96,86 @@ params, state = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
 opt_state = opt.init(params)
 # print(params)
 
+#loss function
+def loss(params: hk.Params, state, batch, labels) -> jnp.ndarray:
+    '''
+    Cross entropy 
+    '''
+    labels = jax.nn.one_hot(labels, num_classes)
+    logits, state = network.apply(params, state, batch)
+    return -jnp.sum(labels * jax.nn.log_softmax(logits)), state
+
+@jax.jit
+def update(
+        params: hk.Params,
+        opt_state: optax.OptState,
+        state,
+        batch,
+        labels
+    ) -> Tuple[hk.Params, optax.OptState]:
+    """Learning rule (stochastic gradient descent)."""
+    (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
+    updates, opt_state = opt.update(grads, opt_state)
+    new_params = optax.apply_updates(params, updates)
+    return new_params, opt_state, loss_value, state
+
+# Train/eval loop.
+start = time.time() #time generation
+for step in range(epochs+1):
+    # Do SGD on a batch of training examples.
+    for x, y in zip(X, Y):
+        params, opt_state, loss_value, state = update(params, opt_state, state, x.reshape(-1,1), y)
+
+    if step % 1 == 0:
+        # Periodically evaluate on train & test sets.
+        Y_pred = []
+        for x in X:
+            logits, state_test = network.apply(params, state, x.reshape(-1,1))
+            Y_pred.append(logits)
+        Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
+        accuracy = jnp.mean(Y_pred == Y)
+        print(f"[Step {step}, Loss {loss_value}, Train Accuracy {accuracy}]")
+end = time.time()
+elapsed = end - start
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+
+jnp.savez("mlp_classify_cells.npz", 
+            weights=params['universe_lp']['w'], 
+            biases=params['universe_lp']['b'], 
+            filters=params['universe_lp']['f'], 
+            states=state['universe_lp']['states'], 
+            N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
+            input_offset=input_offset, output_offset=output_offset,
+            layer_sizes=layer_sizes, kernel_size=kernel_size,
+            allow_pickle=False)
+
+plt.imshow(params['universe_lp']['w'])
+plt.title("Final Weights")
+plt.savefig("vnn_mlp_classify_weights.png", dpi=150)
+plt.show()
+
+plt.imshow(params['universe_lp']['b'])
+plt.title("Final Biases")
+plt.savefig("vnn_mlp_classify_biases.png", dpi=150)
+plt.show()
+
+plt.imshow(params['universe_lp']['f'][0,:,:,0])
+plt.title("Final Filter")
+plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
+plt.show()
+
 plt.imshow(state['universe_lp']['states'])
 plt.title("Final States")
 plt.savefig("vnn_mlp_full_classify_states.png", dpi=75)
 plt.show()
+
+#test performance
+Y_pred = []
+for x, y in zip(X_test, Y_test):
+    logits, state_test = network.apply(params, state, x.reshape(-1,1))
+    Y_pred.append(logits)
+Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
+accuracy = jnp.mean(Y_pred == Y_test)
+print(f"[Final Test Accuracy {accuracy}]")
 
 print("END")
