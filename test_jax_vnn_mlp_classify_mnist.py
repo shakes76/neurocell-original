@@ -24,7 +24,7 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 3
+epochs = 9
 num_classes = 10
 layers = 3
 print("N:", N, "Epochs:", epochs)
@@ -38,7 +38,7 @@ length = X_raw.shape[1]
 samples = X_raw.shape[0]
 num_classes = 10
 print("Data Shape:", X_raw.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
-print("Y raw:", Y_raw.dtype, Y_raw[:10])
+# print("Y raw:", Y_raw.dtype, Y_raw[:10])
 
 #scaling
 scaler = StandardScaler()
@@ -63,14 +63,14 @@ input_top = center-length//2
 input_left = center-total_layers//2-1
 output_top = center-num_classes//2
 output_left = input_left+total_layers-1 #dont include out obv
-print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
+# print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (length,1)
 input_offset = (input_top,input_left)
 output_size = (num_classes,1)
 output_offset = (output_top,output_left)
 layer_sizes = [256, 128, 32]
-kernel_size = (7,3)
+kernel_size = (23,3)
 activation = jax.nn.tanh
 final_activation = None
 depth = output_offset[1]-input_offset[1]
@@ -89,7 +89,7 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.001)
+opt = optax.adam(learning_rate=0.0001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 params, state = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
@@ -142,7 +142,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
-jnp.savez("mlp_classify_cells.npz", 
+jnp.savez("mlp_classify_mnist_cells.npz", 
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
@@ -154,22 +154,22 @@ jnp.savez("mlp_classify_cells.npz",
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
-plt.savefig("vnn_mlp_classify_weights.png", dpi=150)
+plt.savefig("vnn_mlp_classify_mnist_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
-plt.savefig("vnn_mlp_classify_biases.png", dpi=150)
+plt.savefig("vnn_mlp_classify_mnist_biases.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['f'][0,:,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
+plt.savefig("vnn_mlp_classify_mnist_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(state['universe_lp']['states'])
 plt.title("Final States")
-plt.savefig("vnn_mlp_full_classify_states.png", dpi=75)
+plt.savefig("vnn_mlp_full_classify_mnist_states.png", dpi=75)
 plt.show()
 
 #test performance
