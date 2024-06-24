@@ -24,7 +24,7 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 9
+epochs = 11
 num_classes = 10
 layers = 3
 print("N:", N, "Epochs:", epochs)
@@ -70,7 +70,7 @@ input_offset = (input_top,input_left)
 output_size = (num_classes,1)
 output_offset = (output_top,output_left)
 layer_sizes = [256, 128, 32]
-kernel_size = (23,3)
+kernel_size = (11,3)
 activation = jax.nn.tanh
 final_activation = None
 depth = output_offset[1]-input_offset[1]
@@ -89,7 +89,7 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.0001)
+opt = optax.adam(learning_rate=0.001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 params, state = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
@@ -152,6 +152,15 @@ jnp.savez("mlp_classify_mnist_cells.npz",
             layer_sizes=layer_sizes, kernel_size=kernel_size,
             allow_pickle=False)
 
+#test performance
+Y_pred = []
+for x, y in zip(X_test, Y_test):
+    logits, state_test = network.apply(params, state, x.reshape(-1,1))
+    Y_pred.append(jnp.squeeze(logits, axis=-1))
+Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
+accuracy = jnp.mean(Y_pred == Y_test)
+print(f"[Final Test Accuracy {accuracy}]")
+
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
 plt.savefig("vnn_mlp_classify_mnist_weights.png", dpi=150)
@@ -171,14 +180,5 @@ plt.imshow(state['universe_lp']['states'])
 plt.title("Final States")
 plt.savefig("vnn_mlp_full_classify_mnist_states.png", dpi=75)
 plt.show()
-
-#test performance
-Y_pred = []
-for x, y in zip(X_test, Y_test):
-    logits, state_test = network.apply(params, state, x.reshape(-1,1))
-    Y_pred.append(jnp.squeeze(logits, axis=-1))
-Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-accuracy = jnp.mean(Y_pred == Y_test)
-print(f"[Final Test Accuracy {accuracy}]")
 
 print("END")
