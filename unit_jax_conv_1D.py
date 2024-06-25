@@ -25,7 +25,8 @@ print("Input Coords:", input_offset)
 
 #===========
 # nethood = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
-nethood = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
+# nethood = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
+nethood = filters.smooth(dtype=jnp.float32, norm=False) # 8 connected kernel
 print("nethood:", nethood.shape, nethood)
 
 universe = jax.lax.dynamic_update_slice(universe, inputs, input_offset)
@@ -57,14 +58,22 @@ filter_conv1D = jnp.fft.fft(filter, axis=0) #ffts of rows
 
 # FFTs of universe
 universe_conv1D = jnp.fft.fft(universe, axis=0) #ffts of rows
+# print("FFTs:", universe_conv1D.shape, universe_conv1D)
 
 #Conv via CCP
-# print(universe_conv1D[:,input_left-1:input_left+width-1])
-result_conv1D = filter_conv1D * universe_conv1D[:,input_left:input_left+width]
+slices = jnp.zeros((N,width), dtype=jnp.complex64)
+for i in range(width):
+    sub_universe = universe_conv1D[:,input_left-(width-1)+i:input_left-(width-1)+i+width]
+    result_conv1D = filter_conv1D * sub_universe
+    print("i:", i, sub_universe.shape, sub_universe)
+    result_conv1D = jnp.sum(result_conv1D, axis=-1).reshape(-1,1) #reshape promotes to column vec
+    # print(result_conv1D.shape, result_conv1D)
+    slices = jax.lax.dynamic_update_slice(slices, result_conv1D, (0,i))
 
 #inverse FFT
-result_block = jnp.fft.ifft(result_conv1D, axis=0) #ffts of rows
+result_block = jnp.fft.ifft(slices, axis=0) #ffts of rows
 result_block = jnp.real(result_block)
+# result_block = jnp.sum(result_block, axis=-1)
 # print("result_block:", result_block.shape, result_block)
 
 plt.imshow(result_block)
@@ -72,7 +81,7 @@ plt.title("Result Block")
 plt.show()
 
 #copy back
-result2 = jax.lax.dynamic_update_slice(universe, result_block, (0,input_left))
+result2 = jax.lax.dynamic_update_slice(universe, result_block, (0,input_left-1))
 
 plt.imshow(universe)
 plt.title("Initial")
