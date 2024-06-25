@@ -15,6 +15,7 @@ length = 4
 
 #===========
 center = N//2
+# input_top = 0
 input_top = center-length//2
 input_left = center-1
 input_size = (length,1)
@@ -51,6 +52,7 @@ print("width:", width)
 # filter = jnp.pad(nethood, ((padding,padding+odd_pad), (0,0)), mode='constant')
 filter = jnp.pad(nethood, ((0,(N-width)), (0,0)), mode='constant')
 # filter = jnp.pad(nethood, (((N-width),0), (0,0)), mode='constant')
+filter = jnp.roll(filter, -1, axis=0) #make sure centre pixel is first in filter by periodic shift
 print("filter:", filter.shape, filter)
 
 # FFTs of filter
