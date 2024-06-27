@@ -27,7 +27,8 @@ print("Input Coords:", input_offset)
 #===========
 # nethood = filters.backward(dtype=jnp.float32, norm=False) # 8 connected kernel
 # nethood = filters.forward(dtype=jnp.float32, norm=False) # 8 connected kernel
-nethood = filters.smooth(dtype=jnp.float32, norm=False) # 8 connected kernel
+# nethood = filters.smooth(dtype=jnp.float32, norm=False) # 8 connected kernel
+nethood = filters.gaussian(dtype=jnp.float32) # 8 connected kernel
 print("nethood:", nethood.shape, nethood)
 
 universe = jax.lax.dynamic_update_slice(universe, inputs, input_offset)
