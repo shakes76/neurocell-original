@@ -24,7 +24,7 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 11
+epochs = 1
 num_classes = 10
 layers = 3
 print("N:", N, "Epochs:", epochs)
@@ -70,7 +70,7 @@ input_offset = (input_top,input_left)
 output_size = (num_classes,1)
 output_offset = (output_top,output_left)
 layer_sizes = [256, 128, 32]
-kernel_size = (43,3)
+kernel_size = (71,3)
 activation = jax.nn.tanh
 final_activation = None
 depth = output_offset[1]-input_offset[1]
@@ -97,14 +97,19 @@ opt_state = opt.init(params)
 # print(params)
 
 #loss function
-def loss(params: hk.Params, state, batch, labels) -> jnp.ndarray:
+def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
-    return -jnp.sum(labels * jax.nn.log_softmax(logits)), state
+
+    #L2 norm of weights loss
+    filters = params['universe_lp']['f']
+    l2 = jnp.mean(filters**2)
+
+    return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
 
 @jax.jit
 def update(

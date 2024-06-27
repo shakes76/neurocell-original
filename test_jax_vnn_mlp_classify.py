@@ -20,7 +20,7 @@ utils.jax_status()
 
 #parameters
 N = 13
-epochs = 200
+epochs = 50
 samples = 128
 length = 3
 num_classes = 3
@@ -78,7 +78,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
 
     #CE loss
     logits, state = network.apply(params, state, batch)
-    ce = -jnp.sum(labels * jax.nn.log_softmax(jnp.squeeze(logits, axis=-1)))
+    ce = -jnp.mean(labels * jax.nn.log_softmax(jnp.squeeze(logits, axis=-1)))
 
     #L2 norm of weights loss
     filters = params['universe_lp']['f']
@@ -117,9 +117,9 @@ for step in range(1, epochs+1):
             Y_pred.append(jnp.squeeze(logits, axis=-1))
         Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
         accuracy = jnp.mean(Y_pred == Y)
-        print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Accuracy {accuracy}]")
+        print(f"[Step {step}, Loss {loss_value}, Accuracy {accuracy}]")
     else:
-        print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
+        print(f"[Step {step}, Loss {loss_value}]")
 end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
