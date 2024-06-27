@@ -13,7 +13,7 @@ import time
 
 from sklearn import datasets
 
-from universe import UniverseLP #local
+from universe import UniverseLP, STATE_ACTIVE, STATE_SIGNAL #local
 import utils #local
 
 utils.jax_status()
@@ -68,6 +68,15 @@ params, state = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
 opt_state = opt.init(params)
 # print(params)
 # print(state)
+
+states = params['universe_lp']['s']
+states = jnp.where(jnp.logical_and(states>=STATE_SIGNAL,states<STATE_ACTIVE), 2, states) #weight if signal
+states = jnp.where(jnp.logical_and(states>=STATE_ACTIVE,states<2), 3, states) #activate if passive, more accurate
+
+plt.imshow(states)
+plt.title("Initial States")
+plt.savefig("vnn_mlp_classify_states_init.png", dpi=75)
+plt.show()
 
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
@@ -128,7 +137,7 @@ jnp.savez("mlp_classify_cells.npz",
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
-            states=state['universe_lp']['states'], 
+            states=params['universe_lp']['s'], 
             N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             layer_size=layer_size, layer_offset=layer_offset, kernel_size=kernel_size,
@@ -149,7 +158,11 @@ plt.title("Final Filter")
 plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
 plt.show()
 
-plt.imshow(state['universe_lp']['states'])
+states = params['universe_lp']['s']
+states = jnp.where(jnp.logical_and(states>=STATE_SIGNAL,states<STATE_ACTIVE), 2, states) #weight if signal
+states = jnp.where(jnp.logical_and(states>=STATE_ACTIVE,states<2), 3, states) #activate if passive, more accurate
+
+plt.imshow(states)
 plt.title("Final States")
 plt.savefig("vnn_mlp_classify_states.png", dpi=75)
 plt.show()

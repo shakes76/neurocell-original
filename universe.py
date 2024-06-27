@@ -22,6 +22,8 @@ kernel_forward =   [[0, 0, 1],
                     [0, 0, 1],
                     [0, 0, 1],
                     [0, 0, 1]]
+STATE_ACTIVE = 0.6
+STATE_SIGNAL = 0.3
 
 class Universe:
     '''
@@ -372,18 +374,24 @@ class VerticalCells(hk.initializers.Initializer):
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         if self.is_states:
-            cells = jnp.ones(shape, dtype=dtype)
-            inputs = jnp.full(self.in_size, 2, dtype=dtype)
-            outputs = jnp.full(self.out_size, 2, dtype=dtype)
+            # cells = jnp.ones(shape, dtype=dtype)
+            inputs = jnp.full(self.in_size, STATE_ACTIVE, dtype=dtype)
+            outputs = jnp.full(self.out_size, STATE_ACTIVE, dtype=dtype)
         else:
             # real_dtype = jnp.finfo(dtype).dtype
             # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
             # upper = 3.0
             # lower = -3.0
             # cells = stddev * jax.random.truncated_normal(hk.next_rng_key(), lower, upper, shape, real_dtype)
-            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+            # cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
             inputs = jnp.ones(self.in_size, dtype=dtype)
             outputs = jnp.ones(self.out_size, dtype=dtype)
+        
+        cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+
+        if self.is_states:
+            #norm states to 0-1 range
+            cells = jax.nn.sigmoid(cells)
 
         if self.clear:
             cells = self.clear_cells_vertical(cells, self.in_offset, after=False)
@@ -419,18 +427,24 @@ class CoordinateCells(hk.initializers.Initializer):
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         n = len(self.in_coords)
         if self.is_states:
-            cells = jnp.ones(shape, dtype=dtype)
-            inputs = 2
-            outputs = 2
+            # cells = jnp.ones(shape, dtype=dtype)
+            inputs = STATE_ACTIVE
+            outputs = STATE_ACTIVE
         else:
             # real_dtype = jnp.finfo(dtype).dtype
             # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
             # upper = 3.0
             # lower = -3.0
             # cells = stddev * jax.random.truncated_normal(hk.next_rng_key(), lower, upper, shape, real_dtype)
-            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
-            inputs = 1
-            outputs = 1
+            # cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+            inputs = STATE_SIGNAL
+            outputs = STATE_SIGNAL
+
+        cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+
+        if self.is_states:
+            #norm states to 0-1 range
+            cells = jax.nn.sigmoid(cells)
 
         if self.clear:
             cells = self.clear_cells_outside(cells, self.min_coord, after=False)
@@ -468,7 +482,7 @@ class UniverseLP(hk.Module):
         self.N = N
         self.grid_size = (N,N)
         self.dtype = dtype
-        self.states_dtype = jnp.uint8
+        self.states_dtype = jnp.float32
         self.type_MLP = False
         self.type_CLP = False
         #filters for spatial derivatives
@@ -497,12 +511,12 @@ class UniverseLP(hk.Module):
 
         #init states (integers)
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
-        states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
-        passives = jnp.full(layer_size, 2, dtype=self.states_dtype)
-        self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
-        # self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        # passives = jnp.full(layer_size, STATE_ACTIVE, dtype=self.states_dtype)
+        # self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
+        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # print("States:", self.states)
-        hk.set_state("states", self.states)
+        # hk.set_state("states", self.states)
 
         #init weights (random)
         self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
@@ -539,14 +553,15 @@ class UniverseLP(hk.Module):
         #init states (integers)
         #set input and output states
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
-        self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        # self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         #set layers
-        center = self.N//2
-        for index, layer_size in enumerate(self.layer_sizes):
-            passives = jnp.full((layer_size,1), 2, dtype=self.states_dtype)
-            layer_offset = (center-layer_size//2, in_offset[1]+2*(index+1))
-            self.states = jax.lax.dynamic_update_slice(self.states, passives, layer_offset)
-        hk.set_state("states", self.states)
+        # center = self.N//2
+        # for index, layer_size in enumerate(self.layer_sizes):
+        #     passives = jnp.full((layer_size,1), STATE_ACTIVE, dtype=self.states_dtype)
+        #     layer_offset = (center-layer_size//2, in_offset[1]+2*(index+1))
+        #     self.states = jax.lax.dynamic_update_slice(self.states, passives, layer_offset)
+        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # hk.set_state("states", self.states)
 
         #init weights (random)
         self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
@@ -589,11 +604,11 @@ class UniverseLP(hk.Module):
 
         #init states (integers)
         self.s_init = CoordinateCells(self.in_coords, self.out_coords, is_states=True, clear=False)
-        states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
-        self.states = states.at[self.layer_coords[:, 0], self.layer_coords[:, 1]].set(2)
-        # self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        # self.states = states.at[self.layer_coords[:, 0], self.layer_coords[:, 1]].set(2)
+        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # print("States:", self.states)
-        hk.set_state("states", self.states)
+        # hk.set_state("states", self.states)
 
         #init weights (random)
         self.w_init = CoordinateCells(self.in_coords, self.out_coords, is_states=False, clear=False)
@@ -649,8 +664,8 @@ class UniverseLP(hk.Module):
     
     def __call__(self, inputs, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
         # get params
-        states = self.states
-        # states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # states = self.states
+        states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
         biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
 
@@ -667,10 +682,6 @@ class UniverseLP(hk.Module):
             cells = cells.at[self.in_coords[:, 0], self.in_coords[:, 1]].set(inputs)
         # hk.set_state("universe", cells)
 
-        #process input
-        # cells = jnp.where(jnp.logical_and(states==2,cells!=0), activate(cells+biases), cells) #activate if passive
-        # hk.set_state("universe", cells)
-
         #smooth/sharpen weights
         weights = _filter(weights, self.sharpen_filter, self.dn)
 
@@ -682,16 +693,6 @@ class UniverseLP(hk.Module):
         # filter_ffts = _fft_1D(self.N, length, filters)
 
         #forward
-        '''
-        start_index = self.in_offset[1]
-        for i in range(1, self.depth):
-            # cells = self.forward(weights, biases, states, activate, norm)
-            cells = self.forward_fast(start_index+i, weights, biases, states, filter_ffts, activate, norm)
-            hk.set_state("universe", cells)
-        # cells = self.forward(weights, biases, states, final_activate, norm)
-        cells = self.forward_fast(start_index+self.depth, weights, biases, states, filter_ffts, final_activate, norm)
-        hk.set_state("universe", cells)
-        '''
         cells = _forward_propagate_fast(self.in_offset[1], self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
         # cells = _forward_propagate_fast_1D(self.in_offset[1], self.depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm)
         hk.set_state("universe", cells)
@@ -762,13 +763,16 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
         #norm
         cells = jax.nn.standardize(cells, axis=(0,1))
 
+    #norm states to 0-1 range
+    states = jax.nn.sigmoid(states)
+
     #check states
     #if passive apply activation, else signal state so weight
-    cells = jnp.where(states==1, cells*weights, cells) #weight if signal
+    cells = jnp.where(jnp.logical_and(states>=STATE_SIGNAL,states<STATE_ACTIVE), cells*weights, cells) #weight if signal
     if activate == None:
-        cells = jnp.where(jnp.logical_and(states==2,cells!=0), cells+biases, cells) #activate if passive, more accurate
+        cells = jnp.where(states>=STATE_ACTIVE, cells+biases, cells) #activate if passive, more accurate
     else:
-        cells = jnp.where(jnp.logical_and(states==2,cells!=0), activate(cells+biases), cells) #activate if passive, more accurate
+        cells = jnp.where(states>=STATE_ACTIVE, activate(cells+biases), cells) #activate if passive, more accurate
     # cells = jnp.where(states==2, activate(cells+biases), cells) #activate if passive, faster
 
     return cells
@@ -799,15 +803,18 @@ def _forward_fast(index, cells, weights, biases, states, filters, activate, norm
         #norm
         result_block = jax.nn.standardize(result_block, axis=(0,1))
 
+    #norm states to 0-1 range
+    sub_states = jax.nn.sigmoid(sub_states)
+
     #check states
     #if passive apply activation, else signal state so weight
-    result_block = jnp.where(sub_states==1, result_block*sub_weights, result_block) #weight if signal
+    result_block = jnp.where(jnp.logical_and(sub_states>=STATE_SIGNAL,sub_states<STATE_ACTIVE), result_block*sub_weights, result_block) #weight if signal
     # print(result_block.shape)
     if activate == None:
-        result_block = jnp.where(jnp.logical_and(sub_states==2,result_block!=0), result_block+sub_biases, result_block) #activate if passive, more accurate
+        result_block = jnp.where(sub_states>=STATE_ACTIVE, result_block+sub_biases, result_block) #activate if passive, more accurate
     else:
-        result_block = jnp.where(jnp.logical_and(sub_states==2,result_block!=0), activate(result_block+sub_biases), result_block) #activate if passive, more accurate
-    # result_block = jnp.where(states==2, activate(result_block+biases), result_block) #activate if passive, faster
+        result_block = jnp.where(sub_states>=STATE_ACTIVE, activate(result_block+sub_biases), result_block) #activate if passive, more accurate
+    # result_block = jnp.where(sub_states==2, activate(result_block+biases), result_block) #activate if passive, faster
 
     return result_block
 
@@ -837,15 +844,18 @@ def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activat
         #norm
         result_block = jax.nn.standardize(result_block, axis=(0,1))
 
+    #norm states to 0-1 range
+    sub_states = jax.nn.sigmoid(sub_states)
+
     #check states
     #if passive apply activation, else signal state so weight
-    result_block = jnp.where(sub_states==1, result_block*sub_weights, result_block) #weight if signal
+    result_block = jnp.where(jnp.logical_and(sub_states>=STATE_SIGNAL,sub_states<STATE_ACTIVE), result_block*sub_weights, result_block) #weight if signal
     # print(result_block.shape)
     if activate == None:
-        result_block = jnp.where(jnp.logical_and(sub_states==2,result_block!=0), result_block+sub_biases, result_block) #activate if passive, more accurate
+        result_block = jnp.where(sub_states>=STATE_ACTIVE, result_block+sub_biases, result_block) #activate if passive, more accurate
     else:
-        result_block = jnp.where(jnp.logical_and(sub_states==2,result_block!=0), activate(result_block+sub_biases), result_block) #activate if passive, more accurate
-    # result_block = jnp.where(states==2, activate(result_block+biases), result_block) #activate if passive, faster
+        result_block = jnp.where(sub_states>=STATE_ACTIVE, activate(result_block+sub_biases), result_block) #activate if passive, more accurate
+    # result_block = jnp.where(sub_states==2, activate(result_block+biases), result_block) #activate if passive, faster
 
     return result_block
 
