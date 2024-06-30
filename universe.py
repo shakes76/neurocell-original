@@ -391,8 +391,8 @@ class VerticalCells(hk.initializers.Initializer):
 
         if self.is_states:
             #norm states to 0-1 range
-            # cells = jax.nn.sigmoid(cells)
-            cells = (cells - cells.min()) / (cells.max() - cells.min())
+            cells = jax.nn.sigmoid(cells)
+            # cells = (cells - cells.min()) / (cells.max() - cells.min())
 
         if self.clear:
             cells = self.clear_cells_vertical(cells, self.in_offset, after=False)
@@ -445,8 +445,8 @@ class CoordinateCells(hk.initializers.Initializer):
 
         if self.is_states:
             #norm states to 0-1 range
-            # cells = jax.nn.sigmoid(cells)
-            cells = (cells - cells.min()) / (cells.max() - cells.min())
+            cells = jax.nn.sigmoid(cells)
+            # cells = (cells - cells.min()) / (cells.max() - cells.min())
 
         if self.clear:
             cells = self.clear_cells_outside(cells, self.min_coord, after=False)
@@ -766,8 +766,8 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
         cells = jax.nn.standardize(cells, axis=(0,1))
 
     #norm states to 0-1 range
-    # states = jax.nn.sigmoid(states)
-    sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
+    states = jax.nn.sigmoid(states)
+    # sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
 
     #check states
     #if passive apply activation, else signal state so weight
@@ -807,8 +807,8 @@ def _forward_fast(index, cells, weights, biases, states, filters, activate, norm
         result_block = jax.nn.standardize(result_block, axis=(0,1))
 
     #norm states to 0-1 range
-    # sub_states = jax.nn.sigmoid(sub_states)
-    sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
+    sub_states = jax.nn.sigmoid(sub_states)
+    # sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
 
     #check states
     #if passive apply activation, else signal state so weight, let the grad descent decide
@@ -855,8 +855,8 @@ def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activat
         result_block = jax.nn.standardize(result_block, axis=(0,1))
 
     #norm states to 0-1 range
-    # sub_states = jax.nn.sigmoid(sub_states)
-    sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
+    sub_states = jax.nn.sigmoid(sub_states)
+    # sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
 
     #check states
     #if passive apply activation, else signal state so weight
