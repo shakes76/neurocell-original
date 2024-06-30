@@ -69,13 +69,18 @@ opt_state = opt.init(params)
 # print(params)
 # print(state)
 
-states = params['universe_lp']['s']
-states = jnp.where(jnp.logical_and(states>=STATE_SIGNAL,states<STATE_ACTIVE), 2, states) #weight if signal
-states = jnp.where(jnp.logical_and(states>=STATE_ACTIVE,states<2), 3, states) #activate if passive, more accurate
-
-plt.imshow(states)
+plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
 plt.savefig("vnn_mlp_classify_states_init.png", dpi=75)
+plt.show()
+
+states = params['universe_lp']['s']
+states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
+states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
+
+plt.imshow(states)
+plt.title("Initial States (Thresholded)")
+plt.savefig("vnn_mlp_classify_states_init_thres.png", dpi=75)
 plt.show()
 
 #loss function
@@ -158,13 +163,18 @@ plt.title("Final Filter")
 plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
 plt.show()
 
+plt.imshow(params['universe_lp']['s'])
+plt.title("Final States")
+plt.savefig("vnn_mlp_classify_states_final.png", dpi=75)
+plt.show()
+
 states = params['universe_lp']['s']
-states = jnp.where(jnp.logical_and(states>=STATE_SIGNAL,states<STATE_ACTIVE), 2, states) #weight if signal
-states = jnp.where(jnp.logical_and(states>=STATE_ACTIVE,states<2), 3, states) #activate if passive, more accurate
+states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
+states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
 plt.imshow(states)
-plt.title("Final States")
-plt.savefig("vnn_mlp_classify_states.png", dpi=75)
+plt.title("Final States (Thresdolded)")
+plt.savefig("vnn_mlp_classify_states_final_thres.png", dpi=75)
 plt.show()
 
 #function plot

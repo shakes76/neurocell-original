@@ -22,8 +22,8 @@ kernel_forward =   [[0, 0, 1],
                     [0, 0, 1],
                     [0, 0, 1],
                     [0, 0, 1]]
-STATE_ACTIVE = 0.6
-STATE_SIGNAL = 0.3
+STATE_ACTIVE = 0.7
+STATE_SIGNAL = 0.2
 
 class Universe:
     '''
@@ -391,7 +391,8 @@ class VerticalCells(hk.initializers.Initializer):
 
         if self.is_states:
             #norm states to 0-1 range
-            cells = jax.nn.sigmoid(cells)
+            # cells = jax.nn.sigmoid(cells)
+            cells = (cells - cells.min()) / (cells.max() - cells.min())
 
         if self.clear:
             cells = self.clear_cells_vertical(cells, self.in_offset, after=False)
@@ -444,7 +445,8 @@ class CoordinateCells(hk.initializers.Initializer):
 
         if self.is_states:
             #norm states to 0-1 range
-            cells = jax.nn.sigmoid(cells)
+            # cells = jax.nn.sigmoid(cells)
+            cells = (cells - cells.min()) / (cells.max() - cells.min())
 
         if self.clear:
             cells = self.clear_cells_outside(cells, self.min_coord, after=False)
@@ -764,7 +766,8 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
         cells = jax.nn.standardize(cells, axis=(0,1))
 
     #norm states to 0-1 range
-    states = jax.nn.sigmoid(states)
+    # states = jax.nn.sigmoid(states)
+    sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
 
     #check states
     #if passive apply activation, else signal state so weight
@@ -804,17 +807,24 @@ def _forward_fast(index, cells, weights, biases, states, filters, activate, norm
         result_block = jax.nn.standardize(result_block, axis=(0,1))
 
     #norm states to 0-1 range
-    sub_states = jax.nn.sigmoid(sub_states)
+    # sub_states = jax.nn.sigmoid(sub_states)
+    sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
 
     #check states
-    #if passive apply activation, else signal state so weight
-    result_block = jnp.where(jnp.logical_and(sub_states>=STATE_SIGNAL,sub_states<STATE_ACTIVE), result_block*sub_weights, result_block) #weight if signal
-    # print(result_block.shape)
+    #if passive apply activation, else signal state so weight, let the grad descent decide
+    #the operation is akin to adversarial states
     if activate == None:
-        result_block = jnp.where(sub_states>=STATE_ACTIVE, result_block+sub_biases, result_block) #activate if passive, more accurate
+        result_block = result_block*sub_weights*(1.0-sub_states) + (result_block+sub_biases)*sub_states
     else:
-        result_block = jnp.where(sub_states>=STATE_ACTIVE, activate(result_block+sub_biases), result_block) #activate if passive, more accurate
-    # result_block = jnp.where(sub_states==2, activate(result_block+biases), result_block) #activate if passive, faster
+        result_block = result_block*sub_weights*(1.0-sub_states) + activate(result_block+sub_biases)*sub_states
+    
+    # result_block = jnp.where(jnp.logical_and(sub_states>=STATE_SIGNAL,sub_states<STATE_ACTIVE), result_block*sub_weights, result_block) #weight if signal
+    # # print(result_block.shape)
+    # if activate == None:
+    #     result_block = jnp.where(sub_states>=STATE_ACTIVE, result_block+sub_biases, result_block) #activate if passive, more accurate
+    # else:
+    #     result_block = jnp.where(sub_states>=STATE_ACTIVE, activate(result_block+sub_biases), result_block) #activate if passive, more accurate
+    # # result_block = jnp.where(sub_states==2, activate(result_block+biases), result_block) #activate if passive, faster
 
     return result_block
 
@@ -845,7 +855,8 @@ def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activat
         result_block = jax.nn.standardize(result_block, axis=(0,1))
 
     #norm states to 0-1 range
-    sub_states = jax.nn.sigmoid(sub_states)
+    # sub_states = jax.nn.sigmoid(sub_states)
+    sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
 
     #check states
     #if passive apply activation, else signal state so weight

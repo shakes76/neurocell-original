@@ -24,7 +24,7 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 1
+epochs = 15
 num_classes = 10
 layers = 3
 print("N:", N, "Epochs:", epochs)
@@ -151,7 +151,7 @@ jnp.savez("mlp_classify_mnist_cells.npz",
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
-            states=state['universe_lp']['states'], 
+            states=params['universe_lp']['s'], 
             N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             layer_sizes=layer_sizes, kernel_size=kernel_size,
@@ -181,9 +181,18 @@ plt.title("Final Filter")
 plt.savefig("vnn_mlp_classify_mnist_filter.png", dpi=75)
 plt.show()
 
-plt.imshow(state['universe_lp']['states'])
+plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
 plt.savefig("vnn_mlp_full_classify_mnist_states.png", dpi=75)
+plt.show()
+
+states = params['universe_lp']['s']
+states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
+states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
+
+plt.imshow(states)
+plt.title("Final States (Thresholded)")
+plt.savefig("vnn_mlp_full_classify_mnist_states_thres.png", dpi=75)
 plt.show()
 
 print("END")
