@@ -1,7 +1,7 @@
 '''
 Von Neumann network that mimics an MLP for classifying MNIST dataset
 '''
-import numpy as np
+# import numpy as np
 import jax
 import jax.numpy as jnp
 import haiku as hk
@@ -10,12 +10,13 @@ import optax
 # mpl.use('Agg')
 import matplotlib.pyplot as plt
 from typing import Tuple
+from tqdm import tqdm #progbar
 import time
 
-from sklearn.datasets import fetch_openml
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.utils import check_random_state
+#dataset
+import torch
+import torchvision
+import torchvision.transforms as transforms
 
 from universe import UniverseLP #local
 import utils #local
@@ -24,49 +25,28 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 15
+epochs = 8
 num_classes = 10
 layers = 3
 batch_size = 100
+length = 28*28
 print("N:", N, "Epochs:", epochs)
 
+#network IO paths
+path = 'F:/'
+
 #===========
+#transform preproc
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
+
 ##data
-# Load data from https://www.openml.org/d/554
-X_raw, Y_raw = fetch_openml("mnist_784", version=1, return_X_y=True, as_frame=False, parser='pandas')
-Y_raw = Y_raw.astype(np.int32)
-length = X_raw.shape[1]
-samples = X_raw.shape[0]
+trainset = torchvision.datasets.MNIST(root=path+'data/mnist', train=True, download=True, transform=transform)
+train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True) #num_workers=6
+
+testset = torchvision.datasets.MNIST(root=path+'data/mnist', train=False, download=True, transform=transform)
+test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False) #num_workers=6
+
 num_classes = 10
-print("Data Shape:", X_raw.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
-# print("Y raw:", Y_raw.dtype, Y_raw[:10])
-
-#scaling
-scaler = StandardScaler()
-X_preproc = scaler.fit_transform(X_raw)
-print("Preproc Data Shape:", X_raw.shape)
-
-#shuffle
-random_state = check_random_state(0)
-permutation = random_state.permutation(X_preproc.shape[0])
-X_preproc = X_preproc[permutation]
-Y_raw = Y_raw[permutation]
-X_preproc = X_preproc.reshape((X_preproc.shape[0], -1))
-
-#split
-X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=1/7., random_state=42)
-split_samples = X.shape[0]
-split_samples_test = X_test.shape[0]
-
-#batching
-X = jnp.asarray(X)
-Y = jnp.asarray(Y)
-X = jnp.array_split(X, split_samples//batch_size)
-Y = jnp.array_split(Y, split_samples//batch_size)
-X_test = jnp.array_split(X_test, split_samples_test//batch_size)
-Y_test = jnp.array_split(Y_test, split_samples_test//batch_size)
-print("Batches:", len(X), " Batches Test:", len(X_test))
-print("Batched Data Shape:", X[-1].shape)
 
 #locations
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween
@@ -106,7 +86,13 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 opt = optax.adam(learning_rate=0.001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
-params, state = network.init(jax.random.PRNGKey(42), X[0].reshape(-1,1))
+dataset_iter = iter(train_loader)
+x, y = next(dataset_iter)
+x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+# print("INIT SHAPE", x[0:1].shape)
+x = jnp.reshape(x, (x.shape[0], length, 1))
+# print("INIT SHAPE", x[0:1].shape)
+params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
 
@@ -118,12 +104,14 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
+    # print("LOSS SHAPE", labels.shape, logits.shape)
 
     #L2 norm of weights loss
-    filters = params['universe_lp']['f']
-    l2 = jnp.mean(filters**2)
+    # filters = params['universe_lp']['f']
+    # l2 = jnp.mean(filters**2)
 
-    return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
+    # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
+    return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
 @jax.jit
 def update(
@@ -143,17 +131,34 @@ def update(
 start = time.time() #time generation
 for step in range(epochs+1):
     # Do SGD on a batch of training examples.
-    for x, y in zip(X, Y):
-        params, opt_state, loss_value, state = update(params, opt_state, state, x.reshape(-1,1), y)
+    for x, y in tqdm(train_loader):
+        x = jnp.asarray(x.numpy())
+        y = jnp.asarray(y.numpy())
+
+        x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+        # print("TRAIN SHAPE", x.shape)
+        x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
+        # print("TRAIN SHAPE", x.shape)
+
+        params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
 
     if step % 2 == 0:
         # Periodically evaluate on train & test sets.
-        Y_pred = []
-        for x in X:
-            logits, state_test = network.apply(params, state, x.reshape(-1,1)) #if reshaped, use squeeze
-            Y_pred.append(jnp.squeeze(logits, axis=-1))
-        Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-        accuracy = jnp.mean(Y_pred == Y)
+        correct = 0
+        total = 0
+        for x, y in tqdm(test_loader):
+            x = jnp.asarray(x.numpy())
+            y = jnp.asarray(y.numpy())
+
+            x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+            x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
+
+            logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
+            predicted = jnp.squeeze(logits, axis=-1)
+            predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+            correct += jnp.sum(predicted == y)
+            total += y.shape[0]
+        accuracy = 100 * correct / total
         print(f"[Step {step}, Loss {loss_value}, Train Accuracy {accuracy}]")
     else:
         print(f"[Step {step}, Loss {loss_value}]")
@@ -172,12 +177,22 @@ jnp.savez("mlp_classify_mnist_cells.npz",
             allow_pickle=False)
 
 #test performance
-Y_pred = []
-for x, y in zip(X_test, Y_test):
-    logits, state_test = network.apply(params, state, x.reshape(-1,1))
-    Y_pred.append(jnp.squeeze(logits, axis=-1))
-Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-accuracy = jnp.mean(Y_pred == Y_test)
+correct = 0
+total = 0
+for x, y in tqdm(test_loader):
+    x = jnp.asarray(x.numpy())
+    y = jnp.asarray(y.numpy())
+
+    x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+    x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
+
+    logits, state_test = network.apply(params, state, x)
+    predicted = jnp.squeeze(logits, axis=-1)
+    predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+    correct += jnp.sum(predicted == y)
+    total += y.shape[0]
+
+accuracy = 100 * correct / total
 print(f"[Final Test Accuracy {accuracy}]")
 
 plt.imshow(params['universe_lp']['w'])
