@@ -27,6 +27,7 @@ N = 1024
 epochs = 15
 num_classes = 10
 layers = 3
+batch_size = 100
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -43,6 +44,7 @@ print("Data Shape:", X_raw.shape, "Samples:", samples, "Input Length:", length, 
 #scaling
 scaler = StandardScaler()
 X_preproc = scaler.fit_transform(X_raw)
+print("Preproc Data Shape:", X_raw.shape)
 
 #shuffle
 random_state = check_random_state(0)
@@ -52,7 +54,19 @@ Y_raw = Y_raw[permutation]
 X_preproc = X_preproc.reshape((X_preproc.shape[0], -1))
 
 #split
-X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
+X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=1/7., random_state=42)
+split_samples = X.shape[0]
+split_samples_test = X_test.shape[0]
+
+#batching
+X = jnp.asarray(X)
+Y = jnp.asarray(Y)
+X = jnp.array_split(X, split_samples//batch_size)
+Y = jnp.array_split(Y, split_samples//batch_size)
+X_test = jnp.array_split(X_test, split_samples_test//batch_size)
+Y_test = jnp.array_split(Y_test, split_samples_test//batch_size)
+print("Batches:", len(X), " Batches Test:", len(X_test))
+print("Batched Data Shape:", X[-1].shape)
 
 #locations
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween

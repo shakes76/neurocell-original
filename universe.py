@@ -677,13 +677,6 @@ class UniverseLP(hk.Module):
         cells = cells.at[:,:].set(0.)  #clear cells
         # hk.set_state("universe", cells)
 
-        #set input
-        if self.type_MLP:
-            cells = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
-        else:
-            cells = cells.at[self.in_coords[:, 0], self.in_coords[:, 1]].set(inputs)
-        # hk.set_state("universe", cells)
-
         #smooth/sharpen weights
         weights = _filter(weights, self.sharpen_filter, self.dn)
 
@@ -694,9 +687,19 @@ class UniverseLP(hk.Module):
         # # FFTs of filter
         # filter_ffts = _fft_1D(self.N, length, filters)
 
+        #set input
+        # if self.type_MLP:
+        #     cells = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
+        # else:
+        #     cells = cells.at[self.in_coords[:, 0], self.in_coords[:, 1]].set(inputs)
+        # hk.set_state("universe", cells)
+
         #forward
-        cells = _forward_propagate_fast(self.in_offset[1], self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
+        # cells = _forward_propagate_fast(self.in_offset[1], self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
+        # cells = _forward_propagate_fast_mlp(inputs, self.in_offset, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
         # cells = _forward_propagate_fast_1D(self.in_offset[1], self.depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm)
+        forward_propagate_fast = jax.vmap(_forward_propagate_fast_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None])
+        cells = forward_propagate_fast(inputs, self.in_offset, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
         hk.set_state("universe", cells)
 
         #read output
@@ -727,8 +730,22 @@ from functools import partial
 @partial(jax.jit, static_argnums=(0,1,7,8,9,10))
 def _forward_propagate_fast(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
     '''
-    
+    Propagate input across cellular net based on weights etc.
     '''
+    for i in range(1, depth):
+        result_block = _forward_fast(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
+        cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
+    result_block = _forward_fast(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
+    return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
+    
+@partial(jax.jit, static_argnums=(1,2,8,9,10,11))
+def _forward_propagate_fast_mlp(input, offset, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
+    '''
+    Propagate input across cellular net based on weights etc. as a traditional MLP
+    '''
+    cells = jax.lax.dynamic_update_slice(cells, input, offset)
+
+    index = offset[1]
     for i in range(1, depth):
         result_block = _forward_fast(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
