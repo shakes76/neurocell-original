@@ -1,7 +1,6 @@
 '''
 Von Neumann network that mimics an MLP for classifying MNIST dataset
 '''
-# import numpy as np
 import jax
 import jax.numpy as jnp
 import haiku as hk
@@ -28,7 +27,7 @@ N = 1024
 epochs = 8
 num_classes = 10
 layers = 3
-batch_size = 100
+batch_size = 3
 length = 28*28
 print("N:", N, "Epochs:", epochs)
 
@@ -64,11 +63,12 @@ input_offset = (input_top,input_left)
 output_size = (num_classes,1)
 output_offset = (output_top,output_left)
 layer_sizes = [256, 128, 32]
-kernel_size = (71,3)
+kernel_size = (101,3)
 activation = jax.nn.tanh
 final_activation = None
 depth = output_offset[1]-input_offset[1]
-print("depth:", depth)
+total_batches = len(train_loader)
+print("depth:", depth, "total batches:", total_batches)
 
 #===========
 ##create model
@@ -89,7 +89,6 @@ opt = optax.adam(learning_rate=0.001)
 dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
 x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-# print("INIT SHAPE", x[0:1].shape)
 x = jnp.reshape(x, (x.shape[0], length, 1))
 # print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
@@ -105,13 +104,16 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # print("LOSS SHAPE", labels.shape, logits.shape)
+    # print("LOSS", jnp.mean(labels * jax.nn.log_softmax(logits)).shape, logits.shape)
 
     #L2 norm of weights loss
     # filters = params['universe_lp']['f']
     # l2 = jnp.mean(filters**2)
 
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
-    return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
+    # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
+
+    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
 
 @jax.jit
 def update(
@@ -130,6 +132,7 @@ def update(
 # Train/eval loop.
 start = time.time() #time generation
 for step in range(epochs+1):
+    total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
         x = jnp.asarray(x.numpy())
@@ -141,6 +144,8 @@ for step in range(epochs+1):
         # print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
+        total_loss += loss_value/batch_size
+    total_loss /= total_batches
 
     if step % 2 == 0:
         # Periodically evaluate on train & test sets.
@@ -159,9 +164,9 @@ for step in range(epochs+1):
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
         accuracy = 100 * correct / total
-        print(f"[Step {step}, Loss {loss_value}, Train Accuracy {accuracy}]")
+        print(f"[Step {step}, Loss {total_loss}, Train Accuracy {accuracy}]")
     else:
-        print(f"[Step {step}, Loss {loss_value}]")
+        print(f"[Step {step}, Loss {total_loss}]")
 end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
