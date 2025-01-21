@@ -64,7 +64,7 @@ input_size = (length,1)
 input_offset = offset
 output_size = (num_classes,1)
 output_offset = (offset[0]+length//4-num_classes//2, offset[1]+length//4+1) #shift by half of mid and top
-kernel_size = (13,13)
+kernel_size = (7,7)
 activation = jax.nn.tanh
 final_activation = None
 #determine dim with largest depth to propagate forward

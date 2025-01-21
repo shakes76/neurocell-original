@@ -684,7 +684,7 @@ class UniverseLP(hk.Module):
                                 self.filters.shape,  # only ndim matters, not shape 
                                 ('NHWC', 'IHWO', 'NHWC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_full, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_full_slp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
     
@@ -846,6 +846,41 @@ def _forward_propagate_full(input, offset, out_offset, out_size, depth, cells, w
     # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+    
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
+def _forward_propagate_full_slp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
+    '''
+    Propagate input across cellular net based on weights etc. for all layers across entire universe
+    '''
+    length = input.shape[0]
+    #place inputs
+    #top/up
+    up = input[0:length//4].reshape(1,-1) #row vec
+    # print("top:", up.shape, up)
+    up = jnp.fliplr(up) #revrse
+    shift = (offset[0], offset[1]+1) #one step right
+    cells = jax.lax.dynamic_update_slice(cells, up, shift)
+    #middle
+    mid = input[length//4+1:length//2+length//4].reshape(-1,1) #col vec
+    # print("mid:", mid.shape, mid)
+    shift = (offset[0]+1, offset[1]) #one step down
+    cells = jax.lax.dynamic_update_slice(cells, mid, shift)
+    #bottom/down
+    down = input[length//2+length//4+1:length//2+length//4+length//4].reshape(1,-1) #row vec
+    # print("down:", down.shape, down)
+    shift = tuple(map(lambda x, y: x+y, offset, mid.shape)) #move to bottom
+    shift = (shift[0]+1, shift[1]) #one step down
+    # print("shift:", shift)
+    cells = jax.lax.dynamic_update_slice(cells, down, shift)
+
+    #propagate
+    for i in range(1, depth):
+        cells = _forward_full(cells, weights, biases, states, filter_ffts, activate, norm, dn) #not inplace
+        # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i)) #write result for next propagate
+    cells = _forward_full(cells, weights, biases, states, filter_ffts, final_activate, norm, dn) #final prop and activate
+    # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
 @partial(jax.jit, static_argnums=(0,1,7,8,9))
 def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm):
@@ -952,7 +987,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
 
     return result_block
 
-@partial(jax.jit, static_argnums=(6,7,8))
+@partial(jax.jit, static_argnums=(5,6,7))
 def _forward_full(cells, weights, biases, states, filters, activate, norm, dn):
     '''
     Compute the forward pass by computing each neuron depending on its state for a subregion.
