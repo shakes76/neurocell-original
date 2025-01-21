@@ -5,11 +5,14 @@ import math
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-N = 17
-P = 8
-radius = 9
-center = (8,4)
-tolerance = 0.3
+N = 128
+P = 8*8
+
+#we want input to be half a circle
+radius = 2.*P/(jnp.pi*2.) #found so that pi*2r
+center = (N//2,N//2)
+tolerance = 0.4
+print("radius:", radius, "centre:", center)
 
 states = jnp.zeros((N,N))
 

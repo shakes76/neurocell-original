@@ -24,7 +24,7 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 8
+epochs = 16
 num_classes = 10
 layers = 3
 batch_size = 3
@@ -62,7 +62,6 @@ input_size = (length,1)
 input_offset = (input_top,input_left)
 output_size = (num_classes,1)
 output_offset = (output_top,output_left)
-layer_sizes = [256, 128, 32]
 kernel_size = (101,3)
 activation = jax.nn.tanh
 final_activation = None
@@ -77,7 +76,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N)
-    mlp.initialize_mlp_full(input_size, output_size, input_offset, output_offset, layer_sizes, kernel_size)
+    mlp.initialize_mlp_full(input_size, output_size, input_offset, output_offset, kernel_size)
     return mlp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
@@ -178,7 +177,7 @@ jnp.savez("mlp_classify_mnist_cells.npz",
             states=params['universe_lp']['s'], 
             N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
-            layer_sizes=layer_sizes, kernel_size=kernel_size,
+            kernel_size=kernel_size,
             allow_pickle=False)
 
 #test performance

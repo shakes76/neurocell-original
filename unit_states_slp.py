@@ -44,8 +44,10 @@ states = jax.lax.dynamic_update_slice(states, down, shift)
 # states = jax.lax.dynamic_update_slice(states, out, shift)
 #vertical
 out = jnp.arange(64, num_classes+64, dtype=jnp.float32).reshape(-1,1) #col vec
-shift = (offset[0]+P//4-num_classes//2, offset[1]+P//4) #shift by half of mid and top
-states = jax.lax.dynamic_update_slice(states, out, shift)
+out_shift = (offset[0]+P//4-num_classes//2, offset[1]+P//4+1) #shift by half of mid and top
+states = jax.lax.dynamic_update_slice(states, out, out_shift)
+
+print("depth:", out_shift[1]-offset[1])
 
 # extent = (0, states.shape[1], states.shape[0], 0)
 # plt.imshow(states, extent=extent)
