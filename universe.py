@@ -485,8 +485,8 @@ class UniverseLP(hk.Module):
         self.grid_size = (N,N)
         self.dtype = dtype
         self.states_dtype = jnp.float32
-        self.type_MLP = False
-        self.type_CLP = False
+        # self.type_MLP = False
+        # self.type_CLP = False
         #filters for spatial derivatives
         # self.nethood_backward = jnp.array(kernel_backward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
         # self.nethood_forward = jnp.array(kernel_forward, dtype=dtype)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel, NHWC
@@ -506,7 +506,7 @@ class UniverseLP(hk.Module):
         self.layer_offset = layer_offset
         self.kernel_size = kernel_size
         self.depth = self.out_offset[1]-self.in_offset[1]
-        self.type_MLP = True
+        # self.type_MLP = True
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -539,15 +539,14 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
     
-    def initialize_mlp_full(self, in_size, out_size, in_offset, out_offset, layer_sizes, kernel_size=(3,3)):
+    def initialize_mlp_full(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3)):
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
         self.out_offset = out_offset
-        self.layer_sizes = layer_sizes
         self.kernel_size = kernel_size
         self.depth = self.out_offset[1]-self.in_offset[1]
-        self.type_MLP = True
+        # self.type_MLP = True
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -556,12 +555,43 @@ class UniverseLP(hk.Module):
         #set input and output states
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
         # self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
-        #set layers
-        # center = self.N//2
-        # for index, layer_size in enumerate(self.layer_sizes):
-        #     passives = jnp.full((layer_size,1), STATE_ACTIVE, dtype=self.states_dtype)
-        #     layer_offset = (center-layer_size//2, in_offset[1]+2*(index+1))
-        #     self.states = jax.lax.dynamic_update_slice(self.states, passives, layer_offset)
+        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # hk.set_state("states", self.states)
+
+        #init weights (random)
+        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
+        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+
+        #init biases
+        self.b_init = jnp.zeros
+        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        #init filters
+        self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
+        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],1), dtype=self.dtype, init=self.f_init)
+
+        self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
+                                self.filters.shape,  # only ndim matters, not shape 
+                                ('NHWC', 'IHWO', 'NHWC'))  # the important bit
+
+        return hk.get_state("universe")
+
+    def initialize_slp_full(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3)):
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.kernel_size = kernel_size
+        self.depth = self.out_offset[1]-self.in_offset[1]
+
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
+
+        #init states (integers)
+        #set input and output states
+        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
+        # self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # hk.set_state("states", self.states)
 
@@ -589,7 +619,7 @@ class UniverseLP(hk.Module):
         self.out_coords = out_coords
         self.layer_coords = layer_coords
         self.kernel_size = kernel_size
-        self.type_CLP = True
+        # self.type_CLP = True
         if depth is None:
             in_row_coord = self.in_coords[:, 0].min() #top most in
             out_row_coord = self.out_coords[:, 0].min() #top most out
@@ -645,21 +675,6 @@ class UniverseLP(hk.Module):
 
     def get_state(self):
         return hk.get_state("universe")
-    
-    def forward(self, weights, biases, states, activate, norm):
-        cells = hk.get_state("universe")
-        filters = hk.get_parameter("f", shape=(1,self.kernel_size[0],self.kernel_size[1],1), dtype=self.dtype, init=self.f_init)
-        #check backward or forward based on definition of conv in library
-        return _forward(cells, weights, biases, states, filters, activate, norm, self.dn)
-
-    def forward_fast(self, index, weights, biases, states, filter_ffts, activate, norm):
-        cells = hk.get_state("universe")
-
-        #check backward or forward based on definition of conv in library
-        result_block = _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activate, norm)
-
-        #copy back
-        return jax.lax.dynamic_update_slice(cells, result_block, (0,index))
 
     # def forward_propagate(self, activate=nn.sigmoid, norm=True):
     #     self.universe = self.forward(self.universe, self.weights, self.biases, activate=activate, norm=norm)
@@ -726,17 +741,42 @@ class UniverseLP(hk.Module):
         self.dtype = self.weights.dtype
         self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
 
+#JIT compiled members for performance
 from functools import partial
 
 @partial(jax.jit, static_argnums=(0,1,7,8,9,10))
-def _forward_propagate_fast(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
+def _forward_propagate(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
     '''
-    Propagate input across cellular net based on weights etc.
+    Propagate input across cellular net based on weights etc. layer by layer in a column based structure
     '''
     for i in range(1, depth):
-        result_block = _forward_fast(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
+        result_block = _forward_column(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
-    result_block = _forward_fast(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
+    result_block = _forward_column(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
+    return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
+
+@partial(jax.jit, static_argnums=(0,1,7,8,9,10))
+def _forward_propagate_full(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
+    '''
+    Propagate input across cellular net based on weights etc. for all layers across entire universe
+    '''
+    for i in range(1, depth):
+        result_block = _forward_column(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
+        cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
+    result_block = _forward_column(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
+    return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
+
+@partial(jax.jit, static_argnums=(0,1,7,8,9))
+def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm):
+    '''
+    Propagate input across cellular net based on weights etc. layer by layer in a column based structure
+    
+    Uses Fourier convolution property
+    '''
+    for i in range(1, depth):
+        result_block = _forward_fast_1D(index+i, cells, weights, biases, states, filter_ffts, activate, norm)
+        cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
+    result_block = _forward_fast_1D(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm)
     return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
     
 @partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
@@ -748,23 +788,12 @@ def _forward_propagate_fast_mlp(input, offset, out_offset, out_size, depth, cell
 
     index = offset[1]
     for i in range(1, depth):
-        result_block = _forward_fast(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
+        result_block = _forward_column(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
-    result_block = _forward_fast(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
+    result_block = _forward_column(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
     cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
-    
-@partial(jax.jit, static_argnums=(0,1,7,8,9))
-def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm):
-    '''
-    
-    '''
-    for i in range(1, depth):
-        result_block = _forward_fast_1D(index+i, cells, weights, biases, states, filter_ffts, activate, norm)
-        cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
-    result_block = _forward_fast_1D(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm)
-    return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
 @partial(jax.jit, static_argnums=(5,6,7))
 def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
@@ -801,11 +830,11 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
     return cells
 
 @partial(jax.jit, static_argnums=(0,6,7,8))
-def _forward_fast(index, cells, weights, biases, states, filters, activate, norm, dn):
+def _forward_column(index, cells, weights, biases, states, filters, activate, norm, dn):
     '''
     Compute the forward pass by computing each neuron depending on its state for a subregion.
 
-    Fast version computes the forward WRT a central row/column (provided by index) with the nethood applied to it
+    This version computes the forward WRT a central row/column (provided by index) with the nethood applied to it
     according to the width of the nethood. For a nethood of width 3, that means central row/column
     plus one before and one after it.
 
@@ -837,16 +866,40 @@ def _forward_fast(index, cells, weights, biases, states, filters, activate, norm
         result_block = result_block*sub_weights*(1.0-sub_states) + (result_block+sub_biases)*sub_states
     else:
         result_block = result_block*sub_weights*(1.0-sub_states) + activate(result_block+sub_biases)*sub_states
-    
-    # result_block = jnp.where(jnp.logical_and(sub_states>=STATE_SIGNAL,sub_states<STATE_ACTIVE), result_block*sub_weights, result_block) #weight if signal
-    # # print(result_block.shape)
-    # if activate == None:
-    #     result_block = jnp.where(sub_states>=STATE_ACTIVE, result_block+sub_biases, result_block) #activate if passive, more accurate
-    # else:
-    #     result_block = jnp.where(sub_states>=STATE_ACTIVE, activate(result_block+sub_biases), result_block) #activate if passive, more accurate
-    # # result_block = jnp.where(sub_states==2, activate(result_block+biases), result_block) #activate if passive, faster
 
     return result_block
+
+@partial(jax.jit, static_argnums=(6,7,8))
+def _forward_full(cells, weights, biases, states, filters, activate, norm, dn):
+    '''
+    Compute the forward pass by computing each neuron depending on its state for a subregion.
+
+    This version computes the forward across the full array with the nethood applied to it
+    The result is a full 2D convolution with the nethood, which can be expensive.
+
+    All operations are done on the entire universe.
+    '''
+    #conv
+    result = _fast_conv(cells, filters, dn)
+    # print(result.shape)
+
+    if norm:
+        #norm
+        result = jax.nn.standardize(result, axis=(0,1))
+
+    #norm states to 0-1 range
+    states = jax.nn.sigmoid(states)
+    # states = (states - states.min()) / (states.max() - states.min())
+
+    #check states
+    #if passive apply activation, else signal state so weight, let the grad descent decide
+    #the operation is akin to adversarial states
+    if activate == None:
+        result = result*weights*(1.0-states) + (result+biases)*states
+    else:
+        result = result*weights*(1.0-states) + activate(result+biases)*states
+
+    return result
 
 @partial(jax.jit, static_argnums=(0,6,7))
 def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activate, norm):
