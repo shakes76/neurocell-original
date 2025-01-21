@@ -18,19 +18,20 @@ states = jnp.zeros((N,N))
 # assumes that total length is 4n
 
 #inputs
+inputs = jnp.arange(1,P+1, dtype=jnp.float32)
 #top/up
-up = jnp.arange(1,P//4+1, dtype=jnp.float32).reshape(1,-1) #row vec
+up = inputs[0:P//4].reshape(1,-1) #row vec
 print("top:", up.shape, up)
 up = jnp.fliplr(up) #reverse
 shift = (offset[0], offset[1]+1) #one step right
 states = jax.lax.dynamic_update_slice(states, up, shift)
 #middle
-mid = jnp.arange(P//4+1, P//2+P//4+1, dtype=jnp.float32).reshape(-1,1) #col vec
+mid = inputs[P//4+1:P//2+P//4].reshape(-1,1) #col vec
 print("mid:", mid.shape, mid)
 shift = (offset[0]+1, offset[1]) #one step down
 states = jax.lax.dynamic_update_slice(states, mid, shift)
 #bottom/down
-down = jnp.arange(P//2+P//4+1, P//2+P//4+P//4+1, dtype=jnp.float32).reshape(1,-1) #row vec
+down = inputs[P//2+P//4+1:P//2+P//4+P//4].reshape(1,-1) #row vec
 print("down:", down.shape, down)
 shift = tuple(map(lambda x, y: x+y, offset, mid.shape)) #move to bottom
 shift = (shift[0]+1, shift[1]) #one step down
@@ -38,12 +39,13 @@ print("shift:", shift)
 states = jax.lax.dynamic_update_slice(states, down, shift)
 
 #outputs
+outputs = jnp.arange(64, num_classes+64, dtype=jnp.float32)
 #horizontal
 # out = jnp.arange(1, num_classes+1, dtype=jnp.float32).reshape(1,-1) #row vec
 # shift = (offset[0]+P//4, offset[1]+P//8) #shift by half of mid and top
 # states = jax.lax.dynamic_update_slice(states, out, shift)
 #vertical
-out = jnp.arange(64, num_classes+64, dtype=jnp.float32).reshape(-1,1) #col vec
+out = outputs.reshape(-1,1) #col vec
 out_shift = (offset[0]+P//4-num_classes//2, offset[1]+P//4+1) #shift by half of mid and top
 states = jax.lax.dynamic_update_slice(states, out, out_shift)
 

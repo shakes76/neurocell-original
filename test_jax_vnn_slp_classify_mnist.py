@@ -23,12 +23,13 @@ import utils #local
 utils.jax_status()
 
 #parameters
-N = 1024
-epochs = 16
+epochs = 8
 num_classes = 10
-layers = 3
+# layers = 3
 batch_size = 3
 length = 28*28
+padding = 16
+N = length//2+padding
 print("N:", N, "Epochs:", epochs)
 
 #network IO paths
@@ -48,21 +49,22 @@ test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffl
 num_classes = 10
 
 #locations
-#MLP with 784 inputs and 10 outputs, 3 layers inbetween
+#SLP with 784 inputs and 10 outputs, learns num of layers inbetween
 #setup network position
 center = N//2
-total_layers = layers*2+3 #1 col of signal cells per layer, 1 for in + signal col and 1 for out
+offset = (padding,center-length//4) #center-length//2=padding, center-top
+# total_layers = layers*2+3 #1 col of signal cells per layer, 1 for in + signal col and 1 for out
 input_top = center-length//2
-input_left = center-total_layers//2-1
+# input_left = center-total_layers//2-1
 output_top = center-num_classes//2
-output_left = input_left+total_layers-1 #dont include out obv
+# output_left = input_left+total_layers-1 #dont include out obv
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (length,1)
-input_offset = (input_top,input_left)
+input_offset = offset
 output_size = (num_classes,1)
-output_offset = (output_top,output_left)
-kernel_size = (101,3)
+output_offset = (offset[0]+length//4-num_classes//2, offset[1]+length//4+1) #shift by half of mid and top
+kernel_size = (13,13)
 activation = jax.nn.tanh
 final_activation = None
 #determine dim with largest depth to propagate forward
@@ -77,7 +79,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N)
-    mlp.initialize_mlp_full(input_size, output_size, input_offset, output_offset, kernel_size)
+    mlp.initialize_slp_full(input_size, output_size, input_offset, output_offset, kernel_size)
     return mlp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard

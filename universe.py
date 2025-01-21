@@ -400,6 +400,75 @@ class VerticalCells(hk.initializers.Initializer):
         
         cells = jax.lax.dynamic_update_slice(cells, inputs, self.in_offset)
         cells = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
+
+        return cells
+    
+class SquareCells(hk.initializers.Initializer):
+    """Initializes by sampling from a normal distribution and setting square cells."""
+    def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False):
+        """
+        Constructs a :class:`RandomNormal` like initializer with vertical cells.
+        """
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.is_states = is_states
+
+    def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
+        length = shape[0]
+
+        if self.is_states:
+            # cells = jnp.ones(shape, dtype=dtype)
+            inputs = jnp.full(self.in_size, STATE_ACTIVE, dtype=dtype)
+            outputs = jnp.full(self.out_size, STATE_ACTIVE, dtype=dtype)
+        else:
+            # real_dtype = jnp.finfo(dtype).dtype
+            # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
+            # upper = 3.0
+            # lower = -3.0
+            # cells = stddev * jax.random.truncated_normal(hk.next_rng_key(), lower, upper, shape, real_dtype)
+            # cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+            inputs = jnp.ones(self.in_size, dtype=dtype)
+            outputs = jnp.ones(self.out_size, dtype=dtype)
+        
+        cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+
+        if self.is_states:
+            #norm states to 0-1 range
+            cells = jax.nn.sigmoid(cells)
+            # cells = (cells - cells.min()) / (cells.max() - cells.min())
+        
+        cells = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
+
+        #inputs
+        #top/up
+        up = inputs[0:length//4].reshape(1,-1) #row vec
+        # print("top:", up.shape, up)
+        up = jnp.fliplr(up) #reverse
+        shift = (self.in_offset[0], self.in_offset[1]+1) #one step right
+        cells = jax.lax.dynamic_update_slice(cells, up, shift)
+        #middle
+        mid = inputs[length//4+1:length//2+length//4].reshape(-1,1) #col vec
+        # print("mid:", mid.shape, mid)
+        shift = (self.in_offset[0]+1, self.in_offset[1]) #one step down
+        cells = jax.lax.dynamic_update_slice(cells, mid, shift)
+        #bottom/down
+        down = inputs[length//2+length//4+1:length//2+length//4+length//4].reshape(1,-1) #row vec
+        # print("down:", down.shape, down)
+        shift = tuple(map(lambda x, y: x+y, self.in_offset, mid.shape)) #move to bottom
+        shift = (shift[0]+1, shift[1]) #one step down
+        # print("shift:", shift)
+        cells = jax.lax.dynamic_update_slice(cells, down, shift)
+
+        #outputs
+        #horizontal
+        # shift = (offset[0]+P//4, offset[1]+P//8) #shift by half of mid and top
+        # states = jax.lax.dynamic_update_slice(states, out, shift)
+        #vertical
+        out_shift = (self.out_offset[0]+length//4-self.out_size[0]//2, self.out_offset[1]+length//4+1) #shift by half of mid and top
+        cells = jax.lax.dynamic_update_slice(cells, outputs, out_shift)
+
         return cells
     
 class CoordinateCells(hk.initializers.Initializer):
@@ -593,13 +662,13 @@ class UniverseLP(hk.Module):
 
         #init states (integers)
         #set input and output states
-        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
+        self.s_init = SquareCells(in_size, out_size, in_offset, out_offset, is_states=True)
         # self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # hk.set_state("states", self.states)
 
         #init weights (random)
-        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
+        self.w_init = SquareCells(in_size, out_size, in_offset, out_offset, is_states=False)
         self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
 
         #init biases
