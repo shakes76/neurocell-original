@@ -10,7 +10,7 @@ from jax import vmap
 def jax_status():
     print("Total Devices:",jax.devices())
     print("Used Devices:",jax.local_devices())
-    print("Using", jnp.ones(3).device_buffer.device())
+    print("Using", jnp.ones(3).device)
 
 def load_sprite(filename):
     '''
