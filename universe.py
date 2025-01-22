@@ -416,8 +416,6 @@ class SquareCells(hk.initializers.Initializer):
         self.is_states = is_states
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
-        length = shape[0]
-
         if self.is_states:
             # cells = jnp.ones(shape, dtype=dtype)
             inputs = jnp.full(self.in_size, STATE_ACTIVE, dtype=dtype)
@@ -432,13 +430,17 @@ class SquareCells(hk.initializers.Initializer):
             inputs = jnp.ones(self.in_size, dtype=dtype)
             outputs = jnp.ones(self.out_size, dtype=dtype)
         
-        cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        cells = jnp.zeros(shape)
+        # cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
 
         if self.is_states:
             #norm states to 0-1 range
             cells = jax.nn.sigmoid(cells)
             # cells = (cells - cells.min()) / (cells.max() - cells.min())
+
+        length = self.in_size[0]
         
+        #outputs
         cells = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
 
         #inputs
@@ -460,14 +462,6 @@ class SquareCells(hk.initializers.Initializer):
         shift = (shift[0]+1, shift[1]) #one step down
         # print("shift:", shift)
         cells = jax.lax.dynamic_update_slice(cells, down, shift)
-
-        #outputs
-        #horizontal
-        # shift = (offset[0]+P//4, offset[1]+P//8) #shift by half of mid and top
-        # states = jax.lax.dynamic_update_slice(states, out, shift)
-        #vertical
-        out_shift = (self.out_offset[0]+length//4-self.out_size[0]//2, self.out_offset[1]+length//4+1) #shift by half of mid and top
-        cells = jax.lax.dynamic_update_slice(cells, outputs, out_shift)
 
         return cells
     
@@ -852,7 +846,9 @@ def _forward_propagate_full_slp(input, offset, out_offset, out_size, depth, cell
     '''
     Propagate input across cellular net based on weights etc. for all layers across entire universe
     '''
+    width = out_offset[1]-offset[1] #to compute in subregion of the nets
     length = input.shape[0]
+
     #place inputs
     #top/up
     up = input[0:length//4].reshape(1,-1) #row vec
@@ -875,9 +871,9 @@ def _forward_propagate_full_slp(input, offset, out_offset, out_size, depth, cell
 
     #propagate
     for i in range(1, depth):
-        cells = _forward_full(cells, weights, biases, states, filter_ffts, activate, norm, dn) #not inplace
+        cells = _forward_full(width, cells, weights, biases, states, filter_ffts, activate, norm, dn) #not inplace
         # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i)) #write result for next propagate
-    cells = _forward_full(cells, weights, biases, states, filter_ffts, final_activate, norm, dn) #final prop and activate
+    cells = _forward_full(width, cells, weights, biases, states, filter_ffts, final_activate, norm, dn) #final prop and activate
     # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
@@ -987,18 +983,21 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
 
     return result_block
 
-@partial(jax.jit, static_argnums=(5,6,7))
-def _forward_full(cells, weights, biases, states, filters, activate, norm, dn):
+@partial(jax.jit, static_argnums=(0,6,7,8))
+def _forward_full(width, cells, weights, biases, states, filters, activate, norm, dn):
     '''
-    Compute the forward pass by computing each neuron depending on its state for a subregion.
+    Compute the forward pass by computing each neuron depending on its state for a subregion of width.
+    Assumes subregion width is centred within universe WRT columns and width is even.
 
     This version computes the forward across the full array with the nethood applied to it
     The result is a full 2D convolution with the nethood, which can be expensive.
 
     All operations are done on the entire universe.
     '''
+    centre = cells.shape[1]//2
+
     #conv
-    result = _fast_conv(cells, filters, dn)
+    result = _fast_conv(cells[centre-width//2:centre+width//2], filters, dn)
     # print(result.shape)
 
     if norm:
