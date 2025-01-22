@@ -23,12 +23,12 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 8
+epochs = 4
 num_classes = 10
 # layers = 3
-batch_size = 3
+batch_size = 5
 length = 28*28
-padding = 16
+padding = 8
 N = length//2+padding
 print("N:", N, "Epochs:", epochs)
 
@@ -52,19 +52,17 @@ num_classes = 10
 #SLP with 784 inputs and 10 outputs, learns num of layers inbetween
 #setup network position
 center = N//2
-offset = (padding,center-length//4) #center-length//2=padding, center-top
-# total_layers = layers*2+3 #1 col of signal cells per layer, 1 for in + signal col and 1 for out
-input_top = center-length//2
-# input_left = center-total_layers//2-1
-output_top = center-num_classes//2
+offset = (padding//2,center-length//8) #center-length//2=padding, center-top
+# input_top = center-length//4
+# output_top = center-num_classes//2
 # output_left = input_left+total_layers-1 #dont include out obv
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (length,1)
 input_offset = offset
 output_size = (num_classes,1)
-output_offset = (offset[0]+length//4-num_classes//2, offset[1]+length//4+1) #shift by half of mid and top
-kernel_size = (7,7)
+output_offset = (offset[0]+length//4-num_classes//2, offset[1]+length//4+2) #shift by half of mid and top
+kernel_size = (5,5)
 activation = jax.nn.tanh
 final_activation = None
 #determine dim with largest depth to propagate forward
