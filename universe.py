@@ -430,8 +430,8 @@ class SquareCells(hk.initializers.Initializer):
             inputs = jnp.ones(self.in_size, dtype=dtype)
             outputs = jnp.ones(self.out_size, dtype=dtype)
         
-        cells = jnp.zeros(shape)
-        # cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        # cells = jnp.zeros(shape)
+        cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
 
         if self.is_states:
             #norm states to 0-1 range
@@ -994,15 +994,16 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
 
     All operations are done on the entire universe.
     '''
-    centre = cells.shape[1]//2
-    padding = filters.shape[1]-1
+    # centre = cells.shape[1]//2
+    # padding = filters.shape[1]-1
 
-    sub_weights = weights[:,centre-width//2-padding:centre+width//2+padding]
-    sub_biases = biases[:,centre-width//2-padding:centre+width//2+padding]
-    sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
+    # sub_weights = weights[:,centre-width//2-padding:centre+width//2+padding]
+    # sub_biases = biases[:,centre-width//2-padding:centre+width//2+padding]
+    # sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
 
     #conv
-    result = _fast_conv(cells[:,centre-width//2-padding:centre+width//2+padding], filters, dn)
+    # result = _fast_conv(cells[:,centre-width//2-padding:centre+width//2+padding], filters, dn)
+    result = _fast_conv(cells, filters, dn)
     # print(result.shape)
 
     if norm:
@@ -1010,16 +1011,16 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
         result = jax.nn.standardize(result, axis=(0,1))
 
     #norm states to 0-1 range
-    sub_states = jax.nn.sigmoid(sub_states)
+    states = jax.nn.sigmoid(states)
     # states = (states - states.min()) / (states.max() - states.min())
 
     #check states
     #if passive apply activation, else signal state so weight, let the grad descent decide
     #the operation is akin to adversarial states
     if activate == None:
-        result = result*sub_weights*(1.0-sub_states) + (result+sub_biases)*sub_states
+        result = result*weights*(1.0-states) + (result+biases)*states
     else:
-        result = result*sub_weights*(1.0-sub_states) + activate(result+sub_biases)*sub_states
+        result = result*weights*(1.0-states) + activate(result+biases)*states
 
     return result
 
