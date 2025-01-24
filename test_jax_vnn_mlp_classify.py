@@ -13,7 +13,7 @@ import time
 
 from sklearn import datasets
 
-from universe import UniverseLP, STATE_ACTIVE, STATE_SIGNAL #local
+from universe import UniverseLP #local
 import utils #local
 
 utils.jax_status()

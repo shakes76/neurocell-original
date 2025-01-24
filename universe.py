@@ -467,12 +467,14 @@ class SquareCells(hk.initializers.Initializer):
     
 class CoordinateCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting cells through coordinates provided."""
-    def __init__(self, in_coords, out_coords, is_states=False, clear=True):
+    def __init__(self, in_coords, out_coords, out_offset, out_size, is_states=False, clear=True):
         """
         Constructs a :class:`RandomNormal` like initializer with cells with coordinates.
         """
         self.in_coords = in_coords
         self.out_coords = out_coords
+        self.out_offset = out_offset #unused
+        self.out_size = out_size #unused
         self.is_states = is_states
         self.clear = clear
         self.min_coord = in_coords[:, 1].min()
@@ -682,28 +684,21 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
     
-    def initialize_clp(self, in_coords, out_coords, layer_coords, depth=None, kernel_size=(3,3)):
-        self.in_coords = in_coords
+    def initialize_clp(self, in_coords, out_coords, out_offset, out_size, layer_coords, depth, kernel_size=(3,3)):
+        self.in_offset = in_coords
         self.out_coords = out_coords
+        self.out_offset = out_offset
+        self.out_size = out_size
         self.layer_coords = layer_coords
         self.kernel_size = kernel_size
-        # self.type_CLP = True
-        if depth is None:
-            in_row_coord = self.in_coords[:, 0].min() #top most in
-            out_row_coord = self.out_coords[:, 0].min() #top most out
-            in_col_coord = self.in_coords[:, 1].min() #far left
-            out_col_coord = self.out_coords[:, 1].max() #far right
-            depth_row = out_row_coord - in_row_coord
-            depth_col = out_col_coord - in_col_coord
-            self.depth = max(depth_row, depth_col)
-        else:
-            self.depth = depth
+        self.depth = depth
+        # print("depth:", depth)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
         #init states (integers)
-        self.s_init = CoordinateCells(self.in_coords, self.out_coords, is_states=True, clear=False)
+        self.s_init = CoordinateCells(self.in_offset, self.out_coords, out_offset, out_size, is_states=True, clear=False)
         # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         # self.states = states.at[self.layer_coords[:, 0], self.layer_coords[:, 1]].set(2)
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
@@ -711,7 +706,7 @@ class UniverseLP(hk.Module):
         # hk.set_state("states", self.states)
 
         #init weights (random)
-        self.w_init = CoordinateCells(self.in_coords, self.out_coords, is_states=False, clear=False)
+        self.w_init = CoordinateCells(self.in_offset, self.out_coords, out_offset, out_size, is_states=False, clear=False)
         self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
 
         #init biases
@@ -726,6 +721,8 @@ class UniverseLP(hk.Module):
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
                                 self.filters.shape,  # only ndim matters, not shape 
                                 ('NHWC', 'IHWO', 'NHWC'))  # the important bit
+
+        self.forward_op = jax.vmap(_forward_propagate_full_clp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -868,6 +865,25 @@ def _forward_propagate_full_slp(input, offset, out_offset, out_size, depth, cell
     shift = (shift[0]+1, shift[1]) #one step down
     # print("shift:", shift)
     cells = jax.lax.dynamic_update_slice(cells, down, shift)
+
+    #propagate
+    for i in range(1, depth):
+        cells = _forward_full(width, cells, weights, biases, states, filter_ffts, activate, norm, dn) #not inplace
+        # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i)) #write result for next propagate
+    cells = _forward_full(width, cells, weights, biases, states, filter_ffts, final_activate, norm, dn) #final prop and activate
+    # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+    
+@partial(jax.jit, static_argnums=(2,3,4,10,11,12,13))
+def _forward_propagate_full_clp(input, coords, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
+    '''
+    Propagate input across cellular net based on weights etc. for all layers across entire universe
+    '''
+    width = 0 #unused
+    # length = input.shape[0]
+
+    cells = cells.at[coords[:, 0], coords[:, 1]].set(input)
 
     #propagate
     for i in range(1, depth):
