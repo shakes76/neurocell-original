@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 50
+epochs = 60
 length = 3
 padding = 6
 samples = 160
@@ -150,13 +150,16 @@ def update(
 start = time.time() #time generation
 for step in range(1, epochs+1):
     # Do SGD on a batch of training examples.
+    total = 0
     loss_value = 0
     for x, y in zip(X, Y):
         x = x[jnp.newaxis, :] #fake batch dim
         # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value
+        total += 1
         # break
+    loss_value /= total
 
     if step % 5 == 0:
         correct = 0
