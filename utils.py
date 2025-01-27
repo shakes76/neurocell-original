@@ -3,6 +3,7 @@ Utility functions for library
 '''
 import jax
 import jax.numpy as jnp
+import haiku as hk
 import imageio as iio
 from functools import partial
 from jax import vmap
@@ -11,6 +12,13 @@ def jax_status():
     print("Total Devices:",jax.devices())
     print("Used Devices:",jax.local_devices())
     print("Using", jnp.ones(3).device)
+
+# required to enable hk.Initializer to be pure func and accessed as func
+# see https://github.com/google-deepmind/dm-haiku/issues/24
+def initializer_to_function(cls):
+    def sample(shape, dtype):
+        return cls(shape, dtype)
+    return partial(hk.transform(sample, apply_rng=True).apply, {})
 
 def load_sprite(filename):
     '''

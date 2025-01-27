@@ -467,7 +467,7 @@ class SquareCells(hk.initializers.Initializer):
     
 class CoordinateCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting cells through coordinates provided."""
-    def __init__(self, in_coords, out_coords, out_offset, out_size, is_states=False, clear=True):
+    def __init__(self, in_coords, out_coords, out_offset, out_size, is_states=False, clear=True, random_init=True):
         """
         Constructs a :class:`RandomNormal` like initializer with cells with coordinates.
         """
@@ -477,6 +477,7 @@ class CoordinateCells(hk.initializers.Initializer):
         self.out_size = out_size #unused
         self.is_states = is_states
         self.clear = clear
+        self.random_init = random_init
         self.min_coord = in_coords[:, 1].min()
         self.max_coord = out_coords[:, 1].max()
 
@@ -506,7 +507,10 @@ class CoordinateCells(hk.initializers.Initializer):
             inputs = STATE_SIGNAL
             outputs = STATE_SIGNAL
 
-        cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        if self.random_init:
+            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        else:
+            cells = jnp.zeros(shape, dtype=dtype)
 
         if self.is_states:
             #norm states to 0-1 range
@@ -882,7 +886,7 @@ def _forward_propagate_full_clp(input, coords, out_offset, out_size, depth, cell
     '''
     width = 0 #unused
     # length = input.shape[0]
-
+    
     cells = cells.at[coords[:, 0], coords[:, 1]].set(input)
 
     #propagate

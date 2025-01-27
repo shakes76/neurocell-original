@@ -8,13 +8,7 @@ import matplotlib.pyplot as plt
 
 from universe import CoordinateCells
 
-from functools import partial
-# required to enable hk.Initializer to be pure func and accessed as func
-# see https://github.com/google-deepmind/dm-haiku/issues/24
-def initializer_to_function(cls):
-    def sample(shape, dtype):
-        return cls(shape, dtype)
-    return partial(hk.transform(sample, apply_rng=True).apply, {})
+import utils
 
 length = 3
 padding = 6
@@ -36,9 +30,12 @@ out_coords.append([4,6])
 in_coords = jnp.array(in_coords)
 out_coords = jnp.array(out_coords)
 
+output_size = (num_classes,1)
+output_offset = (2,6)
+
 #init states (integers)
 #set input and output states
-s_init = initializer_to_function(CoordinateCells(in_coords, out_coords, is_states=True))
+s_init = utils.initializer_to_function(CoordinateCells(in_coords, out_coords, output_offset, output_size, is_states=True, random_init=False))
 states = s_init(rng=jax.random.PRNGKey(42), shape=(N,N), dtype=jnp.float32)
 print("s_init", states.shape, type(states))
 

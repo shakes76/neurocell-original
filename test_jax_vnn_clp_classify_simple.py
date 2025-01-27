@@ -12,35 +12,29 @@ from typing import Tuple
 import time
 
 from sklearn import datasets
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
-from universe import UniverseLP #local
+from universe import UniverseLP, CoordinateCells #local
 import utils #local
 
 utils.jax_status()
 
 #parameters
-epochs = 10
+epochs = 50
 length = 3
 padding = 6
+samples = 160
 num_classes = 3
 N = int(length/2+0.5)+padding
 start_state = 1 #set None for random state
 
 #===========
 ##data
-data_dict = datasets.load_wine(return_X_y=False)
-X_raw = data_dict['data']
-Y_raw = data_dict['target']
-length = len(data_dict['feature_names'])
-samples = len(Y_raw)
-num_classes = len(data_dict['target_names'])
-print("Data Shape:", X_raw.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
-
-#scaling
-scaler = StandardScaler()
-X_preproc = scaler.fit_transform(X_raw)
+##data
+X_preproc, Y_raw = datasets.make_classification(
+    n_samples=samples, n_features=3, n_redundant=0, n_informative=2, n_clusters_per_class=1, n_classes=3, random_state=start_state
+)
+print("Data Shape:", X_preproc.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
 print("Y shape:", Y.shape, "Y test shape:", Y_test.shape)
@@ -64,6 +58,7 @@ output_offset = (2,6)
 
 input_coords = jnp.array(input_coords)
 output_coords = jnp.array(output_coords)
+print("input coords:", input_coords.shape, input_coords)
 print("N:", N, "Epochs:", epochs)
 
 #locations
@@ -99,10 +94,20 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 opt = optax.adam(learning_rate=0.001)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
-params, state = network.init(jax.random.PRNGKey(42), X[0])
+x = X[0]
+x = x[jnp.newaxis, :] #fake batch dim
+print("x", x.shape, x)
+# x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
+params, state = network.init(jax.random.PRNGKey(42), x)
 opt_state = opt.init(params)
 # print(params)
 # print(state)
+
+#save architecture
+#set input and output states
+s_init = utils.initializer_to_function(CoordinateCells(input_coords, output_coords, output_offset, output_size, is_states=True, random_init=False))
+arch = s_init(rng=jax.random.PRNGKey(42), shape=(N,N), dtype=jnp.float32)
+print("arch", arch.shape, type(arch))
 
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
@@ -110,16 +115,22 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     Cross entropy 
     '''
     labels = jax.nn.one_hot(labels, num_classes)
+    # print("labels", labels.shape)
 
     #CE loss
     logits, state = network.apply(params, state, batch)
-    ce = -jnp.sum(labels * jax.nn.log_softmax(logits))
+    # print("logits", logits.shape)
+    logits = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+    # ce = -jnp.sum(labels * jax.nn.log_softmax(logits))
 
     #L2 norm of weights loss
-    filters = params['universe_lp']['f']
-    l2 = jnp.mean(filters**2)
+    # filters = params['universe_lp']['f']
+    # l2 = jnp.mean(filters**2)
 
-    return ce + l2*l2_scaling, state
+    # return ce + l2*l2_scaling, state
+    # return ce, state
+
+    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
 
 # @jax.jit
 def update(
@@ -141,17 +152,28 @@ for step in range(1, epochs+1):
     # Do SGD on a batch of training examples.
     loss_value = 0
     for x, y in zip(X, Y):
+        x = x[jnp.newaxis, :] #fake batch dim
+        # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value
         # break
 
-    if step % 10 == 0:
-        Y_pred = []
+    if step % 5 == 0:
+        correct = 0
+        total = 0
         for x, y in zip(X, Y):
+            x = x[jnp.newaxis, :] #fake batch dim
+            # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
             logits, state_test = network.apply(params, state, x)
-            Y_pred.append(logits)
-        Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-        accuracy = jnp.mean(Y_pred == Y)
+            # print("logits shape", logits.shape)
+            predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+            # print("pred shape", predicted.shape)
+            predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+            # print("pred", predicted)
+            correct += jnp.sum(predicted == y)
+            total += 1
+        # print(correct, total)
+        accuracy = 100 * correct / total
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Train Accuracy {accuracy}]")
     else:
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
@@ -163,10 +185,15 @@ jnp.savez("clp_classify_cells.npz",
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
-            states=state['universe_lp']['states'], 
+            states=params['universe_lp']['s'], 
             N=N, length=length, num_classes=num_classes, input_coords=input_coords, output_coords=output_coords,
             neuron_coords=[], kernel_size=kernel_size,
             allow_pickle=False)
+
+plt.imshow(arch)
+plt.title("Initial Architecture")
+plt.savefig("vnn_clp_classify_arch.png", dpi=150)
+plt.show()
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
@@ -183,18 +210,28 @@ plt.title("Final Filter")
 plt.savefig("vnn_clp_classify_filter.png", dpi=75)
 plt.show()
 
-plt.imshow(state['universe_lp']['states'])
+plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
 plt.savefig("vnn_clp_classify_states.png", dpi=75)
 plt.show()
 
+plt.imshow(state['universe_lp']['universe'])
+plt.title("Final Universe")
+plt.savefig("vnn_clp_classify_universe.png", dpi=75)
+plt.show()
+
 #test performance
-Y_pred = []
+correct = 0
+total = 0
 for x, y in zip(X_test, Y_test):
+    x = x[jnp.newaxis, :] #fake batch dim
+    # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
     logits, state_test = network.apply(params, state, x)
-    Y_pred.append(logits)
-Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-accuracy = jnp.mean(Y_pred == Y_test)
+    predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+    predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+    correct += jnp.sum(predicted == y)
+    total += 1
+accuracy = 100 * correct / total
 print(f"[Final Accuracy {accuracy}]")
 
 print("END")
