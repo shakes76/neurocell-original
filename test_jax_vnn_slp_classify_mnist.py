@@ -25,7 +25,6 @@ utils.jax_status()
 #parameters
 epochs = 4
 num_classes = 10
-# layers = 3
 batch_size = 5
 length = 28*28
 padding = 8

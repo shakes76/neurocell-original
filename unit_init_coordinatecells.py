@@ -3,7 +3,6 @@ Unit test for check init for square cells in Universe module
 '''
 import jax
 import jax.numpy as jnp
-import haiku as hk
 import matplotlib.pyplot as plt
 
 from universe import CoordinateCells

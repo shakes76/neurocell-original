@@ -405,7 +405,7 @@ class VerticalCells(hk.initializers.Initializer):
     
 class SquareCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting square cells."""
-    def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False):
+    def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, random_init=True):
         """
         Constructs a :class:`RandomNormal` like initializer with vertical cells.
         """
@@ -414,6 +414,7 @@ class SquareCells(hk.initializers.Initializer):
         self.in_offset = in_offset
         self.out_offset = out_offset
         self.is_states = is_states
+        self.random_init = random_init
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         if self.is_states:
@@ -430,8 +431,10 @@ class SquareCells(hk.initializers.Initializer):
             inputs = jnp.ones(self.in_size, dtype=dtype)
             outputs = jnp.ones(self.out_size, dtype=dtype)
         
-        # cells = jnp.zeros(shape)
-        cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        if self.random_init:
+            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        else:
+            cells = jnp.zeros(shape, dtype=dtype)
 
         if self.is_states:
             #norm states to 0-1 range
