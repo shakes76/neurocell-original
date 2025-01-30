@@ -20,18 +20,18 @@ import utils #local
 utils.jax_status()
 
 int_dtype = np.int32
-float_dtype = np.float32
+ds_dtype = np.float32
 
 #parameters
 epochs = 10
 bits = 2
 length = bits
 padding = 6
-samples = 16
+samples = 160
 num_classes = 1
 length_data = bits*samples
 N = int(length/2+0.5)+padding
-start_state = 1 #set None for random state
+delta = 0.2
 
 #===========
 ##data
@@ -39,14 +39,27 @@ X_preproc = np.zeros((length_data), dtype=int_dtype)
 X_preproc[:length_data//2] = 1 #equal number of 0 and 1
 np.random.shuffle(X_preproc)
 X_preproc = np.reshape(X_preproc, (samples, bits))
-Y_raw = X_preproc[:,0] ^ X_preproc[:,1]
+Y_raw = X_preproc[:,0] ^ X_preproc[:,1] #xor
+# Y_raw = X_preproc[:,0] & X_preproc[:,1] #and
+
+# relabel to avoid zeros
+# X_preproc[X_preproc == 0] = -1
+# Y_raw[Y_raw == 0] = -1
+# X_preproc = jax.nn.tanh(X_preproc)
+# Y_raw = jax.nn.tanh(Y_raw)
+# Y_raw += 1
+
+#add noise (necessary)
+noise = np.random.uniform(-delta,+delta, size=(samples, bits))
+X_preproc = X_preproc.astype(ds_dtype) + noise
+
 print("Data Shape:", X_preproc.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
 # print(X_preproc, Y_raw)
-# print(X_preproc.astype(float_dtype), Y_raw.astype(float_dtype))
-# print(X_preproc.astype(float_dtype)[0][0], int(X_preproc.astype(float_dtype)[0][0]))
-# print(X_preproc.astype(float_dtype)[0][1], int(X_preproc.astype(float_dtype)[0][1]))
+# print(X_preproc.astype(ds_dtype), Y_raw.astype(ds_dtype))
+# print(X_preproc.astype(ds_dtype)[0][0], int(X_preproc.astype(ds_dtype)[0][0]))
+# print(X_preproc.astype(ds_dtype)[0][1], int(X_preproc.astype(ds_dtype)[0][1]))
 
-X, X_test, Y, Y_test = train_test_split(X_preproc.astype(float_dtype), Y_raw.astype(float_dtype), test_size=0.2, random_state=42)
+X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
 print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 print("X", X[:3])
 print("Y", Y[:3])
@@ -60,10 +73,10 @@ input_coords.append([4,1])
 
 #output
 output_coords = []
-output_coords.append([3,5])
+output_coords.append([3,4])
 
 output_size = (num_classes,1)
-output_offset = (3,5)
+output_offset = (3,4)
 
 input_coords = jnp.array(input_coords)
 output_coords = jnp.array(output_coords)
@@ -116,7 +129,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     Cross entropy 
     '''
-    labels = jax.nn.one_hot(labels, num_classes)
+    # labels = jax.nn.one_hot(labels, num_classes)
     # print("labels", labels.shape)
 
     #CE loss
@@ -124,6 +137,8 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # print("logits", logits.shape)
     logits = jnp.squeeze(logits[0], axis=-1) #remove extra dim
     # ce = -jnp.sum(labels * jax.nn.log_softmax(logits))
+    # print(logits, labels)
+    # print(optax.softmax_cross_entropy(logits=logits, labels=labels))
 
     #L2 norm of weights loss
     # filters = params['universe_lp']['f']
@@ -132,7 +147,9 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # return ce + l2*l2_scaling, state
     # return ce, state
 
-    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
+    # return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
+    # return optax.softmax_cross_entropy_with_integer_labels(logits=logits, labels=labels).mean(), state
+    return optax.l2_loss(predictions=logits[0], targets=labels).mean(), state
 
 # @jax.jit
 def update(
@@ -173,15 +190,16 @@ for step in range(1, epochs+1):
             # print("logits shape", logits.shape)
             predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
             # print("pred shape", predicted.shape)
-            predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+            predicted = jnp.round(predicted)
             # print("pred", predicted)
-            correct += jnp.sum(predicted == y)
+            correct += jnp.sum(predicted[0] == y)
             total += 1
         # print(correct, total)
         accuracy = 100 * correct / total
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Train Accuracy {accuracy}]")
     else:
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
+    # break
 end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
@@ -230,12 +248,11 @@ correct = 0
 total = 0
 for x, y in zip(X_test, Y_test):
     x = x[jnp.newaxis, :] #fake batch dim
-    # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
     logits, state_test = network.apply(params, state, x)
     predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
-    predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+    predicted = jnp.round(predicted)
     print("x", x, "y_pred", predicted, "y", y)
-    correct += jnp.sum(predicted == y)
+    correct += jnp.sum(predicted[0] == y)
     total += 1
 accuracy = 100 * correct / total
 print(f"[Final Accuracy {accuracy}]")
