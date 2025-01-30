@@ -23,7 +23,7 @@ int_dtype = np.int32
 ds_dtype = np.float32
 
 #parameters
-epochs = 10
+epochs = 20
 bits = 2
 length = bits
 padding = 6
@@ -204,7 +204,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
-jnp.savez("clp_classify_cells.npz", 
+jnp.savez("clp_xor_cells.npz", 
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
@@ -215,32 +215,32 @@ jnp.savez("clp_classify_cells.npz",
 
 plt.imshow(arch)
 plt.title("Initial Architecture")
-plt.savefig("vnn_clp_classify_arch.png", dpi=150)
+plt.savefig("vnn_clp_xor_arch.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
-plt.savefig("vnn_clp_classify_weights.png", dpi=150)
+plt.savefig("vnn_clp_xor_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
-plt.savefig("vnn_clp_classify_biases.png", dpi=150)
+plt.savefig("vnn_clp_xor_biases.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['f'][0,:,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_clp_classify_filter.png", dpi=75)
+plt.savefig("vnn_clp_xor_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_clp_classify_states.png", dpi=75)
+plt.savefig("vnn_clp_xor_states.png", dpi=75)
 plt.show()
 
 plt.imshow(state['universe_lp']['universe'])
 plt.title("Final Universe")
-plt.savefig("vnn_clp_classify_universe.png", dpi=75)
+plt.savefig("vnn_clp_xor_universe.png", dpi=75)
 plt.show()
 
 #test performance
