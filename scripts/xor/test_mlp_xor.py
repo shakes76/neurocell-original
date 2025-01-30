@@ -1,12 +1,11 @@
 '''
 Train MLP for XOR problem
-See: https://github.com/VCHui/xor_pytorch
+Improvements from: https://github.com/VCHui/xor_pytorch
 '''
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
 from torch import FloatTensor
-from torch.autograd import Variable
 
 from data import XORData
 
@@ -16,7 +15,7 @@ if not torch.cuda.is_available():
     print("Warning CUDA not Found. Using CPU")
 
 #parameters
-epochs = 10
+epochs = 30
 table = XORData.TRUTHTABLE
 batch_size = 100
 delta = 0.2
@@ -61,8 +60,9 @@ model.train()
 for epoch in range(epochs):
     epsilonsum = 0
     for t in XORData(batch_size,delta,table):
-        y = model(Variable(FloatTensor(t[0:2])))
-        target = Variable(FloatTensor(t[2:]))
+        # x = x.to(device)
+        y = model(FloatTensor(t[0:2]).to(device))
+        target = FloatTensor(t[2:]).to(device)
         optim.zero_grad()
         epsilon = loss(y,target)
         epsilonsum += epsilon.item()
@@ -73,8 +73,8 @@ for epoch in range(epochs):
 #testing
 model.eval()
 for a,b,xor in XORData():
-    y = model(Variable(FloatTensor([a,b])))
-    target = Variable(FloatTensor([xor]))
+    y = model(FloatTensor([a,b]).to(device))
+    target = FloatTensor([xor]).to(device)
     epsilon = loss(y,target)
     print('{} {:+.8f} {:+.8f}'.format(
         (int(a),int(b)),y.item(),epsilon.item()))
