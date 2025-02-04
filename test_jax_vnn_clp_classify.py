@@ -22,8 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 100
-start_state = 1 #set None for random state
+epochs = 60
 
 #===========
 ##data
@@ -106,12 +105,12 @@ for point in output_coords:
 plt.imshow(cells)
 plt.title("Initial Architecture")
 plt.savefig("vnn_clp_classify_coords.png", dpi=150)
-plt.show()
+# plt.show()
 
 #locations
 #MLP with 1 input and 1 output, one layer inbetween
 #setup
-kernel_size = (3,3)
+kernel_size = (7,7)
 activation = jax.nn.tanh
 final_activation = None
 #depth
@@ -122,7 +121,7 @@ final_activation = None
 # depth_row = out_row_coord - in_row_coord
 # depth_col = out_col_coord - in_col_coord
 # depth = max(depth_row, depth_col)
-depth = 10
+depth = 4
 print("depth:", depth)
 
 #===========
@@ -240,6 +239,11 @@ plt.show()
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
 plt.savefig("vnn_clp_classify_states.png", dpi=75)
+plt.show()
+
+plt.imshow(state['universe_lp']['universe'])
+plt.title("Final Universe")
+plt.savefig("vnn_clp_classify_universe.png", dpi=75)
 plt.show()
 
 #test performance
