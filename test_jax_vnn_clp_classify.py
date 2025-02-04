@@ -1,6 +1,7 @@
 '''
 Von Neumann network that mimics an MLP
 '''
+import numpy as np
 import jax
 import jax.numpy as jnp
 import haiku as hk
@@ -21,8 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 50
-architecture_filename = "patterns/Sprite-CLP13-C.png"
+epochs = 100
 start_state = 1 #set None for random state
 
 #===========
@@ -40,14 +40,73 @@ scaler = StandardScaler()
 X_preproc = scaler.fit_transform(X_raw)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
+print("Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 
 #===========
 #load network architecture
-N, input_coords, neuron_coords, output_coords = utils.load_sprite(architecture_filename)
+def circ_architecture(length, num_classes=3, padding=8, spc=2):
+    '''
+    padding 8 for steps 2, 12 for steps 3
+    '''
+    radius = jnp.ceil(length*spc/jnp.pi)
+    radius_int = int(radius+0.5) #round and pad
+    print("radius", radius)
+
+    N = int(2.*radius+padding+0.5)
+    print("N:", N)
+
+    offset = [N//2-(radius_int+padding)//2, N//2+radius_int//2]
+    slopes = [[0,-spc], [1,-spc], [spc,-1], [spc,0], [spc,1], [1,spc], [0,spc]]
+    steps = 2 #3
+    #input coords
+    input_coords = []
+    #draw anti-clockwise
+    current = offset
+    input_coords.append(current)
+    for vec in slopes:
+        for step in range(steps):
+            new_point = [current[0]+vec[0], current[1]+vec[1]]
+            input_coords.append(new_point)
+            current = new_point
+    # final = current
+
+    #output
+    # input_center = [final[0]-offset[0], final[1]-offset[1]]
+    output_offset = (N//2-num_classes//2, N//2+radius_int//2)
+    print(output_offset)
+    slopes = [[1,0]]
+    current = output_offset
+    output_coords = []
+    output_coords.append(current)
+    for vec in slopes:
+        for step in range(1,num_classes):
+            new_point = [current[0]+vec[0], current[1]+vec[1]]
+            output_coords.append(new_point)
+            current = new_point
+
+    return N, input_coords, output_coords, output_offset
+
+N, input_coords, output_coords, output_offset = circ_architecture(length, num_classes=3, padding=8)
+output_size = (num_classes,1)
+
+#remove points to match data points
+del input_coords[0]
+del input_coords[-1]
+
 input_coords = jnp.array(input_coords)
-neuron_coords = jnp.array(neuron_coords)
 output_coords = jnp.array(output_coords)
 print("N:", N, "Epochs:", epochs)
+
+cells = np.zeros((N,N))
+for point in input_coords:
+    cells[point[0], point[1]] = 128
+for point in output_coords:
+    cells[point[0], point[1]] = 255
+
+plt.imshow(cells)
+plt.title("Initial Architecture")
+plt.savefig("vnn_clp_classify_coords.png", dpi=150)
+plt.show()
 
 #locations
 #MLP with 1 input and 1 output, one layer inbetween
@@ -56,13 +115,14 @@ kernel_size = (3,3)
 activation = jax.nn.tanh
 final_activation = None
 #depth
-in_row_coord = input_coords[:, 0].min() #top most in
-out_row_coord = output_coords[:, 0].min() #top most out
-in_col_coord = input_coords[:, 1].min() #far left in
-out_col_coord = output_coords[:, 1].max() #far right out
-depth_row = out_row_coord - in_row_coord
-depth_col = out_col_coord - in_col_coord
-depth = max(depth_row, depth_col)
+# in_row_coord = input_coords[:, 0].min() #top most in
+# out_row_coord = output_coords[:, 0].min() #top most out
+# in_col_coord = input_coords[:, 1].min() #far left in
+# out_col_coord = output_coords[:, 1].max() #far right out
+# depth_row = out_row_coord - in_row_coord
+# depth_col = out_col_coord - in_col_coord
+# depth = max(depth_row, depth_col)
+depth = 10
 print("depth:", depth)
 
 #===========
@@ -72,7 +132,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     clp = UniverseLP(N)
-    clp.initialize_clp(input_coords, output_coords, neuron_coords, depth, kernel_size)
+    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size)
     return clp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
@@ -95,13 +155,16 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
 
     #CE loss
     logits, state = network.apply(params, state, batch)
-    ce = -jnp.sum(labels * jax.nn.log_softmax(logits))
+    logits = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+    # ce = -jnp.sum(labels * jax.nn.log_softmax(logits))
 
-    #L2 norm of weights loss
-    filters = params['universe_lp']['f']
-    l2 = jnp.mean(filters**2)
+    # #L2 norm of weights loss
+    # filters = params['universe_lp']['f']
+    # l2 = jnp.mean(filters**2)
 
-    return ce + l2*l2_scaling, state
+    # return ce + l2*l2_scaling, state
+    # return ce, state
+    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
 
 # @jax.jit
 def update(
@@ -128,12 +191,21 @@ for step in range(1, epochs+1):
         # break
 
     if step % 10 == 0:
-        Y_pred = []
+        correct = 0
+        total = 0
         for x, y in zip(X, Y):
+            x = x[jnp.newaxis, :] #fake batch dim
+            # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
             logits, state_test = network.apply(params, state, x)
-            Y_pred.append(logits)
-        Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-        accuracy = jnp.mean(Y_pred == Y)
+            # print("logits shape", logits.shape)
+            predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+            # print("pred shape", predicted.shape)
+            predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+            # print("pred", predicted)
+            correct += jnp.sum(predicted == y)
+            total += 1
+        # print(correct, total)
+        accuracy = 100 * correct / total
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Train Accuracy {accuracy}]")
     else:
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
@@ -145,9 +217,9 @@ jnp.savez("clp_classify_cells.npz",
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
-            states=state['universe_lp']['states'], 
+            states=params['universe_lp']['s'], 
             N=N, length=length, num_classes=num_classes, input_coords=input_coords, output_coords=output_coords,
-            neuron_coords=neuron_coords, kernel_size=kernel_size,
+            kernel_size=kernel_size,
             allow_pickle=False)
 
 plt.imshow(params['universe_lp']['w'])
@@ -165,18 +237,21 @@ plt.title("Final Filter")
 plt.savefig("vnn_clp_classify_filter.png", dpi=75)
 plt.show()
 
-plt.imshow(state['universe_lp']['states'])
+plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
 plt.savefig("vnn_clp_classify_states.png", dpi=75)
 plt.show()
 
 #test performance
-Y_pred = []
 for x, y in zip(X_test, Y_test):
+    x = x[jnp.newaxis, :] #fake batch dim
+    # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
     logits, state_test = network.apply(params, state, x)
-    Y_pred.append(logits)
-Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-accuracy = jnp.mean(Y_pred == Y_test)
+    predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+    predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+    correct += jnp.sum(predicted == y)
+    total += 1
+accuracy = 100 * correct / total
 print(f"[Final Accuracy {accuracy}]")
 
 print("END")
