@@ -7,11 +7,11 @@ import matplotlib.pyplot as plt
 
 #parameters
 length = 13
-padding = 8
+padding = 8 #8 for steps 2, 12 for steps 3
 num_classes = 3
 spc = 2 #spacing between points
 
-radius = length*spc/np.pi
+radius = np.ceil(length*spc/np.pi)
 radius_int = int(radius+0.5) #round and pad
 print("radius", radius)
 
@@ -22,7 +22,7 @@ print("N:", N)
 #network architecture
 offset = [N//2-(radius_int+padding)//2, N//2+radius_int//2]
 slopes = [[0,-spc], [1,-spc], [spc,-1], [spc,0], [spc,1], [1,spc], [0,spc]]
-steps = 2
+steps = 2 #3
 #input coords
 input_coords = []
 #draw anti-clockwise
