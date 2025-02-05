@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 60
+epochs = 10
 
 #===========
 ##data
@@ -54,7 +54,7 @@ def circ_architecture(length, num_classes=3, padding=8, spc=2):
     N = int(2.*radius+padding+0.5)
     print("N:", N)
 
-    offset = [N//2-(radius_int+padding)//2, N//2+radius_int//2]
+    offset = [N//2-(radius_int), N//2+radius_int//2]
     slopes = [[0,-spc], [1,-spc], [spc,-1], [spc,0], [spc,1], [1,spc], [0,spc]]
     steps = 2 #3
     #input coords
@@ -67,11 +67,12 @@ def circ_architecture(length, num_classes=3, padding=8, spc=2):
             new_point = [current[0]+vec[0], current[1]+vec[1]]
             input_coords.append(new_point)
             current = new_point
-    # final = current
+    final = current
 
     #output
-    # input_center = [final[0]-offset[0], final[1]-offset[1]]
-    output_offset = (N//2-num_classes//2, N//2+radius_int//2)
+    input_size = [final[0]-offset[0], final[1]-offset[1]]
+    # print("Input Size:", input_size)
+    output_offset = (offset[0]+input_size[0]//2-num_classes//2, N//2+radius_int//2)
     print(output_offset)
     slopes = [[1,0]]
     current = output_offset
@@ -85,7 +86,7 @@ def circ_architecture(length, num_classes=3, padding=8, spc=2):
 
     return N, input_coords, output_coords, output_offset
 
-N, input_coords, output_coords, output_offset = circ_architecture(length, num_classes=3, padding=8)
+N, input_coords, output_coords, output_offset = circ_architecture(length, num_classes=3, padding=32, spc=2)
 output_size = (num_classes,1)
 
 #remove points to match data points
@@ -105,24 +106,27 @@ for point in output_coords:
 plt.imshow(cells)
 plt.title("Initial Architecture")
 plt.savefig("vnn_clp_classify_coords.png", dpi=150)
-# plt.show()
+plt.show()
 
 #locations
 #MLP with 1 input and 1 output, one layer inbetween
 #setup
-kernel_size = (7,7)
+kernel_size = (11,11)
 activation = jax.nn.tanh
 final_activation = None
 #depth
-# in_row_coord = input_coords[:, 0].min() #top most in
-# out_row_coord = output_coords[:, 0].min() #top most out
-# in_col_coord = input_coords[:, 1].min() #far left in
-# out_col_coord = output_coords[:, 1].max() #far right out
-# depth_row = out_row_coord - in_row_coord
-# depth_col = out_col_coord - in_col_coord
-# depth = max(depth_row, depth_col)
-depth = 4
-print("depth:", depth)
+in_row_coord = input_coords[:, 0].min() #top most in
+out_row_coord = output_coords[:, 0].min() #top most out
+in_col_coord = input_coords[:, 1].min() #far left in
+out_col_coord = output_coords[:, 1].max() #far right out
+depth_row = out_row_coord - in_row_coord
+print("row depth:", depth_row)
+depth_col = out_col_coord - in_col_coord
+print("col depth:", depth_col)
+depth = max(depth_row, depth_col)
+print("max depth:", depth)
+depth = 2
+print("depth:", depth, "kernel:", kernel_size)
 
 #===========
 ##create model
@@ -189,7 +193,7 @@ for step in range(1, epochs+1):
         loss_value += value
         # break
 
-    if step % 10 == 0:
+    if step % 2 == 0:
         correct = 0
         total = 0
         for x, y in zip(X, Y):
@@ -208,6 +212,7 @@ for step in range(1, epochs+1):
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Train Accuracy {accuracy}]")
     else:
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
+    # break
 end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
@@ -247,6 +252,8 @@ plt.savefig("vnn_clp_classify_universe.png", dpi=75)
 plt.show()
 
 #test performance
+correct = 0
+total = 0
 for x, y in zip(X_test, Y_test):
     x = x[jnp.newaxis, :] #fake batch dim
     # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
@@ -256,6 +263,6 @@ for x, y in zip(X_test, Y_test):
     correct += jnp.sum(predicted == y)
     total += 1
 accuracy = 100 * correct / total
-print(f"[Final Accuracy {accuracy}]")
+print(f"[Final Test Accuracy {accuracy}]")
 
 print("END")
