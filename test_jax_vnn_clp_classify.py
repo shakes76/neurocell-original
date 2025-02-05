@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 50
+epochs = 20
 
 #===========
 ##data
@@ -86,7 +86,7 @@ def circ_architecture(length, num_classes=3, padding=8, spc=2):
 
     return N, input_coords, output_coords, output_offset
 
-N, input_coords, output_coords, output_offset = circ_architecture(length, num_classes=3, padding=16, spc=2)
+N, input_coords, output_coords, output_offset = circ_architecture(length, num_classes=3, padding=8, spc=2)
 output_size = (num_classes,1)
 
 #remove points to match data points
@@ -111,7 +111,7 @@ plt.savefig("vnn_clp_classify_coords.png", dpi=150)
 #locations
 #MLP with 1 input and 1 output, one layer inbetween
 #setup
-kernel_size = (5,5)
+kernel_size = (3,3)
 activation = jax.nn.tanh
 final_activation = None
 #depth
@@ -125,7 +125,7 @@ depth_col = out_col_coord - in_col_coord
 print("col depth:", depth_col)
 depth = max(depth_row, depth_col)
 print("max depth:", depth)
-depth = 5
+depth = 10
 print("depth:", depth, "kernel:", kernel_size)
 
 #===========
@@ -135,7 +135,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     clp = UniverseLP(N)
-    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size, directions=8)
+    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size, directions=3)
     return clp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
