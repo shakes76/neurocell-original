@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 10
+epochs = 50
 
 #===========
 ##data
@@ -86,7 +86,7 @@ def circ_architecture(length, num_classes=3, padding=8, spc=2):
 
     return N, input_coords, output_coords, output_offset
 
-N, input_coords, output_coords, output_offset = circ_architecture(length, num_classes=3, padding=32, spc=2)
+N, input_coords, output_coords, output_offset = circ_architecture(length, num_classes=3, padding=16, spc=2)
 output_size = (num_classes,1)
 
 #remove points to match data points
@@ -106,12 +106,12 @@ for point in output_coords:
 plt.imshow(cells)
 plt.title("Initial Architecture")
 plt.savefig("vnn_clp_classify_coords.png", dpi=150)
-plt.show()
+# plt.show()
 
 #locations
 #MLP with 1 input and 1 output, one layer inbetween
 #setup
-kernel_size = (11,11)
+kernel_size = (5,5)
 activation = jax.nn.tanh
 final_activation = None
 #depth
@@ -125,7 +125,7 @@ depth_col = out_col_coord - in_col_coord
 print("col depth:", depth_col)
 depth = max(depth_row, depth_col)
 print("max depth:", depth)
-depth = 2
+depth = 5
 print("depth:", depth, "kernel:", kernel_size)
 
 #===========
@@ -135,8 +135,8 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     clp = UniverseLP(N)
-    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size)
-    return clp(batch, activation, final_activation, norm=False)
+    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size, directions=8)
+    return clp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
@@ -189,11 +189,12 @@ for step in range(1, epochs+1):
     # Do SGD on a batch of training examples.
     loss_value = 0
     for x, y in zip(X, Y):
+        x = x[jnp.newaxis, :] #fake batch dim
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value
         # break
 
-    if step % 2 == 0:
+    if step % 5 == 0:
         correct = 0
         total = 0
         for x, y in zip(X, Y):
@@ -236,7 +237,8 @@ plt.title("Final Biases")
 plt.savefig("vnn_clp_classify_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_lp']['f'][0,:,:,0])
+print("filters shape:", params['universe_lp']['f'].shape)
+plt.imshow(params['universe_lp']['f'][0,:,:,0:3])
 plt.title("Final Filter")
 plt.savefig("vnn_clp_classify_filter.png", dpi=75)
 plt.show()

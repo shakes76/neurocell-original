@@ -579,7 +579,7 @@ class UniverseLP(hk.Module):
         self.layer_offset = layer_offset
         self.kernel_size = kernel_size
         self.depth = self.out_offset[1]-self.in_offset[1]
-        # self.type_MLP = True
+        self.directions = 1
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -619,7 +619,7 @@ class UniverseLP(hk.Module):
         self.out_offset = out_offset
         self.kernel_size = kernel_size
         self.depth = self.out_offset[1]-self.in_offset[1]
-        # self.type_MLP = True
+        self.directions = 1
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -659,6 +659,7 @@ class UniverseLP(hk.Module):
         self.out_offset = out_offset
         self.kernel_size = kernel_size
         self.depth = self.out_offset[1]-self.in_offset[1]
+        self.directions = 1
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -691,7 +692,7 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
     
-    def initialize_clp(self, in_coords, out_coords, out_offset, out_size, layer_coords, depth, kernel_size=(3,3)):
+    def initialize_clp(self, in_coords, out_coords, out_offset, out_size, layer_coords, depth, kernel_size=(3,3), directions=1):
         self.in_offset = in_coords
         self.out_coords = out_coords
         self.out_offset = out_offset
@@ -700,6 +701,7 @@ class UniverseLP(hk.Module):
         self.kernel_size = kernel_size
         self.depth = depth
         # print("depth:", depth)
+        self.directions = directions
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -723,7 +725,7 @@ class UniverseLP(hk.Module):
         #init filters
         self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
-        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],1), dtype=self.dtype, init=self.f_init)
+        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
 
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
                                 self.filters.shape,  # only ndim matters, not shape 
@@ -768,7 +770,7 @@ class UniverseLP(hk.Module):
         weights = _filter(weights, self.sharpen_filter, self.dn)
 
         #precompute FFTs of filters
-        filters = hk.get_parameter("f", shape=(1,self.kernel_size[0],self.kernel_size[1],1), dtype=self.dtype, init=self.f_init)
+        filters = hk.get_parameter("f", shape=(1,self.kernel_size[0],self.kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
         # filters = filters[0,:,:,0]
         # length = self.kernel_size[0]
         # # FFTs of filter
@@ -1119,7 +1121,7 @@ def _fast_conv(sub_cells, filters, dn):
                                         (1,1),  # lhs/image dilation
                                         (1,1),  # rhs/kernel dilation
                                         dn)     # dimension_numbers = lhs, rhs, out dimension permutation
-    return sub_cells_conv[0,:,:,0] # NHWC
+    return jnp.mean(sub_cells_conv[0], axis=-1) # NHWC
 
 @partial(jax.jit, static_argnums=())
 def _fast_conv_1D(sub_cells, filter_ffts):
