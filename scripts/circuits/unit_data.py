@@ -5,7 +5,7 @@ import numpy as np
 
 n = 8 #bits
 bit_depth = 2**(n-1)
-samples = 16
+samples = 8
 print("bit depth", bit_depth)
 
 #generate random nums
@@ -21,4 +21,12 @@ print(results)
 #     bin1 = np.binary_repr(x1)
 #     bin2 = np.binary_repr(x2)
 #     biny = np.binary_repr(y)
-print(np.unpackbits(numbers, axis=1, count=n))
+data = np.unpackbits(numbers, axis=1, count=n)
+print("bits data:", data)
+
+#add noise
+delta = 0.2
+rands = np.random.uniform(-delta,+delta,size=data.shape)
+
+data = data.astype(np.float32) + rands
+print("training data:", data)
