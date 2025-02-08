@@ -19,10 +19,10 @@ if not torch.cuda.is_available():
 epochs = 2000
 n = 8
 bit_depth = 2**(n-1)
-samples = 1600
+samples = 3200
 batch_size = 160
 num_batches = samples//batch_size
-delta = 0.2
+delta = 0.01
 
 #data
 numbers = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
@@ -35,7 +35,6 @@ Y_raw = np.unpackbits(results, axis=2, count=n)
 print(X1.shape, X1)
 
 #add noise
-delta = 0.01
 rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
 rand2 = np.random.uniform(-delta,+delta,size=X2.shape)
 X1 = X1.astype(np.float32) + rand1
