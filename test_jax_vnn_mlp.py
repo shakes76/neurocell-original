@@ -84,17 +84,15 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-4) -> jnp.ndarra
     # labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits[0], axis=-1) #remove extra dim
-    # ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
-    print(logits.shape, labels.shape)
-    print("LL",logits)
-    print(-1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon)))
+    ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
 
     #L2 norm of weights loss
     # filters = params['universe_lp']['f']
     # l2 = jnp.mean(filters**2)
 
     # return ce + l2*l2_scaling, state
-    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
+    return ce, state
+    # return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
     # return optax.l2_loss(predictions=logits, targets=labels).mean(), state
 
 # @jax.jit
@@ -126,7 +124,7 @@ for step in range(1, epochs+1):
         # print(x, y)
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value
-        break
+        # break
 
     print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
     # if step % 100 == 0:
@@ -139,7 +137,7 @@ for step in range(1, epochs+1):
     #     plt.plot(X, Y, 'm')
     #     plt.xlabel('X')
     #     plt.show()
-    break
+    # break
 end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
