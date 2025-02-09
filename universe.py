@@ -939,6 +939,8 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
         result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
     result_block = _forward_column(index+depth, cells, weights, biases, states, filters, final_activate, norm, dn)
+    if not final_activate == None:
+        result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
