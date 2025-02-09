@@ -19,8 +19,10 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 20
+epochs = 200
 samples = 120
+batch_size = 12
+num_batches = samples//batch_size
 length = 1
 num_classes = 1
 epsilon = 1e-8
@@ -35,7 +37,10 @@ print("X shape", X.shape, "Y shape", Y.shape)
 
 #square wave, ignoring extra dim
 Y[ (X[:,0] >= -0.5) & (X[:,0] < 0.5), 0 ] = 1.0
-# print(Y)
+
+#reshape to number of batches
+X = np.reshape(X, (num_batches,batch_size,1))
+Y = np.reshape(Y, (num_batches,batch_size,1))
 
 #locations
 #MLP with 1 input and 1 output, one layer inbetween
@@ -44,8 +49,6 @@ input_size = (length,1)
 input_offset = (3,1)
 output_size = (num_classes,1)
 output_offset = (3,5)
-# layer_size = (5,1)
-# layer_offset = (1,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 depth = output_offset[1]-input_offset[1]
@@ -67,9 +70,9 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
-x = jnp.asarray(X[0])
+x = X[0]
 # print("X0 shape:", x.shape)
-x = x[jnp.newaxis, :, jnp.newaxis] #fake batch dim
+x = x[:, jnp.newaxis] #fake 2D
 print("X0 shape:", x.shape)
 params, state = network.init(jax.random.PRNGKey(42), x)
 opt_state = opt.init(params)
@@ -83,7 +86,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-4) -> jnp.ndarra
     '''
     # labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
-    logits = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
 
     #L2 norm of weights loss
@@ -115,13 +118,8 @@ for step in range(1, epochs+1):
     # Do SGD on a batch of training examples.
     loss_value = 0
     for x, y in zip(X, Y):
-        x = jnp.asarray(x)
+        x = x[:, jnp.newaxis] #fake 2D
         # print(x.shape)
-        x = x[jnp.newaxis, :, jnp.newaxis] #fake batch dim
-        # print(x.shape)
-        y = jnp.asarray(y) #important
-        # y = y[jnp.newaxis, :, jnp.newaxis] #fake batch dim
-        # print(x, y)
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value
         # break
@@ -171,16 +169,18 @@ plt.show()
 
 #function plot
 fig = plt.figure()
-Y_pred = []
 for x, y in zip(X, Y):
-    x = jnp.asarray(x)
-    x = x[jnp.newaxis, :, jnp.newaxis] #fake batch dim
+    x = jnp.squeeze(x, axis=-1) #remove extra dim
+    y = jnp.squeeze(y, axis=-1) #remove extra dim
+    plt.plot(x, y, 'm')
+for x, y in zip(X, Y):
+    x = x[:, jnp.newaxis] #fake 2D
     logits, state_test = network.apply(params, state, x)
-    predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
-    Y_pred.append(predicted[0])
-# print(Y_pred)
-plt.plot(X, Y_pred)
-plt.plot(X, Y, 'm')
+    predictions = jnp.squeeze(logits, axis=-1) #remove extra dim
+    # for pred in predictions:
+    # for val, pred in zip(x, predictions): # samples in batch
+    x = jnp.squeeze(x, axis=-1) #remove extra dim
+    plt.plot(x, predictions, 'b')
 plt.xlabel('X')
 plt.savefig("vnn_mlp_plot.png", dpi=150)
 plt.show()
