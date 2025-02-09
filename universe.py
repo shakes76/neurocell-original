@@ -24,6 +24,8 @@ kernel_forward =   [[0, 0, 1],
                     [0, 0, 1]]
 STATE_ACTIVE = 0.7
 STATE_SIGNAL = 0.2
+STATE_ACTIVE_VALUE = 1.0
+STATE_SIGNAL_VALUE = 0.0
 
 class Universe:
     '''
@@ -375,8 +377,8 @@ class VerticalCells(hk.initializers.Initializer):
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         if self.is_states:
             # cells = jnp.ones(shape, dtype=dtype)
-            inputs = jnp.full(self.in_size, STATE_ACTIVE, dtype=dtype)
-            outputs = jnp.full(self.out_size, STATE_ACTIVE, dtype=dtype)
+            inputs = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=dtype)
+            outputs = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=dtype)
         else:
             # real_dtype = jnp.finfo(dtype).dtype
             # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
@@ -419,8 +421,8 @@ class SquareCells(hk.initializers.Initializer):
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         if self.is_states:
             # cells = jnp.ones(shape, dtype=dtype)
-            inputs = jnp.full(self.in_size, STATE_ACTIVE, dtype=dtype)
-            outputs = jnp.full(self.out_size, STATE_ACTIVE, dtype=dtype)
+            inputs = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=dtype)
+            outputs = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=dtype)
         else:
             # real_dtype = jnp.finfo(dtype).dtype
             # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
@@ -498,8 +500,8 @@ class CoordinateCells(hk.initializers.Initializer):
         n = len(self.in_coords)
         if self.is_states:
             # cells = jnp.ones(shape, dtype=dtype)
-            inputs = STATE_ACTIVE
-            outputs = STATE_ACTIVE
+            inputs = STATE_ACTIVE_VALUE
+            outputs = STATE_ACTIVE_VALUE
         else:
             # real_dtype = jnp.finfo(dtype).dtype
             # stddev = 1. / jnp.sqrt(max(shape[0], shape[1]))
@@ -507,8 +509,8 @@ class CoordinateCells(hk.initializers.Initializer):
             # lower = -3.0
             # cells = stddev * jax.random.truncated_normal(hk.next_rng_key(), lower, upper, shape, real_dtype)
             # cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
-            inputs = STATE_SIGNAL
-            outputs = STATE_SIGNAL
+            inputs = STATE_SIGNAL_VALUE
+            outputs = STATE_SIGNAL_VALUE
 
         if self.random_init:
             cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
@@ -570,13 +572,11 @@ class UniverseLP(hk.Module):
         self.img_shape = (1,N,N,1)
         self.forward_op = None
 
-    def initialize_mlp(self, in_size, out_size, in_offset, out_offset, layer_size, layer_offset, kernel_size=(3,3)):
+    def initialize_mlp(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3)):
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
         self.out_offset = out_offset
-        self.layer_size = layer_size
-        self.layer_offset = layer_offset
         self.kernel_size = kernel_size
         self.depth = self.out_offset[1]-self.in_offset[1]
         self.directions = 1
@@ -584,7 +584,7 @@ class UniverseLP(hk.Module):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
-        #init states (integers)
+        #init states 
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
         # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         # passives = jnp.full(layer_size, STATE_ACTIVE, dtype=self.states_dtype)
@@ -592,6 +592,9 @@ class UniverseLP(hk.Module):
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # print("States:", self.states)
         # hk.set_state("states", self.states)
+        # we need input and out shaped array to force input/output states to be active, used later
+        self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
 
         #init weights (random)
         self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
@@ -604,11 +607,13 @@ class UniverseLP(hk.Module):
         #init filters
         self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
-        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],1), dtype=self.dtype, init=self.f_init)
+        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
 
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
                                 self.filters.shape,  # only ndim matters, not shape 
                                 ('NHWC', 'IHWO', 'NHWC'))  # the important bit
+
+        self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
     
@@ -624,7 +629,7 @@ class UniverseLP(hk.Module):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
-        #init states (integers)
+        #init states 
         #set input and output states
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
         # self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
@@ -642,13 +647,13 @@ class UniverseLP(hk.Module):
         #init filters
         self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
-        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],1), dtype=self.dtype, init=self.f_init)
+        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
 
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
                                 self.filters.shape,  # only ndim matters, not shape 
                                 ('NHWC', 'IHWO', 'NHWC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_fast_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -783,6 +788,10 @@ class UniverseLP(hk.Module):
         #     cells = cells.at[self.in_coords[:, 0], self.in_coords[:, 1]].set(inputs)
         # hk.set_state("universe", cells)
 
+        # force input/output states to be active
+        states = jax.lax.dynamic_update_slice(states, self.input_states, self.in_offset)
+        states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
+
         #forward
         # cells = _forward_propagate_fast(self.in_offset[1], self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
         # cells = _forward_propagate_fast_mlp(inputs, self.in_offset, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
@@ -825,9 +834,9 @@ def _forward_propagate(index, depth, cells, weights, biases, states, filter_ffts
     '''
     #propagate
     for i in range(1, depth):
-        result_block = _forward_column(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
+        result_block = _forward(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
-    result_block = _forward_column(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
+    result_block = _forward(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
     return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
 @partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
@@ -918,7 +927,7 @@ def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, fil
     return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
     
 @partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
-def _forward_propagate_fast_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
+def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn):
     '''
     Propagate input across cellular net based on weights etc. as a traditional MLP
     '''
@@ -927,13 +936,14 @@ def _forward_propagate_fast_mlp(input, offset, out_offset, out_size, depth, cell
     #propagate
     index = offset[1]
     for i in range(1, depth):
-        result_block = _forward_column(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
+        result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
-    result_block = _forward_column(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm, dn)
+    result_block = _forward_column(index+depth, cells, weights, biases, states, filters, final_activate, norm, dn)
     cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
+# forward step operators
 @partial(jax.jit, static_argnums=(5,6,7))
 def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
     '''
@@ -1105,6 +1115,7 @@ def _fft_1D(N, length, filters):
     # FFTs of filter
     return jnp.fft.fft(filters, axis=0) #ffts of rows
 
+# conv operators
 @partial(jax.jit, static_argnums=(2))
 def _fast_conv(sub_cells, filters, dn):
     '''
