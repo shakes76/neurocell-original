@@ -21,13 +21,14 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 30
+epochs = 60
 length = 3
 padding = 6
-samples = 128
-batch_size = 4
+samples = 160
+batch_size = 2
 num_batches = samples//batch_size
 num_classes = 3
+epsilon = 1e-8
 N = int(length/2+0.5)+padding
 start_state = 1 #set None for random state
 
@@ -38,15 +39,16 @@ X_preproc, Y_raw = datasets.make_classification(
 )
 print("Data Shape:", X_preproc.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
 
-data_split = 0.25
+data_split = 0.2
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=data_split, random_state=42)
-print("Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 
 #reshape to number of batches
 X = np.reshape(X, (int(num_batches*(1.0-data_split)),batch_size,length))
 Y = np.reshape(Y, (int(num_batches*(1.0-data_split)),batch_size))
 X_test = np.reshape(X_test, (int(num_batches*data_split),batch_size,length))
 Y_test = np.reshape(Y_test, (int(num_batches*data_split),batch_size))
+print("X shape:", X.shape, "X test shape:", X_test.shape)
+print("Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 
 #===========
 #load network architecture
@@ -75,7 +77,7 @@ print("N:", N, "Epochs:", epochs)
 #setup
 kernel_size = (3,3)
 activation = jax.nn.tanh
-final_activation = None
+final_activation = jax.nn.sigmoid
 #depth
 # in_row_coord = input_coords[:, 0].min() #top most in
 # out_row_coord = output_coords[:, 0].min() #top most out
@@ -131,6 +133,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # print("logits", logits.shape)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # ce = -jnp.sum(labels * jax.nn.log_softmax(logits))
+    # ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
 
     #L2 norm of weights loss
     # filters = params['universe_lp']['f']
@@ -178,7 +181,8 @@ for step in range(1, epochs+1):
             # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
             logits, state_test = network.apply(params, state, x)
             predicted = jnp.squeeze(logits, axis=-1) #remove extra dim
-            predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+            predicted = jnp.argmax(predicted, axis=-1)
+            # print(predicted.shape, y.shape)
             correct += jnp.sum(predicted == y)
             total += batch_size
         # print(correct, total)
@@ -237,7 +241,7 @@ for x, y in zip(X_test, Y_test):
     # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
     logits, state_test = network.apply(params, state, x)
     predicted = jnp.squeeze(logits, axis=-1) #remove extra dim
-    predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+    predicted = jnp.argmax(predicted, axis=-1)
     correct += jnp.sum(predicted == y)
     total += batch_size
 accuracy = 100 * correct / total
