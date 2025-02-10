@@ -679,7 +679,7 @@ class UniverseLP(hk.Module):
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # hk.set_state("states", self.states)
         # we need input and out shaped array to force input/output states to be active, used later
-        # self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.input_states = None
         self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
 
         #init weights (random)
@@ -725,7 +725,7 @@ class UniverseLP(hk.Module):
         # print("States:", self.states)
         # hk.set_state("states", self.states)
         # we need input and out shaped array to force input/output states to be active, used later
-        # self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.input_states = None
         self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
 
         #init weights (random)
@@ -798,7 +798,8 @@ class UniverseLP(hk.Module):
         # hk.set_state("universe", cells)
 
         # force input/output states to be active
-        states = jax.lax.dynamic_update_slice(states, self.input_states, self.in_offset)
+        if not self.input_states is None:
+            states = jax.lax.dynamic_update_slice(states, self.input_states, self.in_offset)
         states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
 
         #forward

@@ -1,6 +1,7 @@
 '''
 Von Neumann network that mimics an MLP
 '''
+import numpy as np
 import jax
 import jax.numpy as jnp
 import haiku as hk
@@ -20,24 +21,32 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 60
+epochs = 30
 length = 3
 padding = 6
-samples = 160
+samples = 128
+batch_size = 4
+num_batches = samples//batch_size
 num_classes = 3
 N = int(length/2+0.5)+padding
 start_state = 1 #set None for random state
 
 #===========
 ##data
-##data
 X_preproc, Y_raw = datasets.make_classification(
     n_samples=samples, n_features=3, n_redundant=0, n_informative=2, n_clusters_per_class=1, n_classes=3, random_state=start_state
 )
 print("Data Shape:", X_preproc.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
 
-X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
+data_split = 0.25
+X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=data_split, random_state=42)
 print("Y shape:", Y.shape, "Y test shape:", Y_test.shape)
+
+#reshape to number of batches
+X = np.reshape(X, (int(num_batches*(1.0-data_split)),batch_size,length))
+Y = np.reshape(Y, (int(num_batches*(1.0-data_split)),batch_size))
+X_test = np.reshape(X_test, (int(num_batches*data_split),batch_size,length))
+Y_test = np.reshape(Y_test, (int(num_batches*data_split),batch_size))
 
 #===========
 #load network architecture
@@ -91,11 +100,11 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.001)
+opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
-x = x[jnp.newaxis, :] #fake batch dim
+# x = x[jnp.newaxis, :] #fake batch dim
 print("x", x.shape, x)
 # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
 params, state = network.init(jax.random.PRNGKey(42), x)
@@ -120,7 +129,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     #CE loss
     logits, state = network.apply(params, state, batch)
     # print("logits", logits.shape)
-    logits = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # ce = -jnp.sum(labels * jax.nn.log_softmax(logits))
 
     #L2 norm of weights loss
@@ -153,7 +162,7 @@ for step in range(1, epochs+1):
     total = 0
     loss_value = 0
     for x, y in zip(X, Y):
-        x = x[jnp.newaxis, :] #fake batch dim
+        # x = x[jnp.newaxis, :] #fake batch dim
         # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value
@@ -165,16 +174,13 @@ for step in range(1, epochs+1):
         correct = 0
         total = 0
         for x, y in zip(X, Y):
-            x = x[jnp.newaxis, :] #fake batch dim
+            # x = x[jnp.newaxis, :] #fake batch dim
             # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
             logits, state_test = network.apply(params, state, x)
-            # print("logits shape", logits.shape)
-            predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
-            # print("pred shape", predicted.shape)
+            predicted = jnp.squeeze(logits, axis=-1) #remove extra dim
             predicted = jnp.argmax(jnp.array(predicted), axis=-1)
-            # print("pred", predicted)
             correct += jnp.sum(predicted == y)
-            total += 1
+            total += batch_size
         # print(correct, total)
         accuracy = 100 * correct / total
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}, Train Accuracy {accuracy}]")
@@ -227,13 +233,13 @@ plt.show()
 correct = 0
 total = 0
 for x, y in zip(X_test, Y_test):
-    x = x[jnp.newaxis, :] #fake batch dim
+    # x = x[jnp.newaxis, :] #fake batch dim
     # x = jnp.reshape(x, (x.shape[0], length, 1)) #to col vector
     logits, state_test = network.apply(params, state, x)
-    predicted = jnp.squeeze(logits[0], axis=-1) #remove extra dim
+    predicted = jnp.squeeze(logits, axis=-1) #remove extra dim
     predicted = jnp.argmax(jnp.array(predicted), axis=-1)
     correct += jnp.sum(predicted == y)
-    total += 1
+    total += batch_size
 accuracy = 100 * correct / total
 print(f"[Final Accuracy {accuracy}]")
 

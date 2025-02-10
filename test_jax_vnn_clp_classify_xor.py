@@ -42,13 +42,6 @@ X_preproc = np.reshape(X_preproc, (samples, bits))
 Y_raw = X_preproc[:,0] ^ X_preproc[:,1] #xor
 # Y_raw = X_preproc[:,0] & X_preproc[:,1] #and
 
-# relabel to avoid zeros
-# X_preproc[X_preproc == 0] = -1
-# Y_raw[Y_raw == 0] = -1
-# X_preproc = jax.nn.tanh(X_preproc)
-# Y_raw = jax.nn.tanh(Y_raw)
-# Y_raw += 1
-
 #add noise (necessary)
 noise = np.random.uniform(-delta,+delta, size=(samples, bits))
 X_preproc = X_preproc.astype(ds_dtype) + noise
@@ -56,8 +49,6 @@ X_preproc = X_preproc.astype(ds_dtype) + noise
 print("Data Shape:", X_preproc.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
 # print(X_preproc, Y_raw)
 # print(X_preproc.astype(ds_dtype), Y_raw.astype(ds_dtype))
-# print(X_preproc.astype(ds_dtype)[0][0], int(X_preproc.astype(ds_dtype)[0][0]))
-# print(X_preproc.astype(ds_dtype)[0][1], int(X_preproc.astype(ds_dtype)[0][1]))
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
 print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
