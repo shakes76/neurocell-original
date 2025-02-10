@@ -24,10 +24,10 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 16
+epochs = 8
 num_classes = 10
-layers = 3
-batch_size = 3
+layers = 4
+batch_size = 6
 length = 28*28
 print("N:", N, "Epochs:", epochs)
 

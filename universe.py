@@ -635,6 +635,9 @@ class UniverseLP(hk.Module):
         # self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # hk.set_state("states", self.states)
+        # we need input and out shaped array to force input/output states to be active, used later
+        self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
 
         #init weights (random)
         self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
@@ -675,6 +678,9 @@ class UniverseLP(hk.Module):
         # self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # hk.set_state("states", self.states)
+        # we need input and out shaped array to force input/output states to be active, used later
+        # self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
 
         #init weights (random)
         self.w_init = SquareCells(in_size, out_size, in_offset, out_offset, is_states=False)
@@ -718,6 +724,9 @@ class UniverseLP(hk.Module):
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # print("States:", self.states)
         # hk.set_state("states", self.states)
+        # we need input and out shaped array to force input/output states to be active, used later
+        # self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
 
         #init weights (random)
         self.w_init = CoordinateCells(self.in_offset, self.out_coords, out_offset, out_size, is_states=False, clear=False)
