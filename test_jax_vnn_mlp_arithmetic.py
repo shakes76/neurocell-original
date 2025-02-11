@@ -1,0 +1,240 @@
+'''
+Von Neumann network that mimics an MLP for arithmetic
+'''
+import numpy as np
+import jax
+import jax.numpy as jnp
+import haiku as hk
+import optax
+# import matplotlib as mpl
+# mpl.use('Agg')
+import matplotlib.pyplot as plt
+from typing import Tuple
+import time
+
+from sklearn.model_selection import train_test_split
+
+from universe import UniverseLP #local
+import utils #local
+
+utils.jax_status()
+
+#parameters
+epochs = 2000
+n = 8
+bit_depth = 2**(n-1)
+length = 2*n
+samples = 3200
+batch_size = 160
+num_batches = samples//batch_size
+delta = 0.01
+padding = 4
+N = length + 2*padding
+print("N:", N, "Epochs:", epochs)
+
+#===========
+#data
+numbers = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
+operands = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
+results = numbers + operands
+#to bits
+X1 = np.unpackbits(numbers, axis=2, count=n)
+X2 = np.unpackbits(operands, axis=2, count=n)
+Y_raw = np.unpackbits(results, axis=2, count=n)
+print(X1.shape, X1)
+
+#add noise
+rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
+rand2 = np.random.uniform(-delta,+delta,size=X2.shape)
+X1 = X1.astype(np.float32) + rand1
+# Xsep = np.zeros((samples,1), dtype=np.float32)
+X2 = X2.astype(np.float32) + rand2
+
+#stack
+# X_preproc = np.concatenate([X1, Xsep, X2], axis=1)
+X_preproc = np.concatenate([X1, X2], axis=2)
+print(X_preproc.shape, X_preproc)
+
+X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
+print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
+print("X", X[:1])
+print("Y", Y[:1])
+
+Y_packed = np.packbits(Y,axis=2)
+Y_test_packed = np.packbits(Y_test,axis=2)
+print("Y_packed shape", Y_packed.shape)
+# print("Y_packed", Y_packed[:1])
+
+#locations
+#MLP with 1 input and 1 output, one layer inbetween
+#setup
+center = (N//2, N//2)
+depth = 6
+input_size = (length,1)
+input_offset = (center[0]-length//2,center[1]-depth//2)
+output_size = (n,1)
+output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
+kernel_size = (7,3)
+activation = jax.nn.tanh
+final_activation = jax.nn.sigmoid
+print("depth:", depth)
+
+#===========
+##create model
+def _forward(batch) -> jnp.ndarray:
+    '''
+    Forward pass through network
+    '''
+    mlp = UniverseLP(N)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, kernel_size)
+    return mlp(batch, activation, final_activation, norm=False)
+
+# Make the network and optimizer. Haiku standard
+network = hk.without_apply_rng(hk.transform_with_state(_forward))
+# opt = optax.sgd(learning_rate=0.005)
+opt = optax.adam(learning_rate=0.01)
+
+# Initialize network and optimiser; note we draw an input to get shapes.
+x = X[0]
+# print("X0 shape:", x.shape)
+x = x[:, jnp.newaxis] #fake 2D
+params, state = network.init(jax.random.PRNGKey(42), x)
+opt_state = opt.init(params)
+# print(params)
+# print(state)
+
+plt.imshow(params['universe_lp']['s'])
+plt.title("Initial States")
+plt.savefig("vnn_mlp_classify_states_init.png", dpi=75)
+plt.show()
+
+states = params['universe_lp']['s']
+states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
+states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
+
+plt.imshow(states)
+plt.title("Initial States (Thresholded)")
+plt.savefig("vnn_mlp_classify_states_init_thres.png", dpi=75)
+plt.show()
+
+#loss function
+def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
+    '''
+    Cross entropy 
+    '''
+    # labels = jax.nn.one_hot(labels, num_classes)
+
+    #CE loss
+    logits, state = network.apply(params, state, batch)
+    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
+
+    return optax.l2_loss(predictions=logits, targets=labels).mean(), state
+
+# @jax.jit
+def update(
+        params: hk.Params,
+        opt_state: optax.OptState,
+        state,
+        batch,
+        labels
+    ) -> Tuple[hk.Params, optax.OptState]:
+    """Learning rule (stochastic gradient descent)."""
+    (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
+    updates, opt_state = opt.update(grads, opt_state)
+    new_params = optax.apply_updates(params, updates)
+    return new_params, opt_state, loss_value, state
+
+# Train/eval loop.
+start = time.time() #time generation
+for step in range(1, epochs+1):
+    # Do SGD on a batch of training examples.
+    loss_value = 0
+    for x, y in zip(X, Y):
+        x = x[:, :, jnp.newaxis] #fake 2D
+        # y = y[:, :, jnp.newaxis] #fake 2D
+        params, opt_state, value, state = update(params, opt_state, state, x, y)
+        loss_value += value
+        # break
+
+    if step % 10 == 0:
+        Y_pred = []
+        for x, y in zip(X, Y):
+            x = x[:, :, jnp.newaxis] #fake 2D
+            logits, state_test = network.apply(params, state, x)
+            predictions = jnp.squeeze(logits, axis=-1) #remove extra dim
+            predictions = jnp.round(predictions).astype(np.uint8)
+            predictions = jnp.packbits(predictions,axis=1)
+            Y_pred.append(predictions)
+        # Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
+        # Y_pred = Y_pred[:, jnp.newaxis] #fake 2D
+        Y_pred = jnp.array(Y_pred)
+        # print(Y_pred.shape, Y_packed.shape)
+        accuracy = jnp.mean(Y_pred == Y_packed)
+        print(f"[Step {step}, Loss {loss_value}, Accuracy {accuracy}]")
+    else:
+        print(f"[Step {step}, Loss {loss_value}]")
+end = time.time()
+elapsed = end - start
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+
+jnp.savez("mlp_classify_cells.npz", 
+            weights=params['universe_lp']['w'], 
+            biases=params['universe_lp']['b'], 
+            filters=params['universe_lp']['f'], 
+            states=params['universe_lp']['s'], 
+            N=N, length=length, n=n, input_size=input_size, output_size=output_size,
+            input_offset=input_offset, output_offset=output_offset,
+            kernel_size=kernel_size,
+            allow_pickle=False)
+
+plt.imshow(params['universe_lp']['w'])
+plt.title("Final Weights")
+plt.savefig("vnn_mlp_classify_weights.png", dpi=150)
+plt.show()
+
+plt.imshow(params['universe_lp']['b'])
+plt.title("Final Biases")
+plt.savefig("vnn_mlp_classify_biases.png", dpi=150)
+plt.show()
+
+plt.imshow(params['universe_lp']['f'][0,:,:,0])
+plt.title("Final Filter")
+plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
+plt.show()
+
+plt.imshow(params['universe_lp']['s'])
+plt.title("Final States")
+plt.savefig("vnn_mlp_classify_states_final.png", dpi=75)
+plt.show()
+
+states = params['universe_lp']['s']
+states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
+states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
+
+plt.imshow(states)
+plt.title("Final States (Thresdolded)")
+plt.savefig("vnn_mlp_classify_states_final_thres.png", dpi=75)
+plt.show()
+
+#function plot
+# fig = plt.figure()
+# ax = fig.add_subplot(projection='3d')
+Y_pred = []
+for x, y in zip(X, Y):
+    x = x[:, :, jnp.newaxis] #fake 2D
+    logits, state_test = network.apply(params, state, x)
+    predictions = jnp.squeeze(logits, axis=-1) #remove extra dim
+    predictions = jnp.round(predictions).astype(np.uint8)
+    predictions = jnp.packbits(predictions,axis=1)
+    Y_pred.append(predictions)
+# Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
+# print("After", Y_pred.shape, Y_pred)
+Y_pred = jnp.array(Y_pred)
+accuracy = jnp.mean(Y_pred == Y_packed)
+print(f"[Final Accuracy {accuracy}]")
+# for x, y in zip(X, Y_pred):
+#     ax.scatter(x[:, 0], x[:, 1], x[:, 2], marker="o", c=y, s=25, edgecolor="k")
+# plt.savefig("vnn_mlp_classify_plot.png", dpi=150)
+# plt.show()
+
+print("END")
