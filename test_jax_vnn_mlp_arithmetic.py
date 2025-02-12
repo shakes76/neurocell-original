@@ -25,10 +25,10 @@ n = 8
 bit_depth = 2**(n-1)
 length = 2*n
 samples = 3200
-batch_size = 160
+batch_size = 40
 num_batches = samples//batch_size
 delta = 0.01
-padding = 4
+padding = length
 N = length + 2*padding
 print("N:", N, "Epochs:", epochs)
 
@@ -69,12 +69,12 @@ print("Y_packed shape", Y_packed.shape)
 #MLP with 1 input and 1 output, one layer inbetween
 #setup
 center = (N//2, N//2)
-depth = 6
+depth = 8
 input_size = (length,1)
 input_offset = (center[0]-length//2,center[1]-depth//2)
 output_size = (n,1)
 output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
-kernel_size = (7,3)
+kernel_size = (5,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 print("depth:", depth)
@@ -96,8 +96,8 @@ opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
-# print("X0 shape:", x.shape)
-x = x[:, jnp.newaxis] #fake 2D
+x = x[:, :, jnp.newaxis] #fake 2D
+print("X0 shape:", x.shape)
 params, state = network.init(jax.random.PRNGKey(42), x)
 opt_state = opt.init(params)
 # print(params)
@@ -105,8 +105,8 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
-plt.savefig("vnn_mlp_classify_states_init.png", dpi=75)
-plt.show()
+plt.savefig("vnn_mlp_arith_states_init.png", dpi=75)
+# plt.show()
 
 states = params['universe_lp']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
@@ -114,8 +114,8 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Initial States (Thresholded)")
-plt.savefig("vnn_mlp_classify_states_init_thres.png", dpi=75)
-plt.show()
+plt.savefig("vnn_mlp_arith_states_init_thres.png", dpi=75)
+# plt.show()
 
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
@@ -124,7 +124,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     # labels = jax.nn.one_hot(labels, num_classes)
 
-    #CE loss
+    #MSE loss
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
 
@@ -151,22 +151,32 @@ for step in range(1, epochs+1):
     loss_value = 0
     for x, y in zip(X, Y):
         x = x[:, :, jnp.newaxis] #fake 2D
-        # y = y[:, :, jnp.newaxis] #fake 2D
         params, opt_state, value, state = update(params, opt_state, state, x, y)
-        loss_value += value
+        loss_value += value/batch_size
         # break
 
     if step % 10 == 0:
         Y_pred = []
+        done = 0
         for x, y in zip(X, Y):
             x = x[:, :, jnp.newaxis] #fake 2D
             logits, state_test = network.apply(params, state, x)
+            # print("LL", logits.shape)
             predictions = jnp.squeeze(logits, axis=-1) #remove extra dim
             predictions = jnp.round(predictions).astype(np.uint8)
+            # print("LLLL", predictions.shape)
+            # print("PRED", predictions[0])
             predictions = jnp.packbits(predictions,axis=1)
+            # print("LLLLPPP", predictions.shape)
+            # print("PREDPPP", predictions[0])
             Y_pred.append(predictions)
+            if done < 3:
+                x1 = jnp.round(x[0,:n]).astype(np.uint8)
+                x2 = jnp.round(x[0,n:]).astype(np.uint8)
+                y = y[0].astype(np.uint8)
+                print(jnp.packbits(x1,axis=0),jnp.packbits(x2,axis=0), predictions[0], jnp.packbits(y,axis=0))
+                done += 1
         # Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-        # Y_pred = Y_pred[:, jnp.newaxis] #fake 2D
         Y_pred = jnp.array(Y_pred)
         # print(Y_pred.shape, Y_packed.shape)
         accuracy = jnp.mean(Y_pred == Y_packed)
@@ -177,7 +187,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
-jnp.savez("mlp_classify_cells.npz", 
+jnp.savez("mlp_arith_cells.npz", 
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
@@ -189,22 +199,22 @@ jnp.savez("mlp_classify_cells.npz",
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
-plt.savefig("vnn_mlp_classify_weights.png", dpi=150)
+plt.savefig("vnn_mlp_arith_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
-plt.savefig("vnn_mlp_classify_biases.png", dpi=150)
+plt.savefig("vnn_mlp_arith_biases.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['f'][0,:,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
+plt.savefig("vnn_mlp_arith_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_mlp_classify_states_final.png", dpi=75)
+plt.savefig("vnn_mlp_arith_states_final.png", dpi=75)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -213,12 +223,10 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Final States (Thresdolded)")
-plt.savefig("vnn_mlp_classify_states_final_thres.png", dpi=75)
+plt.savefig("vnn_mlp_arith_states_final_thres.png", dpi=75)
 plt.show()
 
 #function plot
-# fig = plt.figure()
-# ax = fig.add_subplot(projection='3d')
 Y_pred = []
 for x, y in zip(X, Y):
     x = x[:, :, jnp.newaxis] #fake 2D
@@ -232,9 +240,5 @@ for x, y in zip(X, Y):
 Y_pred = jnp.array(Y_pred)
 accuracy = jnp.mean(Y_pred == Y_packed)
 print(f"[Final Accuracy {accuracy}]")
-# for x, y in zip(X, Y_pred):
-#     ax.scatter(x[:, 0], x[:, 1], x[:, 2], marker="o", c=y, s=25, edgecolor="k")
-# plt.savefig("vnn_mlp_classify_plot.png", dpi=150)
-# plt.show()
 
 print("END")
