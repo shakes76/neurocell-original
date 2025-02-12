@@ -24,11 +24,12 @@ epochs = 2000
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
-samples = 3200
-batch_size = 40
+samples = 6400
+batch_size = 360
 num_batches = samples//batch_size
-delta = 0.01
-padding = length
+delta = 0.1
+padding = 2*length
+layers = 4
 N = length + 2*padding
 print("N:", N, "Epochs:", epochs)
 
@@ -69,13 +70,13 @@ print("Y_packed shape", Y_packed.shape)
 #MLP with 1 input and 1 output, one layer inbetween
 #setup
 center = (N//2, N//2)
-depth = 8
+depth = 2*layers+1
 input_size = (length,1)
 input_offset = (center[0]-length//2,center[1]-depth//2)
 output_size = (n,1)
 output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
-kernel_size = (5,3)
-activation = jax.nn.tanh
+kernel_size = (17,3)
+activation = jax.nn.sigmoid
 final_activation = jax.nn.sigmoid
 print("depth:", depth)
 
@@ -151,8 +152,14 @@ for step in range(1, epochs+1):
     loss_value = 0
     for x, y in zip(X, Y):
         x = x[:, :, jnp.newaxis] #fake 2D
+        
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value/batch_size
+
+        # x1 = jnp.round(x[0,:n,0]).astype(np.uint8)
+        # x2 = jnp.round(x[0,n:,0]).astype(np.uint8)
+        # y = y[0].astype(np.uint8)
+        # print(jnp.packbits(x1,axis=0),jnp.packbits(x2,axis=0), jnp.packbits(y,axis=0))
         # break
 
     if step % 10 == 0:
