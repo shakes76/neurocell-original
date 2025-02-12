@@ -19,10 +19,10 @@ if not torch.cuda.is_available():
 epochs = 2000
 n = 8
 bit_depth = 2**(n-1)
-samples = 3200
+samples = 6400
 batch_size = 160
 num_batches = samples//batch_size
-delta = 0.01
+delta = 0.1
 
 #data
 numbers = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
@@ -50,6 +50,10 @@ X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_
 print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 print("X", X[:3])
 print("Y", Y[:3])
+
+Y_packed = np.packbits(Y,axis=2)
+Y_test_packed = np.packbits(Y_test,axis=2)
+print("Y_packed shape", Y_packed.shape)
 
 #model
 class XORNet(nn.Module):
@@ -101,14 +105,20 @@ for epoch in range(epochs):
 
 #testing
 model.eval()
+Y_pred = []
 for x, y in zip(X_test, Y_test):
     y_hat = model(FloatTensor(x).to(device))
-    target = FloatTensor(y).to(device)
-    epsilon = loss(target,y_hat)
+    y_hat = torch.round(y_hat).cpu().detach().numpy().astype(np.uint8)
+    predictions = np.packbits(y_hat,axis=1)
+    Y_pred.append(predictions)
+
     x1 = np.round(x[0,:n]).astype(np.uint8)
     x2 = np.round(x[0,n:]).astype(np.uint8)
     y = y[0].astype(np.uint8)
-    y_hat = torch.round(y_hat).cpu().detach().numpy()[0].astype(np.uint8)
-    print(np.packbits(x1,axis=0),np.packbits(x2,axis=0), np.packbits(y_hat,axis=0), np.packbits(y,axis=0), epsilon.item())
+    print(np.packbits(x1,axis=0),np.packbits(x2,axis=0), predictions[0], np.packbits(y,axis=0))
+Y_pred = np.array(Y_pred)
+# print(Y_pred.shape, Y_packed.shape)
+accuracy = np.mean(Y_pred == Y_test_packed)
+print(f"[Final Accuracy {accuracy}]")
 
 print("END")
