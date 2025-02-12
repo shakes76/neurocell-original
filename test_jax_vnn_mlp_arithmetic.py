@@ -76,7 +76,7 @@ input_offset = (center[0]-length//2,center[1]-depth//2)
 output_size = (n,1)
 output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
 kernel_size = (17,3)
-activation = jax.nn.sigmoid
+activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 print("depth:", depth)
 

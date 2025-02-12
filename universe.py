@@ -353,7 +353,7 @@ class Universe:
 
 class VerticalCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting vertical cells."""
-    def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, clear=True):
+    def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=1.0):
         """
         Constructs a :class:`RandomNormal` like initializer with vertical cells.
         """
@@ -363,6 +363,8 @@ class VerticalCells(hk.initializers.Initializer):
         self.out_offset = out_offset
         self.is_states = is_states
         self.clear = clear
+        self.random_init = random_init
+        self.initializer = jax.nn.initializers.uniform(self.random_init)
 
     def clear_cells_vertical(self, cells, offset, after=False):
         '''
@@ -389,7 +391,10 @@ class VerticalCells(hk.initializers.Initializer):
             inputs = jnp.ones(self.in_size, dtype=dtype)
             outputs = jnp.ones(self.out_size, dtype=dtype)
         
-        cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        if self.random_init > 0 or not self.random_init is None:
+            cells = self.initializer(hk.next_rng_key(), shape, jnp.float32)
+        else:
+            cells = jnp.zeros(shape, dtype=dtype)
 
         if self.is_states:
             #norm states to 0-1 range
@@ -407,7 +412,7 @@ class VerticalCells(hk.initializers.Initializer):
     
 class SquareCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting square cells."""
-    def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, random_init=True):
+    def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, random_init=1.0):
         """
         Constructs a :class:`RandomNormal` like initializer with vertical cells.
         """
@@ -417,6 +422,7 @@ class SquareCells(hk.initializers.Initializer):
         self.out_offset = out_offset
         self.is_states = is_states
         self.random_init = random_init
+        self.initializer = jax.nn.initializers.uniform(self.random_init)
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         if self.is_states:
@@ -433,8 +439,8 @@ class SquareCells(hk.initializers.Initializer):
             inputs = jnp.ones(self.in_size, dtype=dtype)
             outputs = jnp.ones(self.out_size, dtype=dtype)
         
-        if self.random_init:
-            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        if self.random_init > 0 or not self.random_init is None:
+            cells = self.initializer(hk.next_rng_key(), shape, jnp.float32)
         else:
             cells = jnp.zeros(shape, dtype=dtype)
 
@@ -472,7 +478,7 @@ class SquareCells(hk.initializers.Initializer):
     
 class CoordinateCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting cells through coordinates provided."""
-    def __init__(self, in_coords, out_coords, out_offset, out_size, is_states=False, clear=True, random_init=True):
+    def __init__(self, in_coords, out_coords, out_offset, out_size, is_states=False, clear=True, random_init=1.0):
         """
         Constructs a :class:`RandomNormal` like initializer with cells with coordinates.
         """
@@ -485,6 +491,8 @@ class CoordinateCells(hk.initializers.Initializer):
         self.random_init = random_init
         self.min_coord = in_coords[:, 1].min()
         self.max_coord = out_coords[:, 1].max()
+        self.random_init = random_init
+        self.initializer = jax.nn.initializers.uniform(self.random_init)
 
     def clear_cells_outside(self, cells, coord, after=False):
         '''
@@ -512,8 +520,8 @@ class CoordinateCells(hk.initializers.Initializer):
             inputs = STATE_SIGNAL_VALUE
             outputs = STATE_SIGNAL_VALUE
 
-        if self.random_init:
-            cells = 1.0 * jax.random.normal(hk.next_rng_key(), shape)
+        if self.random_init > 0 or not self.random_init is None:
+            cells = self.initializer(hk.next_rng_key(), shape, jnp.float32)
         else:
             cells = jnp.zeros(shape, dtype=dtype)
 
@@ -533,8 +541,10 @@ class CoordinateCells(hk.initializers.Initializer):
 
 class FiltersCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting filters."""
-    def __init__(self, is_forward=True):
+    def __init__(self, is_forward=True, random_init=1.0):
         self.is_forward = is_forward
+        self.random_init = random_init
+        self.initializer = jax.nn.initializers.uniform(self.random_init)
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         # if not self.is_forward:
@@ -543,7 +553,10 @@ class FiltersCells(hk.initializers.Initializer):
         #     nethood = filters.forward(dtype=dtype, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
 
         # nethood = nethood + 0.1 * jax.random.normal(hk.next_rng_key(), nethood.shape)
-        nethood = 1.0 * jax.random.normal(hk.next_rng_key(), shape, dtype)
+        if self.random_init > 0 or not self.random_init is None:
+            nethood = self.initializer(hk.next_rng_key(), shape, jnp.float32)
+        else:
+            nethood = jnp.ones(shape, dtype=dtype)
 
         return nethood
 
