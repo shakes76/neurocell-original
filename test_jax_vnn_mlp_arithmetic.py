@@ -25,10 +25,10 @@ n = 8
 bit_depth = 2**(n-1)
 length = 2*n
 samples = 6400
-batch_size = 360
+batch_size = 320
 num_batches = samples//batch_size
 delta = 0.1
-padding = 2*length
+padding = 4*length
 layers = 4
 N = length + 2*padding
 print("N:", N, "Epochs:", epochs)
@@ -75,9 +75,9 @@ input_size = (length,1)
 input_offset = (center[0]-length//2,center[1]-depth//2)
 output_size = (n,1)
 output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
-kernel_size = (17,3)
+kernel_size = (11,3)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+final_activation = None
 print("depth:", depth)
 
 #===========
