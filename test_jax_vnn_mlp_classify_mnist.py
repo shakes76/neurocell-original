@@ -76,7 +76,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N)
-    mlp.initialize_mlp_full(input_size, output_size, input_offset, output_offset, kernel_size)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, kernel_size)
     return mlp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard

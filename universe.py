@@ -566,10 +566,11 @@ class UniverseLP(hk.Module):
 
     You must use the initialize_* members to create the type of layered perceptron, e.g. MLP etc.
     '''
-    def __init__(self, N, dtype=jnp.float32, name=None):
+    def __init__(self, N, sharpen=True, dtype=jnp.float32, name=None):
         super().__init__(name=name)
         self.N = N
         self.grid_size = (N,N)
+        self.sharpen = sharpen
         self.dtype = dtype
         self.states_dtype = jnp.float32
         # self.type_MLP = False
@@ -598,7 +599,7 @@ class UniverseLP(hk.Module):
         hk.set_state("universe", cells)
 
         #init states 
-        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
+        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=1.)
         # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         # passives = jnp.full(layer_size, STATE_ACTIVE, dtype=self.states_dtype)
         # self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
@@ -610,7 +611,7 @@ class UniverseLP(hk.Module):
         self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
 
         #init weights (random)
-        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
+        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=1.)
         self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
 
         #init biases
@@ -618,50 +619,7 @@ class UniverseLP(hk.Module):
         self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
 
         #init filters
-        self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
-        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
-        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
-
-        self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
-                                self.filters.shape,  # only ndim matters, not shape 
-                                ('NHWC', 'IHWO', 'NHWC'))  # the important bit
-
-        self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
-
-        return hk.get_state("universe")
-    
-    def initialize_mlp_full(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3)):
-        self.in_size = in_size
-        self.out_size = out_size
-        self.in_offset = in_offset
-        self.out_offset = out_offset
-        self.kernel_size = kernel_size
-        self.depth = self.out_offset[1]-self.in_offset[1]
-        self.directions = 1
-
-        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
-        hk.set_state("universe", cells)
-
-        #init states 
-        #set input and output states
-        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True)
-        # self.states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
-        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
-        # hk.set_state("states", self.states)
-        # we need input and out shaped array to force input/output states to be active, used later
-        self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
-        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
-
-        #init weights (random)
-        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True)
-        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
-
-        #init biases
-        self.b_init = jnp.zeros
-        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
-
-        #init filters
-        self.f_init = FiltersCells(is_forward=False) # 8 connected kernel
+        self.f_init = FiltersCells(is_forward=False, random_init=0.1) # 8 connected kernel
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
 
@@ -673,7 +631,7 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
 
-    def initialize_slp_full(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3)):
+    def initialize_slp(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3)):
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
@@ -794,7 +752,8 @@ class UniverseLP(hk.Module):
         # hk.set_state("universe", cells)
 
         #smooth/sharpen weights
-        weights = _filter(weights, self.sharpen_filter, self.dn)
+        if self.sharpen:
+            weights = _filter(weights, self.sharpen_filter, self.dn)
 
         #precompute FFTs of filters
         filters = hk.get_parameter("f", shape=(1,self.kernel_size[0],self.kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
