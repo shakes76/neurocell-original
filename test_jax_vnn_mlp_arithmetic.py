@@ -25,7 +25,7 @@ n = 8
 bit_depth = 2**(n-1)
 length = 2*n
 samples = 6400
-batch_size = 320
+batch_size = 640
 num_batches = samples//batch_size
 delta = 0.1
 padding = 4*length
@@ -93,7 +93,7 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.01)
+opt = optax.adam(learning_rate=0.03)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
