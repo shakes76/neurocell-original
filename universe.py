@@ -364,7 +364,8 @@ class VerticalCells(hk.initializers.Initializer):
         self.is_states = is_states
         self.clear = clear
         self.random_init = random_init
-        self.initializer = jax.nn.initializers.uniform(self.random_init)
+        # self.initializer = jax.nn.initializers.uniform(self.random_init)
+        self.initializer = jax.nn.initializers.variance_scaling(self.random_init, mode="fan_in", distribution="truncated_normal")
 
     def clear_cells_vertical(self, cells, offset, after=False):
         '''
@@ -422,7 +423,8 @@ class SquareCells(hk.initializers.Initializer):
         self.out_offset = out_offset
         self.is_states = is_states
         self.random_init = random_init
-        self.initializer = jax.nn.initializers.uniform(self.random_init)
+        # self.initializer = jax.nn.initializers.uniform(self.random_init)
+        self.initializer = jax.nn.initializers.variance_scaling(self.random_init, mode="fan_in", distribution="truncated_normal")
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         if self.is_states:
@@ -492,7 +494,8 @@ class CoordinateCells(hk.initializers.Initializer):
         self.min_coord = in_coords[:, 1].min()
         self.max_coord = out_coords[:, 1].max()
         self.random_init = random_init
-        self.initializer = jax.nn.initializers.uniform(self.random_init)
+        # self.initializer = jax.nn.initializers.uniform(self.random_init)
+        self.initializer = jax.nn.initializers.variance_scaling(self.random_init, mode="fan_in", distribution="truncated_normal")
 
     def clear_cells_outside(self, cells, coord, after=False):
         '''
@@ -544,7 +547,8 @@ class FiltersCells(hk.initializers.Initializer):
     def __init__(self, is_forward=True, random_init=1.0):
         self.is_forward = is_forward
         self.random_init = random_init
-        self.initializer = jax.nn.initializers.uniform(self.random_init)
+        # self.initializer = jax.nn.initializers.uniform(self.random_init)
+        self.initializer = jax.nn.initializers.variance_scaling(self.random_init, mode="fan_in", distribution="truncated_normal")
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
         # if not self.is_forward:

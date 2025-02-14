@@ -129,7 +129,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
 
-    return optax.l2_loss(predictions=logits, targets=labels).mean(), state
+    return optax.squared_error(predictions=logits, targets=labels).mean(), state
 
 # @jax.jit
 def update(
