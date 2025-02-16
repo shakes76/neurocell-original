@@ -25,10 +25,10 @@ n = 8
 bit_depth = 2**(n-1)
 length = 2*n
 samples = 6400
-batch_size = 640
+batch_size = 160
 num_batches = samples//batch_size
 delta = 0.1
-padding = 4*length
+padding = 2*length
 layers = 4
 N = length + 2*padding
 print("N:", N, "Epochs:", epochs)
@@ -52,7 +52,7 @@ X1 = X1.astype(np.float32) + rand1
 X2 = X2.astype(np.float32) + rand2
 
 #stack
-# X_preproc = np.concatenate([X1, Xsep, X2], axis=1)
+# X_preproc = np.concatenate([X1, Xsep, X2], axis=2)
 X_preproc = np.concatenate([X1, X2], axis=2)
 print(X_preproc.shape, X_preproc)
 
@@ -77,7 +77,7 @@ output_size = (n,1)
 output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
 kernel_size = (11,3)
 activation = jax.nn.tanh
-final_activation = None
+final_activation = jax.nn.sigmoid
 print("depth:", depth)
 
 #===========
@@ -93,7 +93,7 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.03)
+opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
@@ -179,6 +179,7 @@ for step in range(1, epochs+1):
             Y_pred.append(predictions)
             if done < 3:
                 x1 = jnp.round(x[0,:n]).astype(np.uint8)
+                # x2 = jnp.round(x[0,n+1:]).astype(np.uint8)
                 x2 = jnp.round(x[0,n:]).astype(np.uint8)
                 y = y[0].astype(np.uint8)
                 print(jnp.packbits(x1,axis=0),jnp.packbits(x2,axis=0), predictions[0], jnp.packbits(y,axis=0))
