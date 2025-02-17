@@ -89,13 +89,11 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
-# schedule = optax.warmup_cosine_decay_schedule(init_value=0.0001,peak_value=0.01,warmup_steps=1000,decay_steps=epochs*num_batches,end_value=0.0005)
 # opt = optax.sgd(learning_rate=0.005)
 opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
-# x = x[:, :, jnp.newaxis] #fake 2D
 print("X0 shape:", x.shape)
 params, state = network.init(jax.random.PRNGKey(42), x)
 opt_state = opt.init(params)
@@ -107,14 +105,12 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     Cross entropy 
     '''
-    # labels = jax.nn.one_hot(labels, num_classes)
-
     #MSE loss
     logits, state = network.apply(params, state, batch)
 
     return optax.squared_error(predictions=logits, targets=labels).mean(), state
 
-# @jax.jit
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,
@@ -134,8 +130,6 @@ for step in range(1, epochs+1):
     # Do SGD on a batch of training examples.
     loss_value = 0
     for x, y in zip(X, Y):
-        # x = x[:, :, jnp.newaxis] #fake 2D
-        
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value/batch_size
 
@@ -143,7 +137,6 @@ for step in range(1, epochs+1):
         Y_pred = []
         done = 0
         for x, y in zip(X, Y):
-            # x = x[:, :, jnp.newaxis] #fake 2D
             logits, state_test = network.apply(params, state, x)
             predictions = jnp.round(logits).astype(np.uint8)
             predictions = jnp.packbits(predictions,axis=1)
@@ -154,9 +147,7 @@ for step in range(1, epochs+1):
                 y = y[0].astype(np.uint8)
                 print(jnp.packbits(x1,axis=0),jnp.packbits(x2,axis=0), predictions[0], jnp.packbits(y,axis=0))
                 done += 1
-        # Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
         Y_pred = jnp.array(Y_pred)
-        # print(Y_pred.shape, Y_packed.shape)
         accuracy = jnp.mean(Y_pred == Y_packed)
         print(f"[Step {step}, Loss {loss_value}, Accuracy {accuracy}]")
     else:
@@ -168,7 +159,6 @@ print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins i
 #function plot
 Y_pred = []
 for x, y in zip(X, Y):
-    # x = x[:, :, jnp.newaxis] #fake 2D
     logits, state_test = network.apply(params, state, x)
     predictions = jnp.round(logits).astype(np.uint8)
     predictions = jnp.packbits(predictions,axis=1)
