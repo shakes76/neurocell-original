@@ -602,6 +602,8 @@ class UniverseLP(hk.Module):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
+        # init_scale = 1./jnp.sqrt(self.depth*self.N)
+
         #init states 
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=1.)
         # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
@@ -784,7 +786,7 @@ class UniverseLP(hk.Module):
         # cells = _forward_propagate_fast_1D(self.in_offset[1], self.depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm)
         # forward_propagate_fast = jax.vmap(_forward_propagate_fast_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
         cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
-        hk.set_state("universe", cells[0])
+        hk.set_state("universe", cells[0]) #remove vmap batch dim
 
         #read output
         # if self.type_MLP:
@@ -921,6 +923,7 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
 
     #propagate
     index = offset[1]
+    # print("index",index)
     for i in range(1, depth):
         result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
@@ -928,6 +931,24 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+    
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
+def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn):
+    '''
+    Propagate input across cellular net based on weights etc. as a traditional MLP
+    '''
+    cells = jax.lax.dynamic_update_slice(cells, input, offset)
+
+    #propagate
+    for i in range(1, depth):
+        cells = _forward_full(1, cells, weights, biases, states, filters, activate, norm, dn) #not inplace
+        # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i)) #write result for next propagate
+    cells = _forward_full(1, cells, weights, biases, states, filters, final_activate, norm, dn) #final prop and activate
+    # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
+    if not final_activate == None:
+        cells = final_activate(cells) #force final activation, assume output layer
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
@@ -977,16 +998,26 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
 
     All operations are done on the sub-region defined by width of nethood and central index
     '''
-    width = filters.shape[1]
+    height = filters.shape[1] #shape is (1,rows,cols,1)
+    width = filters.shape[2] #shape is (1,rows,cols,1)
+    height_pad = (height-1)//2
+    width_pad = (width-1)//2
+    # print("width",width,"width_pad",width_pad)
+
     # sub_cells = cells[:,index-1:index-1+width]
     sub_weights = weights[:,index].reshape(-1,1) #reshape promotes to column vec
     sub_biases = biases[:,index].reshape(-1,1) #reshape promotes to column vec
     sub_states = states[:,index].reshape(-1,1) #reshape promotes to column vec
-    # print(sub_states.shape)
+    # print("sub_states",sub_states.shape)
 
     #conv
-    result_block = _fast_conv(cells[:,index-1:index-1+width], filters, dn)
-    # print(result_block.shape)
+    result_block = cells[:,index-width_pad:index-width_pad+width]
+    # print("result_block",result_block.shape, "filters", filters.shape)
+    result_block = _fast_conv(result_block, filters, dn, padding_mode="VALID")
+    # print("result_block",result_block.shape)
+    # sub_states = result_block[:,index].reshape(-1,1) #reshape promotes to column vec
+    result_block = jnp.pad(result_block, ((height_pad,height_pad), (0,0)) ) #pad rows to undo valid conv in rows
+    # print("result_block padded",result_block.shape)
 
     if norm:
         #norm
@@ -1104,8 +1135,8 @@ def _fft_1D(N, length, filters):
     return jnp.fft.fft(filters, axis=0) #ffts of rows
 
 # conv operators
-@partial(jax.jit, static_argnums=(2))
-def _fast_conv(sub_cells, filters, dn):
+@partial(jax.jit, static_argnums=(2,3))
+def _fast_conv(sub_cells, filters, dn, padding_mode="SAME"):
     '''
     2D conv done in 1D convs via the CCP and Fourier space.
 
@@ -1116,7 +1147,7 @@ def _fast_conv(sub_cells, filters, dn):
     sub_cells_conv = jax.lax.conv_general_dilated(sub_cells[jnp.newaxis,:,:,jnp.newaxis], # lhs = NHWC image tensor
                                         filters,  # rhs = OHWI conv kernel tensor
                                         (1,1),  # window strides
-                                        'SAME', # padding mode
+                                        padding_mode, # padding mode
                                         (1,1),  # lhs/image dilation
                                         (1,1),  # rhs/kernel dilation
                                         dn)     # dimension_numbers = lhs, rhs, out dimension permutation

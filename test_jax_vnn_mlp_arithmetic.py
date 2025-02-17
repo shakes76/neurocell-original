@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 2000
+epochs = 1000
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
@@ -28,9 +28,9 @@ samples = 6400
 batch_size = 160
 num_batches = samples//batch_size
 delta = 0.1
-padding = 2*length
-layers = 4
-N = length + 2*padding
+padding = 4*length
+layers = 3
+N = length + 4*padding
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -48,12 +48,10 @@ print(X1.shape, X1)
 rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
 rand2 = np.random.uniform(-delta,+delta,size=X2.shape)
 X1 = X1.astype(np.float32) + rand1
-# Xsep = np.zeros((samples,1), dtype=np.float32)
 X2 = X2.astype(np.float32) + rand2
 
 #stack
-# X_preproc = np.concatenate([X1, Xsep, X2], axis=2)
-X_preproc = np.concatenate([X1, X2], axis=2)
+X_preproc = np.concatenate([X1, X2], axis=-1)
 print(X_preproc.shape, X_preproc)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
@@ -75,7 +73,7 @@ input_size = (length,1)
 input_offset = (center[0]-length//2,center[1]-depth//2)
 output_size = (n,1)
 output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
-kernel_size = (11,3)
+kernel_size = (17,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 print("depth:", depth)
@@ -86,12 +84,13 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = UniverseLP(N)
+    mlp = UniverseLP(N, sharpen=True)
     mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, kernel_size)
-    return mlp(batch, activation, final_activation, norm=False)
+    return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
+# schedule = optax.warmup_cosine_decay_schedule(init_value=0.0001,peak_value=0.01,warmup_steps=1000,decay_steps=epochs*num_batches,end_value=0.0005)
 # opt = optax.sgd(learning_rate=0.005)
 opt = optax.adam(learning_rate=0.01)
 
@@ -131,7 +130,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
 
     return optax.squared_error(predictions=logits, targets=labels).mean(), state
 
-# @jax.jit
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,
@@ -230,8 +229,13 @@ states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
 plt.imshow(states)
-plt.title("Final States (Thresdolded)")
+plt.title("Final States (Thresholded)")
 plt.savefig("vnn_mlp_arith_states_final_thres.png", dpi=75)
+plt.show()
+
+plt.imshow(state['universe_lp']['universe'])
+plt.title("Final Universe")
+plt.savefig("vnn_mlp_arith_universe.png", dpi=75)
 plt.show()
 
 #function plot
