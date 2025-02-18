@@ -21,7 +21,7 @@ utils.jax_status()
 
 #parameters
 N = 13
-epochs = 30
+epochs = 50
 samples = 128
 batch_size = 8
 num_batches = samples//batch_size
@@ -52,7 +52,7 @@ output_offset = (5,8)
 kernel_size = (7,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-depth = output_offset[1]-input_offset[1]
+depth = 3
 print("depth:", depth)
 
 #===========
@@ -62,7 +62,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N)
-    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, kernel_size)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size)
     return mlp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
@@ -106,14 +106,9 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # print(logits.shape, labels.shape)
     ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
 
-    #L2 norm of weights loss
-    # filters = params['universe_lp']['f']
-    # l2 = jnp.mean(filters**2)
-
-    # return ce + l2*l2_scaling, state
     return ce, state
 
-# @jax.jit
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,

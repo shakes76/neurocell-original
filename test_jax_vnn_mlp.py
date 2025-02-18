@@ -51,7 +51,7 @@ output_size = (num_classes,1)
 output_offset = (3,5)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-depth = output_offset[1]-input_offset[1]
+depth = 3
 print("depth:", depth)
 
 #===========
@@ -61,7 +61,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N)
-    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth)
     return mlp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
@@ -98,7 +98,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-4) -> jnp.ndarra
     # return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
     # return optax.l2_loss(predictions=logits, targets=labels).mean(), state
 
-# @jax.jit
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,

@@ -27,12 +27,12 @@ N = 1024
 epochs = 8
 num_classes = 10
 layers = 4
-batch_size = 6
+batch_size = 10
 length = 28*28
 print("N:", N, "Epochs:", epochs)
 
 #network IO paths
-path = 'F:/'
+path = '/home/uqscha22/'
 
 #===========
 #transform preproc
@@ -51,11 +51,11 @@ num_classes = 10
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween
 #setup network position
 center = N//2
-total_layers = layers*2+3 #1 col of signal cells per layer, 1 for in + signal col and 1 for out
+depth = layers*2+1 #1 col of signal cells per layer
 input_top = center-length//2
-input_left = center-total_layers//2-1
+input_left = center-(depth-1)//2
 output_top = center-num_classes//2
-output_left = input_left+total_layers-1 #dont include out obv
+output_left = input_left+depth+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (length,1)
@@ -64,8 +64,7 @@ output_size = (num_classes,1)
 output_offset = (output_top,output_left)
 kernel_size = (101,3)
 activation = jax.nn.tanh
-final_activation = None
-depth = output_offset[1]-input_offset[1]
+final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
 print("depth:", depth, "total batches:", total_batches)
 
@@ -76,8 +75,8 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N)
-    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, kernel_size)
-    return mlp(batch, activation, final_activation, norm=False)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size)
+    return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
