@@ -618,6 +618,7 @@ class UniverseLP(hk.Module):
         # we need input and out shaped array to force input/output states to be active, used later
         self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
         self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
 
         #init weights (random)
         self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=init_scale)
@@ -784,6 +785,8 @@ class UniverseLP(hk.Module):
         if not self.input_states is None:
             states = jax.lax.dynamic_update_slice(states, self.input_states, self.in_offset)
         states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
+        if not self.output_weights is None:
+            weights = jax.lax.dynamic_update_slice(weights, self.output_weights, self.out_offset)
 
         #forward
         # cells = _forward_propagate_fast(self.in_offset[1], self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
