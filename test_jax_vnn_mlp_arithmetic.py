@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 1000
+epochs = 500
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
@@ -56,8 +56,8 @@ print(X_preproc.shape, X_preproc)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
 print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
-print("X", X[:1])
-print("Y", Y[:1])
+# print("X", X[:1])
+# print("Y", Y[:1])
 
 Y_packed = np.packbits(Y,axis=2)
 Y_test_packed = np.packbits(Y_test,axis=2)
@@ -65,18 +65,18 @@ print("Y_packed shape", Y_packed.shape)
 # print("Y_packed", Y_packed[:1])
 
 #locations
-#MLP with 1 input and 1 output, one layer inbetween
+#MLP with inputs and outputs, depth layers inbetween
 #setup
 center = (N//2, N//2)
-depth = 2*layers+1
+depth = 2*layers+1 #decision and signal layers, not including output
 input_size = (length,1)
-input_offset = (center[0]-length//2,center[1]-depth//2)
+input_offset = (center[0]-length//2,center[1]-(depth-1)//2)
 output_size = (n,1)
-output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
+output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth+1) #+1 output layer
 kernel_size = (17,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-print("depth:", depth)
+print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
 
 #===========
 ##create model
@@ -85,7 +85,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N, sharpen=True)
-    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, kernel_size)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size)
     return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
