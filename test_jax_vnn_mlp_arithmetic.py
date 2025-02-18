@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 1000
+epochs = 500
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
@@ -29,7 +29,7 @@ batch_size = 160
 num_batches = samples//batch_size
 delta = 0.1
 padding = 4*length
-layers = 3
+layers = 5
 N = length + 4*padding
 print("N:", N, "Epochs:", epochs)
 
@@ -42,7 +42,7 @@ results = numbers + operands
 X1 = np.unpackbits(numbers, axis=2, count=n)
 X2 = np.unpackbits(operands, axis=2, count=n)
 Y_raw = np.unpackbits(results, axis=2, count=n)
-print(X1.shape, X1)
+print(X1.shape)
 
 #add noise
 rand1 = np.random.uniform(-delta,+delta,size=X1.shape)

@@ -603,6 +603,7 @@ class UniverseLP(hk.Module):
         hk.set_state("universe", cells)
 
         # init_scale = 1./jnp.sqrt(self.depth*self.N)
+        # init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]) #shape is (rows,cols) before array creation
 
         #init states 
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=1.)
