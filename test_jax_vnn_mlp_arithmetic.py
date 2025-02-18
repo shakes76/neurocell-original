@@ -29,7 +29,7 @@ batch_size = 160
 num_batches = samples//batch_size
 delta = 0.1
 padding = 4*length
-layers = 4
+layers = 5
 N = length + 4*padding
 print("N:", N, "Epochs:", epochs)
 
@@ -90,7 +90,10 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
-schedule = optax.warmup_cosine_decay_schedule(init_value=0.0005,peak_value=0.03,warmup_steps=10*num_batches,decay_steps=epochs*num_batches,end_value=0.0005)
+
+#optimizer
+total_steps = epochs*num_batches
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.0005,peak_value=0.03,warmup_steps=0.05*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.sgd(learning_rate=0.005)
 opt = optax.adam(learning_rate=schedule)
 

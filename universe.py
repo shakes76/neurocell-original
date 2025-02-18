@@ -604,11 +604,11 @@ class UniverseLP(hk.Module):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
-        # init_scale = 1./jnp.sqrt(self.depth*self.N)
-        # init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]) #shape is (rows,cols) before array creation
+        init_scale = 1./jnp.sqrt(self.depth*self.N)
+        init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]) #shape is (rows,cols) before array creation
 
         #init states 
-        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=1.)
+        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=init_scale)
         # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         # passives = jnp.full(layer_size, STATE_ACTIVE, dtype=self.states_dtype)
         # self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
@@ -620,7 +620,7 @@ class UniverseLP(hk.Module):
         self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
 
         #init weights (random)
-        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=1.)
+        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=init_scale)
         self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
 
         #init biases
@@ -628,7 +628,7 @@ class UniverseLP(hk.Module):
         self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
 
         #init filters
-        self.f_init = FiltersCells(is_forward=False, random_init=0.1) # 8 connected kernel
+        self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
 
