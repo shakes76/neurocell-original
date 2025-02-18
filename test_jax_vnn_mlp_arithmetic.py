@@ -29,7 +29,7 @@ batch_size = 160
 num_batches = samples//batch_size
 delta = 0.1
 padding = 4*length
-layers = 5
+layers = 4
 N = length + 4*padding
 print("N:", N, "Epochs:", epochs)
 
@@ -52,12 +52,12 @@ X2 = X2.astype(np.float32) + rand2
 
 #stack
 X_preproc = np.concatenate([X1, X2], axis=-1)
-print(X_preproc.shape, X_preproc)
+# print(X_preproc.shape)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
 print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
-print("X", X[:1])
-print("Y", Y[:1])
+# print("X", X[:1])
+# print("Y", Y[:1])
 
 Y_packed = np.packbits(Y,axis=2)
 Y_test_packed = np.packbits(Y_test,axis=2)
@@ -65,18 +65,18 @@ print("Y_packed shape", Y_packed.shape)
 # print("Y_packed", Y_packed[:1])
 
 #locations
-#MLP with 1 input and 1 output, one layer inbetween
+#MLP with inputs and outputs, depth layers inbetween
 #setup
 center = (N//2, N//2)
-depth = 2*layers+1
+depth = 2*layers+1 #decision and signal layers, not including output
 input_size = (length,1)
-input_offset = (center[0]-length//2,center[1]-depth//2)
+input_offset = (center[0]-length//2,center[1]-(depth-1)//2)
 output_size = (n,1)
-output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth)
+output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth+1) #+1 output layer
 kernel_size = (17,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-print("depth:", depth)
+print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
 
 #===========
 ##create model
@@ -85,14 +85,14 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N, sharpen=True)
-    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, kernel_size)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size)
     return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
-# schedule = optax.warmup_cosine_decay_schedule(init_value=0.0001,peak_value=0.01,warmup_steps=1000,decay_steps=epochs*num_batches,end_value=0.0005)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.0005,peak_value=0.03,warmup_steps=10*num_batches,decay_steps=epochs*num_batches,end_value=0.0005)
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.01)
+opt = optax.adam(learning_rate=schedule)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
@@ -122,8 +122,6 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     Cross entropy 
     '''
-    # labels = jax.nn.one_hot(labels, num_classes)
-
     #MSE loss
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
@@ -167,18 +165,12 @@ for step in range(1, epochs+1):
         for x, y in zip(X, Y):
             x = x[:, :, jnp.newaxis] #fake 2D
             logits, state_test = network.apply(params, state, x)
-            # print("LL", logits.shape)
             predictions = jnp.squeeze(logits, axis=-1) #remove extra dim
             predictions = jnp.round(predictions).astype(np.uint8)
-            # print("LLLL", predictions.shape)
-            # print("PRED", predictions[0])
             predictions = jnp.packbits(predictions,axis=1)
-            # print("LLLLPPP", predictions.shape)
-            # print("PREDPPP", predictions[0])
             Y_pred.append(predictions)
             if done < 3:
                 x1 = jnp.round(x[0,:n]).astype(np.uint8)
-                # x2 = jnp.round(x[0,n+1:]).astype(np.uint8)
                 x2 = jnp.round(x[0,n:]).astype(np.uint8)
                 y = y[0].astype(np.uint8)
                 print(jnp.packbits(x1,axis=0),jnp.packbits(x2,axis=0), predictions[0], jnp.packbits(y,axis=0))

@@ -590,14 +590,16 @@ class UniverseLP(hk.Module):
         self.img_shape = (1,N,N,1)
         self.forward_op = None
 
-    def initialize_mlp(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3)):
+    def initialize_mlp(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3)):
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
         self.out_offset = out_offset
         self.kernel_size = kernel_size
-        self.depth = self.out_offset[1]-self.in_offset[1]
+        self.depth = depth
+        # self.depth = self.out_offset[1]-self.in_offset[1]
         self.directions = 1
+        # print("depth:", self.depth)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -638,14 +640,16 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
 
-    def initialize_slp(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3)):
+    def initialize_slp(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3)):
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
         self.out_offset = out_offset
         self.kernel_size = kernel_size
-        self.depth = self.out_offset[1]-self.in_offset[1]
+        self.depth = depth
+        # self.depth = self.out_offset[1]-self.in_offset[1]
         self.directions = 1
+        # print("depth:", self.depth)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -686,7 +690,7 @@ class UniverseLP(hk.Module):
         self.out_coords = out_coords
         self.out_offset = out_offset
         self.out_size = out_size
-        self.layer_coords = layer_coords
+        # self.layer_coords = layer_coords
         self.kernel_size = kernel_size
         self.depth = depth
         # print("depth:", depth)
@@ -919,15 +923,19 @@ def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, fil
 def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn):
     '''
     Propagate input across cellular net based on weights etc. as a traditional MLP
+
+    Uses column based computation for efficiency and propagates up to provided depth and
+    then one more for output layer.
     '''
     cells = jax.lax.dynamic_update_slice(cells, input, offset)
 
     #propagate
-    index = offset[1]
-    # print("index",index)
-    for i in range(1, depth):
+    index = offset[1]+1 #first col next to input
+    # print("forward index",index)
+    for i in range(depth): #0 to depth-1, depth in total
         result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
+    # print("forward index final",index+depth)
     result_block = _forward_column(index+depth, cells, weights, biases, states, filters, final_activate, norm, dn)
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
@@ -1003,7 +1011,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     width = filters.shape[2] #shape is (1,rows,cols,1)
     height_pad = (height-1)//2
     width_pad = (width-1)//2
-    # print("width",width,"width_pad",width_pad)
+    # print("index",index,"width",width,"width_pad",width_pad)
 
     # sub_cells = cells[:,index-1:index-1+width]
     sub_weights = weights[:,index].reshape(-1,1) #reshape promotes to column vec
@@ -1012,12 +1020,15 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # print("sub_states",sub_states.shape)
 
     #conv
+    # print("cells",cells.shape)
     result_block = cells[:,index-width_pad:index-width_pad+width]
     # print("result_block",result_block.shape, "filters", filters.shape)
+    #valid mode approach
     result_block = _fast_conv(result_block, filters, dn, padding_mode="VALID")
-    # print("result_block",result_block.shape)
-    # sub_states = result_block[:,index].reshape(-1,1) #reshape promotes to column vec
     result_block = jnp.pad(result_block, ((height_pad,height_pad), (0,0)) ) #pad rows to undo valid conv in rows
+    #Same mode approach
+    # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")
+    # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
     # print("result_block padded",result_block.shape)
 
     if norm:
@@ -1031,6 +1042,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     #check states
     #if passive apply activation, else signal state so weight, let the grad descent decide
     #the operation is akin to adversarial states
+    # print("result_block",result_block.shape, "sub_weights", sub_weights.shape)
     if activate == None:
         result_block = result_block*sub_weights*(1.0-sub_states) + (result_block+sub_biases)*sub_states
     else:
@@ -1139,7 +1151,7 @@ def _fft_1D(N, length, filters):
 @partial(jax.jit, static_argnums=(2,3))
 def _fast_conv(sub_cells, filters, dn, padding_mode="SAME"):
     '''
-    2D conv done in 1D convs via the CCP and Fourier space.
+    2D conv done with filters. Supports multiple filters in channel dim.
 
     Cells is assumed to be the relevant sub-region to process
     '''
@@ -1152,7 +1164,7 @@ def _fast_conv(sub_cells, filters, dn, padding_mode="SAME"):
                                         (1,1),  # lhs/image dilation
                                         (1,1),  # rhs/kernel dilation
                                         dn)     # dimension_numbers = lhs, rhs, out dimension permutation
-    return jnp.mean(sub_cells_conv[0], axis=-1) # NHWC
+    return jnp.mean(sub_cells_conv[0], axis=-1) # NHWC, support for multi-filters, averaged
 
 @partial(jax.jit, static_argnums=())
 def _fast_conv_1D(sub_cells, filter_ffts):
