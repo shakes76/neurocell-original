@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 1000
+epochs = 500
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
@@ -90,9 +90,9 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
-# schedule = optax.warmup_cosine_decay_schedule(init_value=0.0001,peak_value=0.01,warmup_steps=1000,decay_steps=epochs*num_batches,end_value=0.0005)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.0005,peak_value=0.03,warmup_steps=10*num_batches,decay_steps=epochs*num_batches,end_value=0.0005)
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.01)
+opt = optax.adam(learning_rate=schedule)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
