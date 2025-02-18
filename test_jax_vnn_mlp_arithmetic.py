@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 500
+epochs = 1000
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
@@ -29,7 +29,7 @@ batch_size = 160
 num_batches = samples//batch_size
 delta = 0.1
 padding = 4*length
-layers = 3
+layers = 4
 N = length + 4*padding
 print("N:", N, "Epochs:", epochs)
 
@@ -42,7 +42,7 @@ results = numbers + operands
 X1 = np.unpackbits(numbers, axis=2, count=n)
 X2 = np.unpackbits(operands, axis=2, count=n)
 Y_raw = np.unpackbits(results, axis=2, count=n)
-print(X1.shape, X1)
+print(X1.shape)
 
 #add noise
 rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
@@ -52,7 +52,7 @@ X2 = X2.astype(np.float32) + rand2
 
 #stack
 X_preproc = np.concatenate([X1, X2], axis=-1)
-print(X_preproc.shape, X_preproc)
+# print(X_preproc.shape)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
 print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
@@ -122,8 +122,6 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     Cross entropy 
     '''
-    # labels = jax.nn.one_hot(labels, num_classes)
-
     #MSE loss
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
@@ -167,18 +165,12 @@ for step in range(1, epochs+1):
         for x, y in zip(X, Y):
             x = x[:, :, jnp.newaxis] #fake 2D
             logits, state_test = network.apply(params, state, x)
-            # print("LL", logits.shape)
             predictions = jnp.squeeze(logits, axis=-1) #remove extra dim
             predictions = jnp.round(predictions).astype(np.uint8)
-            # print("LLLL", predictions.shape)
-            # print("PRED", predictions[0])
             predictions = jnp.packbits(predictions,axis=1)
-            # print("LLLLPPP", predictions.shape)
-            # print("PREDPPP", predictions[0])
             Y_pred.append(predictions)
             if done < 3:
                 x1 = jnp.round(x[0,:n]).astype(np.uint8)
-                # x2 = jnp.round(x[0,n+1:]).astype(np.uint8)
                 x2 = jnp.round(x[0,n:]).astype(np.uint8)
                 y = y[0].astype(np.uint8)
                 print(jnp.packbits(x1,axis=0),jnp.packbits(x2,axis=0), predictions[0], jnp.packbits(y,axis=0))
