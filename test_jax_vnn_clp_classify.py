@@ -114,6 +114,7 @@ plt.show()
 kernel_size = (3,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
+directions = 3 #how many filters, i.e. possible directions, to learn
 #depth
 in_row_coord = input_coords[:, 0].min() #top most in
 out_row_coord = output_coords[:, 0].min() #top most out
@@ -135,7 +136,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     clp = UniverseLP(N)
-    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size, directions=3)
+    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size, directions=directions)
     return clp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
@@ -238,8 +239,12 @@ plt.savefig("vnn_clp_classify_biases.png", dpi=150)
 plt.show()
 
 print("filters shape:", params['universe_lp']['f'].shape)
-plt.imshow(params['universe_lp']['f'][0,:,:,0:3])
-plt.title("Final Filter")
+fig = plt.figure(figsize=(4,4))
+for c in range(directions):
+    plt.subplot(1, directions, c+1)
+    plt.imshow(params['universe_lp']['f'][0,:,:,c])
+    plt.tight_layout()
+    plt.title("Filter "+str(c))
 plt.savefig("vnn_clp_classify_filter.png", dpi=75)
 plt.show()
 

@@ -24,9 +24,9 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 50
+epochs = 30
 batch_size = 2
-kernel_size = (5,13)
+kernel_size = (7,7)
 padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
@@ -78,6 +78,8 @@ output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 directions = 4 #how many filters, i.e. possible directions, to learn
+depth = output_left-input_left
+print("depth:", depth)
 
 #===========
 ##create model
@@ -86,7 +88,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N)
-    mlp.initialize_tm(input_size, output_size, input_offset, output_offset, kernel_size, directions=directions)
+    mlp.initialize_tm(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
@@ -185,10 +187,11 @@ plt.title("Final Biases")
 plt.savefig("vnn_mlp_classify_biases.png", dpi=150)
 plt.show()
 
-fig = plt.figure(figsize=(8,8))
+fig = plt.figure(figsize=(4,4))
 for c in range(directions):
     plt.subplot(2, 2, c+1)
     plt.imshow(params['universe_lp']['f'][0,:,:,c])
+    plt.tight_layout()
     plt.title("Filter "+str(c))
 plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
 plt.show()

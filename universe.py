@@ -734,13 +734,13 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
 
-    def initialize_tm(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3), directions=1):
+    def initialize_tm(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3), directions=1):
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
         self.out_offset = out_offset
         self.kernel_size = kernel_size
-        self.depth = 1
+        self.depth = depth
         self.directions = directions
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
