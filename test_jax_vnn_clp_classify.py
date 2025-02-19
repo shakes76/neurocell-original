@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 100
+epochs = 30
 
 #===========
 ##data

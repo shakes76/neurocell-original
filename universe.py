@@ -734,6 +734,52 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
 
+    def initialize_tm(self, in_size, out_size, in_offset, out_offset, kernel_size=(3,3), directions=1):
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.kernel_size = kernel_size
+        self.depth = 1
+        self.directions = directions
+
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
+
+        init_scale = 1./jnp.sqrt(self.depth*self.N)
+        init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]) #shape is (rows,cols) before array creation
+
+        #init states 
+        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=False, random_init=init_scale)
+        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # print("States:", self.states)
+        # hk.set_state("states", self.states)
+        # we need input and out shaped array to force input/output states to be active, used later
+        self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
+
+        #init weights (random)
+        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=False, random_init=init_scale)
+        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+
+        #init biases
+        self.b_init = jnp.zeros
+        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        #init filters
+        self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
+        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.filters = hk.get_parameter("f", shape=(1,kernel_size[0],kernel_size[1],self.directions), dtype=self.dtype, init=self.f_init)
+
+        self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
+                                self.filters.shape,  # only ndim matters, not shape 
+                                ('NHWC', 'IHWO', 'NHWC'))  # the important bit
+
+        self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
+
+        return hk.get_state("universe")
+
     def get_weights(self):
         return self.weights
     
@@ -904,9 +950,7 @@ def _forward_propagate_full_clp(input, coords, out_offset, out_size, depth, cell
     #propagate
     for i in range(1, depth):
         cells = _forward_full(width, cells, weights, biases, states, filter_ffts, activate, norm, dn) #not inplace
-        # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i)) #write result for next propagate
     cells = _forward_full(width, cells, weights, biases, states, filter_ffts, final_activate, norm, dn) #final prop and activate
-    # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
@@ -958,9 +1002,7 @@ def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cell
     #propagate
     for i in range(1, depth):
         cells = _forward_full(1, cells, weights, biases, states, filters, activate, norm, dn) #not inplace
-        # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i)) #write result for next propagate
     cells = _forward_full(1, cells, weights, biases, states, filters, final_activate, norm, dn) #final prop and activate
-    # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 

@@ -59,7 +59,7 @@ print("X shape:", X.shape, "X test shape:", X_test.shape)
 print("Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 
 #locations
-#MLP with 784 inputs and 10 outputs, 3 layers inbetween
+#MLP with 13 inputs and 3 outputs, 2 layers inbetween
 #setup network position
 center = N//2
 depth = layers*2+1 #1 col of signal cells per layer
