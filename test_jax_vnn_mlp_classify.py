@@ -208,7 +208,7 @@ states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
 plt.imshow(states)
-plt.title("Final States (Thresdolded)")
+plt.title("Final States (Thresholded)")
 plt.savefig("vnn_mlp_classify_states_final_thres.png", dpi=75)
 plt.show()
 

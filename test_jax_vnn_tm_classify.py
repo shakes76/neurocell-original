@@ -24,10 +24,10 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 30
+epochs = 20
 batch_size = 2
 kernel_size = (7,7)
-padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
+padding = 4*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
 
@@ -66,10 +66,11 @@ print("Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 #setup network position, but in a line like a tape
 #inputs and outputs sequentially in 1D with gap
 center = N//2
+gap = 1
 input_mid = center #centre vertically
 input_left = padding #one pad away from edge
 output_mid = center
-output_left = input_left+length+1 #include out layer
+output_left = input_left+length+gap #include out layer
 #setup parameters and lengths
 input_size = (1,length)
 input_offset = (input_mid,input_left)
@@ -87,7 +88,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = UniverseLP(N)
+    mlp = UniverseLP(N, sharpen=False)
     mlp.initialize_tm(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
@@ -107,7 +108,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
-plt.savefig("vnn_mlp_classify_states_init.png", dpi=75)
+plt.savefig("vnn_tm_classify_states_init.png", dpi=75)
 plt.show()
 
 #loss function
@@ -167,7 +168,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
-jnp.savez("mlp_classify_cells.npz", 
+jnp.savez("tm_classify_cells.npz", 
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
@@ -179,12 +180,12 @@ jnp.savez("mlp_classify_cells.npz",
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
-plt.savefig("vnn_mlp_classify_weights.png", dpi=150)
+plt.savefig("vnn_tm_classify_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
-plt.savefig("vnn_mlp_classify_biases.png", dpi=150)
+plt.savefig("vnn_tm_classify_biases.png", dpi=150)
 plt.show()
 
 fig = plt.figure(figsize=(4,4))
@@ -193,12 +194,12 @@ for c in range(directions):
     plt.imshow(params['universe_lp']['f'][0,:,:,c])
     plt.tight_layout()
     plt.title("Filter "+str(c))
-plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
+plt.savefig("vnn_tm_classify_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_mlp_classify_states_final.png", dpi=75)
+plt.savefig("vnn_tm_classify_states_final.png", dpi=75)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -206,8 +207,8 @@ states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
 plt.imshow(states)
-plt.title("Final States (Thresdolded)")
-plt.savefig("vnn_mlp_classify_states_final_thres.png", dpi=75)
+plt.title("Final States (Thresholded)")
+plt.savefig("vnn_tm_classify_states_final_thres.png", dpi=75)
 plt.show()
 
 #test performance
