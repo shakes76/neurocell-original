@@ -664,6 +664,7 @@ class UniverseLP(hk.Module):
         # we need input and out shaped array to force input/output states to be active, used later
         self.input_states = None
         self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = None
 
         #init weights (random)
         self.w_init = SquareCells(in_size, out_size, in_offset, out_offset, is_states=False)
@@ -710,6 +711,7 @@ class UniverseLP(hk.Module):
         # we need input and out shaped array to force input/output states to be active, used later
         self.input_states = None
         self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = None
 
         #init weights (random)
         self.w_init = CoordinateCells(self.in_offset, self.out_coords, out_offset, out_size, is_states=False, clear=False)
