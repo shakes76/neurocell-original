@@ -13,6 +13,8 @@ from typing import Tuple
 import time
 
 from sklearn import datasets
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 
 from universe import UniverseLP #local
 import utils #local
@@ -20,39 +22,59 @@ import utils #local
 utils.jax_status()
 
 #parameters
-N = 13
-epochs = 50
-samples = 128
-batch_size = 8
-num_batches = samples//batch_size
-length = 3
-num_classes = 3
+N = 32
+epochs = 10
+batch_size = 2
+layers = 2
 epsilon = 1e-8
 start_state = 1 #set None for random state
 print("N:", N, "Epochs:", epochs)
 
 #===========
 ##data
-X, Y = datasets.make_classification(
-    n_samples=samples, n_features=3, n_redundant=0, n_informative=2, n_clusters_per_class=1, n_classes=3, random_state=start_state
-)
-print("X_pre shape", X.shape, "Y_pre shape", Y.shape)
+data_dict = datasets.load_wine(return_X_y=False)
+X_raw = data_dict['data']
+Y_raw = data_dict['target']
+length = len(data_dict['feature_names'])
+samples = len(Y_raw)
+num_classes = len(data_dict['target_names'])
+print("Data Shape:", X_raw.shape, "Samples:", samples, "Input Length:", length, "Classes:", num_classes)
+
+#scaling
+scaler = StandardScaler()
+X_preproc = scaler.fit_transform(X_raw)
+
+#split
+data_split = 18
+X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=data_split, random_state=42)
+num_batches = (samples-data_split)//batch_size
+print("Y shape:", Y.shape, "Y test shape:", Y_test.shape, "Num Batches", num_batches)
 
 #reshape to number of batches
 X = np.reshape(X, (num_batches,batch_size,length))
 Y = np.reshape(Y, (num_batches,batch_size))
+X_test = np.reshape(X_test, (data_split//batch_size,batch_size,length))
+Y_test = np.reshape(Y_test, (data_split//batch_size,batch_size))
+print("X shape:", X.shape, "X test shape:", X_test.shape)
+print("Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 
 #locations
-#MLP with 1 input and 1 output, one layer inbetween
-#setup
+#MLP with 784 inputs and 10 outputs, 3 layers inbetween
+#setup network position
+center = N//2
+depth = layers*2+1 #1 col of signal cells per layer
+input_top = center-length//2
+input_left = center-(depth-1)//2
+output_top = center-num_classes//2
+output_left = input_left+depth+1 #include out layer
+#setup parameters and lengths
 input_size = (length,1)
-input_offset = (5,4)
+input_offset = (input_top,input_left)
 output_size = (num_classes,1)
-output_offset = (5,8)
+output_offset = (output_top,output_left)
 kernel_size = (7,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-depth = 3
 print("depth:", depth)
 
 #===========
@@ -131,7 +153,7 @@ for step in range(1, epochs+1):
         x = x[:, :, jnp.newaxis] #fake 2D
         # y = y[:, :, jnp.newaxis] #fake 2D
         params, opt_state, value, state = update(params, opt_state, state, x, y)
-        loss_value += value
+        loss_value += value/batch_size
         # break
 
     if step % 10 == 0:
@@ -190,21 +212,17 @@ plt.title("Final States (Thresdolded)")
 plt.savefig("vnn_mlp_classify_states_final_thres.png", dpi=75)
 plt.show()
 
-#function plot
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
-Y_pred = []
-for x, y in zip(X, Y):
+#test performance
+correct = 0
+total = 0
+for x, y in zip(X_test, Y_test):
     x = x[:, :, jnp.newaxis] #fake 2D
     logits, state_test = network.apply(params, state, x)
-    Y_pred.append(jnp.squeeze(logits, axis=-1))
-Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
-print("After", Y_pred.shape, Y_pred)
-accuracy = jnp.mean(Y_pred == Y)
-print(f"[Final Accuracy {accuracy}]")
-for x, y in zip(X, Y_pred):
-    ax.scatter(x[:, 0], x[:, 1], x[:, 2], marker="o", c=y, s=25, edgecolor="k")
-plt.savefig("vnn_mlp_classify_plot.png", dpi=150)
-plt.show()
+    predicted = jnp.squeeze(logits, axis=-1) #remove extra dim
+    predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+    correct += jnp.sum(predicted == y)
+    total += batch_size
+accuracy = 100 * correct / total
+print(f"[Final Test Accuracy {accuracy}]")
 
 print("END")

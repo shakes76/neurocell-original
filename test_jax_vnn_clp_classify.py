@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 20
+epochs = 100
 
 #===========
 ##data
@@ -106,7 +106,7 @@ for point in output_coords:
 plt.imshow(cells)
 plt.title("Initial Architecture")
 plt.savefig("vnn_clp_classify_coords.png", dpi=150)
-# plt.show()
+plt.show()
 
 #locations
 #MLP with 1 input and 1 output, one layer inbetween
@@ -246,6 +246,15 @@ plt.show()
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
 plt.savefig("vnn_clp_classify_states.png", dpi=75)
+plt.show()
+
+states = params['universe_lp']['s']
+states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
+states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
+
+plt.imshow(states)
+plt.title("Final States (Thresholded)")
+plt.savefig("vnn_clp_classify_states_thres.png", dpi=75)
 plt.show()
 
 plt.imshow(state['universe_lp']['universe'])
