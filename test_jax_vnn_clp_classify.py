@@ -113,7 +113,7 @@ plt.savefig("vnn_clp_classify_coords.png", dpi=150)
 #setup
 kernel_size = (3,3)
 activation = jax.nn.tanh
-final_activation = None
+final_activation = jax.nn.sigmoid
 #depth
 in_row_coord = input_coords[:, 0].min() #top most in
 out_row_coord = output_coords[:, 0].min() #top most out
@@ -141,7 +141,7 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.001)
+opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 params, state = network.init(jax.random.PRNGKey(42), X[0])
@@ -169,7 +169,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # return ce, state
     return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
 
-# @jax.jit
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,

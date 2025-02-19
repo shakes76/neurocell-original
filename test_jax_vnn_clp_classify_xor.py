@@ -31,7 +31,7 @@ samples = 160
 num_classes = 1
 length_data = bits*samples
 N = int(length/2+0.5)+padding
-delta = 0.2
+delta = 0.1
 
 #===========
 ##data
@@ -92,12 +92,12 @@ def _forward(batch) -> jnp.ndarray:
     '''
     clp = UniverseLP(N)
     clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size)
-    return clp(batch, activation, final_activation, norm=False)
+    return clp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.001)
+opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
@@ -142,7 +142,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # return optax.softmax_cross_entropy_with_integer_labels(logits=logits, labels=labels).mean(), state
     return optax.l2_loss(predictions=logits[0], targets=labels).mean(), state
 
-# @jax.jit
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,

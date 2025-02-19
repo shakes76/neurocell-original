@@ -25,7 +25,7 @@ epochs = 60
 length = 3
 padding = 6
 samples = 160
-batch_size = 2
+batch_size = 1
 num_batches = samples//batch_size
 num_classes = 3
 epsilon = 1e-8
@@ -77,7 +77,7 @@ print("N:", N, "Epochs:", epochs)
 #setup
 kernel_size = (3,3)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+final_activation = None
 #depth
 # in_row_coord = input_coords[:, 0].min() #top most in
 # out_row_coord = output_coords[:, 0].min() #top most out
@@ -144,7 +144,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
 
     return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
 
-# @jax.jit
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,
