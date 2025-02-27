@@ -235,7 +235,7 @@ plt.show()
 
 #function plot
 Y_pred = []
-for x, y in zip(X, Y):
+for x, y in zip(X_test, Y_test):
     x = x[:, :, jnp.newaxis] #fake 2D
     logits, state_test = network.apply(params, state, x)
     predictions = jnp.squeeze(logits, axis=-1) #remove extra dim
@@ -245,7 +245,7 @@ for x, y in zip(X, Y):
 # Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
 # print("After", Y_pred.shape, Y_pred)
 Y_pred = jnp.array(Y_pred)
-accuracy = jnp.mean(Y_pred == Y_packed)
+accuracy = jnp.mean(Y_pred == Y_test_packed)
 print(f"[Final Accuracy {accuracy}]")
 
 print("END")
