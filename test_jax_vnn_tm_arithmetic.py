@@ -22,19 +22,19 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 300
+epochs = 400
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
-samples = 6400
-batch_size = 160
-kernel_size = (9,9)
+samples = 64000
+batch_size = 1600
+kernel_size = (17,17)
 num_batches = samples//batch_size
-delta = 0.1
+delta = 0.2
 padding = 4*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
-N = length + 4*padding
+N = length + 2*padding
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -76,7 +76,7 @@ print("Y_packed shape", Y_packed.shape)
 center = N//2
 gap = 1
 input_mid = center #centre vertically
-input_left = 2*padding #one pad away from edge
+input_left = padding #one pad away from edge
 output_mid = center
 output_left = input_left+length+gap #include out layer
 #setup parameters and lengths
@@ -86,7 +86,7 @@ output_size = (1,n)
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-directions = 4 #how many filters, i.e. possible directions, to learn
+directions = 2 #how many filters, i.e. possible directions, to learn
 depth = output_left-input_left
 print("depth:", depth)
 
@@ -210,7 +210,7 @@ plt.show()
 
 fig = plt.figure(figsize=(4,4))
 for c in range(directions):
-    plt.subplot(2, 2, c+1)
+    plt.subplot(2, 1, c+1)
     plt.imshow(params['universe_lp']['f'][0,:,:,c])
     plt.tight_layout()
     plt.title("Filter "+str(c))
