@@ -1,6 +1,6 @@
-'''
+"""
 Universe object for Von Neumann networks
-'''
+"""
 from typing import Sequence
 
 import jax
@@ -28,9 +28,9 @@ STATE_ACTIVE_VALUE = 1.0
 STATE_SIGNAL_VALUE = 0.0
 
 class Universe:
-    '''
+    """
     Represents cellular structured universe of Von Neumann networks
-    '''
+    """
     def __init__(self, N, dtype=jnp.float32):
         self.epsilon = 1e-6
         self.N = N
@@ -109,9 +109,9 @@ class Universe:
         self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
     
     def clear_cells_vertical(self, universe, offset, after=False):
-        '''
+        """
         Clears cells upto and including offset positions
-        '''
+        """
         if after:
             result = universe.at[:,offset[1]:].set(0)  #clear cells after
         else:
@@ -119,9 +119,9 @@ class Universe:
         return result
 
     def set_input_vector(self, inputs, offset=None):
-        '''
+        """
         Set in vector at address with size
-        '''
+        """
         self.in_offset = (self.N//4, self.N//8)
         if offset:
             self.in_offset = offset
@@ -131,9 +131,9 @@ class Universe:
         # self.weights = jax.lax.dynamic_update_slice(weights, inputs, self.in_offset)
     
     def set_output_vector(self, outputs, offset=None):
-        '''
+        """
         Write out vector from address with size
-        '''
+        """
         self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
         if offset:
             self.out_offset = offset
@@ -147,18 +147,18 @@ class Universe:
         self.states = jax.lax.dynamic_update_slice(self.states, passives, offset)
     
     def get_input_vector(self, input_size, offset=None):
-        '''
+        """
         Read in vector from address with size
-        '''
+        """
         self.in_offset = (self.N//4, self.N//8)
         if offset:
             self.in_offset = offset
         return jax.lax.dynamic_slice(self.universe, self.in_offset, input_size)
     
     def get_output_vector(self, output_size, offset=None):
-        '''
+        """
         Read out vector from address with size
-        '''
+        """
         self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
         if offset:
             self.out_offset = offset
@@ -209,9 +209,9 @@ class Universe:
         self.universe = self.backward(self.universe, activate=activate, norm=norm)
 
     def loss(self, cells, depth, labels, inputs, in_offset, output_size, out_offset, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
-        '''
+        """
         Cross entropy 
-        '''
+        """
         #set input
         # cells = self.clear_cells_vertical(cells, in_offset, after=False)
         cells = jax.lax.dynamic_update_slice(cells, inputs, in_offset)
@@ -225,11 +225,11 @@ class Universe:
         # return jnp.mean((labels - logits)**2) #MSE
         
     def loss_perturb(self, params, deltas, labels, inputs, in_offset, output_size, out_offset, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
-        '''
+        """
         Cross entropy 
         We use the perturbation trick, so get the layer by layer grad values for the overall loss
         See https://github.com/google/jax/discussions/5336#discussioncomment-269983 
-        '''
+        """
         depth = len(deltas)
         weights, biases = params
         #set input
@@ -253,10 +253,10 @@ class Universe:
         return jax.value_and_grad(self.loss)(self.universe, depth, labels, inputs, in_offset, out_size, out_offset, norm=False)
         
     def value_and_grad_perturb(self, depth, labels, inputs, in_offset, out_size, out_offset):
-        '''
+        """
         We use delta values to perturb the grad of the loss function
         Setting delta to zero means the grad will return the gradient of that layer
-        '''
+        """
         deltas = []
         for i in range(1,depth+1):
             deltas.append(0.0)
@@ -288,10 +288,10 @@ class Universe:
         return self.loss_value, self.grads, self.bias_grads
 
     def gradient_update(self, lr, step, depth, inputs, input_size, in_offset=None, out_offset=None, activate=nn.sigmoid):
-        '''
+        """
         Computes the gradient based on the step and backprops it
         Computes and applies the updates to the saved state, assigns to current state
-        '''
+        """
         self.out_offset = (self.N//4+self.N//8, self.N//8+self.N//8)
         if out_offset:
             self.out_offset = out_offset
@@ -352,7 +352,7 @@ class Universe:
         self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
 
 class VerticalCells(hk.initializers.Initializer):
-    """Initializes by sampling from a normal distribution and setting vertical cells."""
+    """Initializes by sampling from a normal distribution and setting vertical/horizontal cells."""
     def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=1.0):
         """
         Constructs a :class:`RandomNormal` like initializer with vertical cells.
@@ -368,9 +368,9 @@ class VerticalCells(hk.initializers.Initializer):
         self.initializer = jax.nn.initializers.variance_scaling(self.random_init, mode="fan_in", distribution="truncated_normal")
 
     def clear_cells_vertical(self, cells, offset, after=False):
-        '''
+        """
         Clears cells upto and including offset positions
-        '''
+        """
         if after:
             result = cells.at[:,offset[1]:].set(0)  #clear cells after
         else:
@@ -412,7 +412,7 @@ class VerticalCells(hk.initializers.Initializer):
         return cells
     
 class SquareCells(hk.initializers.Initializer):
-    """Initializes by sampling from a normal distribution and setting square cells."""
+    """Initializes by sampling from a normal distribution and setting open square (shape of a C) cells."""
     def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, random_init=1.0):
         """
         Constructs a :class:`RandomNormal` like initializer with vertical cells.
@@ -479,7 +479,7 @@ class SquareCells(hk.initializers.Initializer):
         return cells
     
 class CoordinateCells(hk.initializers.Initializer):
-    """Initializes by sampling from a normal distribution and setting cells through coordinates provided."""
+    """Initializes by sampling from a normal distribution and setting cells through 2D coordinates provided."""
     def __init__(self, in_coords, out_coords, out_offset, out_size, is_states=False, clear=True, random_init=1.0):
         """
         Constructs a :class:`RandomNormal` like initializer with cells with coordinates.
@@ -498,9 +498,9 @@ class CoordinateCells(hk.initializers.Initializer):
         self.initializer = jax.nn.initializers.variance_scaling(self.random_init, mode="fan_in", distribution="truncated_normal")
 
     def clear_cells_outside(self, cells, coord, after=False):
-        '''
+        """
         Clears cells upto and including coords positions padded by 1
-        '''
+        """
         if after:
             result = cells.at[:,coord+1:].set(0)  #clear cells after
         else:
@@ -565,11 +565,11 @@ class FiltersCells(hk.initializers.Initializer):
         return nethood
 
 class UniverseLP(hk.Module):
-    '''
+    """
     Represents cellular structured universe of Von Neumann networks as a layered perceptron (LP)
 
     You must use the initialize_* members to create the type of layered perceptron, e.g. MLP etc.
-    '''
+    """
     def __init__(self, N, sharpen=True, dtype=jnp.float32, name=None):
         super().__init__(name=name)
         self.N = N
@@ -591,6 +591,9 @@ class UniverseLP(hk.Module):
         self.forward_op = None
 
     def initialize_mlp(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3)):
+        """
+        Init all cells as a typical vertical set of layers like a traditional MLP
+        """
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
@@ -642,6 +645,9 @@ class UniverseLP(hk.Module):
         return hk.get_state("universe")
 
     def initialize_slp(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3)):
+        """
+        Init all cells as an open square-like shape
+        """
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
@@ -688,6 +694,9 @@ class UniverseLP(hk.Module):
         return hk.get_state("universe")
     
     def initialize_clp(self, in_coords, out_coords, out_offset, out_size, layer_coords, depth, kernel_size=(3,3), directions=1):
+        """
+        Init all cells as an open circle-like shape
+        """
         self.in_offset = in_coords
         self.out_coords = out_coords
         self.out_offset = out_offset
@@ -735,6 +744,9 @@ class UniverseLP(hk.Module):
         return hk.get_state("universe")
 
     def initialize_tm(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3), directions=1):
+        """
+        Init all cells as a tape-like shape (horizontal lines)
+        """
         self.in_size = in_size
         self.out_size = out_size
         self.in_offset = in_offset
@@ -873,9 +885,9 @@ from functools import partial
 
 @partial(jax.jit, static_argnums=(0,1,7,8,9,10))
 def _forward_propagate(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
-    '''
+    """
     Propagate input across cellular net based on weights etc. layer by layer in a column based structure
-    '''
+    """
     #propagate
     for i in range(1, depth):
         result_block = _forward(index+i, cells, weights, biases, states, filter_ffts, activate, norm, dn)
@@ -885,9 +897,9 @@ def _forward_propagate(index, depth, cells, weights, biases, states, filter_ffts
 
 @partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
 def _forward_propagate_full(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
-    '''
+    """
     Propagate input across cellular net based on weights etc. for all layers across entire universe
-    '''
+    """
     #place inputs
     cells = jax.lax.dynamic_update_slice(cells, input, offset)
 
@@ -902,9 +914,9 @@ def _forward_propagate_full(input, offset, out_offset, out_size, depth, cells, w
     
 @partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
 def _forward_propagate_full_slp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
-    '''
+    """
     Propagate input across cellular net based on weights etc. for all layers across entire universe
-    '''
+    """
     width = out_offset[1]-offset[1] #to compute in subregion of the nets
     length = input.shape[0]
 
@@ -939,9 +951,9 @@ def _forward_propagate_full_slp(input, offset, out_offset, out_size, depth, cell
     
 @partial(jax.jit, static_argnums=(2,3,4,10,11,12,13))
 def _forward_propagate_full_clp(input, coords, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
-    '''
+    """
     Propagate input across cellular net based on weights etc. for all layers across entire universe
-    '''
+    """
     width = 0 #unused
     # length = input.shape[0]
     
@@ -956,11 +968,11 @@ def _forward_propagate_full_clp(input, coords, out_offset, out_size, depth, cell
 
 @partial(jax.jit, static_argnums=(0,1,7,8,9))
 def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm):
-    '''
+    """
     Propagate input across cellular net based on weights etc. layer by layer in a column based structure
     
     Uses Fourier convolution property
-    '''
+    """
     #propagate
     for i in range(1, depth):
         result_block = _forward_fast_1D(index+i, cells, weights, biases, states, filter_ffts, activate, norm)
@@ -970,12 +982,12 @@ def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, fil
     
 @partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
 def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn):
-    '''
+    """
     Propagate input across cellular net based on weights etc. as a traditional MLP
 
     Uses column based computation for efficiency and propagates up to provided depth and
     then one more for output layer.
-    '''
+    """
     cells = jax.lax.dynamic_update_slice(cells, input, offset)
 
     #propagate
@@ -994,9 +1006,9 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
     
 @partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
 def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn):
-    '''
+    """
     Propagate input across cellular net based on weights etc. as a traditional MLP
-    '''
+    """
     cells = jax.lax.dynamic_update_slice(cells, input, offset)
 
     #propagate
@@ -1011,9 +1023,9 @@ def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cell
 # forward step operators
 @partial(jax.jit, static_argnums=(5,6,7))
 def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
-    '''
+    """
     Compute the forward pass by computing each neuron depending on its state.
-    '''
+    """
     #get weighted sum of neighbors using convolution
     cells = jax.lax.conv_general_dilated(cells[jnp.newaxis,:,:,jnp.newaxis], # lhs = NHWC image tensor
                                         nethood,  # rhs = OHWI conv kernel tensor
@@ -1045,7 +1057,7 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
 
 @partial(jax.jit, static_argnums=(0,6,7,8))
 def _forward_column(index, cells, weights, biases, states, filters, activate, norm, dn):
-    '''
+    """
     Compute the forward pass by computing each neuron depending on its state for a subregion.
 
     This version computes the forward WRT a central row/column (provided by index) with the nethood applied to it
@@ -1053,7 +1065,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     plus one before and one after it.
 
     All operations are done on the sub-region defined by width of nethood and central index
-    '''
+    """
     height = filters.shape[1] #shape is (1,rows,cols,1)
     width = filters.shape[2] #shape is (1,rows,cols,1)
     height_pad = (height-1)//2
@@ -1099,7 +1111,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
 
 @partial(jax.jit, static_argnums=(0,6,7,8))
 def _forward_full(width, cells, weights, biases, states, filters, activate, norm, dn):
-    '''
+    """
     Compute the forward pass by computing each neuron depending on its state for a subregion of width.
     Assumes subregion width is centred within universe WRT columns and width is even.
 
@@ -1107,7 +1119,7 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     The result is a full 2D convolution with the nethood, which can be expensive.
 
     All operations are done on the entire universe.
-    '''
+    """
     # centre = cells.shape[1]//2
     # padding = filters.shape[1]-1
 
@@ -1140,7 +1152,7 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
 
 @partial(jax.jit, static_argnums=(0,6,7))
 def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activate, norm):
-    '''
+    """
     Compute the forward pass by computing each neuron depending on its state for a subregion.
 
     Fast version computes the forward WRT a central row/column (provided by index) with the nethood applied to it
@@ -1148,7 +1160,7 @@ def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activat
     plus one before and one after it.
 
     All operations are done on the sub-region defined by width of nethood and central index
-    '''
+    """
     width = filter_ffts.shape[1]
     # sub_cells = cells[:,index-1:index-1+width]
     sub_weights = weights[:,index].reshape(-1,1) #reshape promotes to column vec
@@ -1182,11 +1194,11 @@ def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activat
 
 @partial(jax.jit, static_argnums=(0,1))
 def _fft_1D(N, length, filters):
-    '''
+    """
     2D conv done in 1D convs via the CCP and Fourier space.
 
     Cells is assumed to be the relevant sub-region to process
-    '''
+    """
     #pad to length of layers
     filters = jnp.pad(filters, ((0,(N-length)), (0,0)), mode='constant')
     filters = jnp.roll(filters, -1, axis=0) #make sure centre pixel is first in filter by periodic shift
@@ -1197,11 +1209,11 @@ def _fft_1D(N, length, filters):
 # conv operators
 @partial(jax.jit, static_argnums=(2,3))
 def _fast_conv(sub_cells, filters, dn, padding_mode="SAME"):
-    '''
+    """
     2D conv done with filters. Supports multiple filters in channel dim.
 
     Cells is assumed to be the relevant sub-region to process
-    '''
+    """
     #Conv via 2D brute force
     #get weighted sum of neighbors using convolution
     sub_cells_conv = jax.lax.conv_general_dilated(sub_cells[jnp.newaxis,:,:,jnp.newaxis], # lhs = NHWC image tensor
@@ -1215,11 +1227,11 @@ def _fast_conv(sub_cells, filters, dn, padding_mode="SAME"):
 
 @partial(jax.jit, static_argnums=())
 def _fast_conv_1D(sub_cells, filter_ffts):
-    '''
+    """
     2D conv done in 1D convs via the CCP and Fourier space.
 
     Cells is assumed to be the relevant sub-region to process
-    '''
+    """
     #Conv via CCP
     # FFTs of universe
     cells_conv1D = jnp.fft.fft(sub_cells, axis=0) #ffts of rows
@@ -1235,9 +1247,9 @@ def _fast_conv_1D(sub_cells, filter_ffts):
 
 @partial(jax.jit, static_argnums=(2))
 def _filter(cells, nethood, dn):
-    '''
+    """
     Filter the array provided by filter provided.
-    '''
+    """
     #get weighted sum of neighbors using convolution
     cells = jax.lax.conv_general_dilated(cells[jnp.newaxis,:,:,jnp.newaxis], # lhs = NHWC image tensor
                                         nethood,  # rhs = OHWI conv kernel tensor
