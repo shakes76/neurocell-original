@@ -1,7 +1,7 @@
 """
 Universe object for Von Neumann networks
 """
-from typing import Sequence
+from typing import Sequence, TypeAlias
 
 import jax
 import jax.numpy as jnp
@@ -27,7 +27,7 @@ STATE_SIGNAL = 0.2
 STATE_ACTIVE_VALUE = 1.0
 STATE_SIGNAL_VALUE = 0.0
 
-class VerticalCells(hk.initializers.Initializer):
+class VectorCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting vertical/horizontal cells."""
     def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=1.0):
         """
@@ -86,7 +86,11 @@ class VerticalCells(hk.initializers.Initializer):
         cells = jax.lax.dynamic_update_slice(cells, outputs, self.out_offset)
 
         return cells
-    
+
+VerticalCells: TypeAlias = VectorCells #same as VectorCells, just use column vectors
+
+HorizontalCells: TypeAlias = VectorCells #same as VectorCells, just use row vectors
+
 class SquareCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting open square (shape of a C) cells."""
     def __init__(self, in_size, out_size, in_offset, out_offset, is_states=False, random_init=1.0):
@@ -242,9 +246,10 @@ class FiltersCells(hk.initializers.Initializer):
 
 class UniverseLP(hk.Module):
     """
-    Represents cellular structured universe of Von Neumann networks as a layered perceptron (LP)
+    Represents cellular structured universe of Von Neumann networks (VNNs) as a layered perceptron (LP)
 
-    You must use the initialize_* members to create the type of layered perceptron, e.g. MLP etc.
+    You must use the initialize_* members to create the type of layered perceptron, e.g. MLP etc. first
+    Then call usual JAX/Haiku type networks calls that will call this classes implementation of the VNNs
     """
     def __init__(self, N, sharpen=True, dtype=jnp.float32, name=None):
         super().__init__(name=name)
@@ -438,7 +443,7 @@ class UniverseLP(hk.Module):
         init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]) #shape is (rows,cols) before array creation
 
         #init states 
-        self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=False, random_init=init_scale)
+        self.s_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=False, random_init=init_scale)
         self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
         # print("States:", self.states)
         # hk.set_state("states", self.states)
@@ -448,7 +453,7 @@ class UniverseLP(hk.Module):
         self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
 
         #init weights (random)
-        self.w_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=False, random_init=init_scale)
+        self.w_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=False, random_init=init_scale)
         self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
 
         #init biases
