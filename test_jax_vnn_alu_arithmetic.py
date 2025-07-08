@@ -150,7 +150,7 @@ print("Y_packed shape", Y_packed.shape)
 center = N//2
 gap = 1
 input_top = center-n//2 #centre vertically
-input_left = padding #one pad away from edge
+input_left = center-n #mid of cells by half of 2*n
 output_mid = center+n//2+1-n//2 #centre vertically
 output_left = input_left+n+2*gap #include out layer
 #setup parameters and lengths
@@ -256,9 +256,10 @@ for step in range(1, epochs+1):
             Y_pred.append(predictions)
             if done < 3:
                 x1 = jnp.round(x1[0,:n]).astype(np.uint8)
-                x2 = jnp.round(x2[0,n:]).astype(np.uint8)
+                x2 = jnp.round(x2[0,:n]).astype(np.uint8)
+                c = jnp.round(c[0,:n]).astype(np.uint8)
                 y = y[0].astype(np.uint8)
-                print(jnp.packbits(x1,axis=0),jnp.packbits(x2,axis=0), predictions[0], jnp.packbits(y,axis=0))
+                print(jnp.packbits(x1,axis=0), jnp.packbits(x2,axis=0), jnp.packbits(c,axis=0), predictions[0], jnp.packbits(y,axis=0))
                 done += 1
         # Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
         Y_pred = jnp.array(Y_pred)
