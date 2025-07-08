@@ -22,12 +22,11 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 400
+epochs = 40
 n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
-length = 2*n
 samples = 32000
 batch_size = 1600
 kernel_size = (13,13)
@@ -36,20 +35,20 @@ delta = 0.2
 padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
-N = length + 2*padding
+N = 3*n + 2*padding
 print("N:", N, "Epochs:", epochs, "bit depth:", bit_depth)
 
 #===========
 ##data
 #   S_2     S_1     S_0     C_in    |   Out        C_out
-#   0       0       0       0       |   F = A       0
+#   0       0       0       0       |   F = A       0 Identity
 #   0       0       0       1       |   F = A+1     0 Increment
 #   0       0       1       0       |   F = A+B     0 Sum
 #   0       0       1       1       |   F = A+B+1   1 Carry
 #   0       1       1       1       |   F = A-B-1   1 Borrow
 #   0       1       1       0       |   F = A-B     0 Subtract
 #   0       1       0       1       |   F = A-1     0 Decrement
-#   0       1       0       0       |   F = A       0
+#   0       1       0       0       |   F = A       0 Identity
 #   1       0       0       0       |   F = A+B     0 OR
 #   1       0       1       0       |   F = Acirc+B 0 XOR
 #   1       1       0       0       |   F = AB      0 AND
@@ -126,6 +125,19 @@ print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 # print("X", X[:1])
 # print("Y", Y[:1])
 
+#split back to separate inputs/ctrl after train/test splits
+X_splits = np.dsplit(X, 3)
+print("X Split:", X_splits[0].shape)
+X1 = X_splits[0]
+X2 = X_splits[1]
+C = X_splits[2]
+
+X_test_splits = np.dsplit(X_test, 3)
+# print("X Test Split:", X_test_splits[0].shape)
+X1_test = X_test_splits[0]
+X2_test = X_test_splits[1]
+C_test = X_test_splits[2]
+
 Y_packed = np.packbits(Y,axis=2)
 Y_test_packed = np.packbits(Y_test,axis=2)
 print("Y_packed shape", Y_packed.shape)
@@ -137,14 +149,17 @@ print("Y_packed shape", Y_packed.shape)
 #inputs and outputs sequentially in 1D with gap
 center = N//2
 gap = 1
-input_mid = center #centre vertically
+input_top = center-n//2 #centre vertically
 input_left = padding #one pad away from edge
-output_mid = center
-output_left = input_left+length+gap #include out layer
+output_mid = center+n//2+1-n//2 #centre vertically
+output_left = input_left+n+2*gap #include out layer
 #setup parameters and lengths
-input_size = (1,length)
-input_offset = (input_mid,input_left)
-output_size = (1,n)
+input_size = (n,1) #column vec
+input_offset_x1 = (input_top,input_left)
+input_offset_x2 = (input_top+n+gap,input_left)
+ctrl_size = (1,n) #row vec
+ctrl_offset = (input_top,input_left+gap)
+output_size = (n,1) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
@@ -159,7 +174,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N, sharpen=False)
-    mlp.initialize_tm(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
+    mlp.initialize([input_size, input_size, ctrl_size], output_size, [input_offset_x1, input_offset_x2, ctrl_offset], output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
@@ -168,9 +183,10 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
-x = X[0]
-print("X0 shape:", x.shape)
-x = x[:, :, jnp.newaxis] #fake 2D
+x = [X1[0], X2[0], C[0]] #one batch
+for index, input in enumerate(x):
+    x[index] = x[index][:, :, jnp.newaxis] #fake 2D
+print("X0 shape:", x[0].shape)
 params, state = network.init(jax.random.PRNGKey(42), x)
 opt_state = opt.init(params)
 # print(params)
@@ -188,7 +204,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     #MSE loss
     logits, state = network.apply(params, state, batch)
-    logits = jnp.squeeze(logits, axis=1) #remove extra row
+    logits = jnp.squeeze(logits, axis=-1) #remove extra dim, must match output vector type
 
     return optax.squared_error(predictions=logits, targets=labels).mean(), state
 
@@ -211,9 +227,12 @@ start = time.time() #time generation
 for step in range(1, epochs+1):
     # Do SGD on a batch of training examples.
     loss_value = 0
-    for x, y in zip(X, Y):
+    for x1, x2, c, y in zip(X1, X2, C, Y):
         # print(x.shape)
-        x = x[:, :, jnp.newaxis] #fake 2D, but horizontal
+        x = [x1, x2, c] #batch of inputs
+        for index, input in enumerate(x):
+            x[index] = x[index][:, :, jnp.newaxis] #fake 2D
+        # print("X1 shape:", x[0].shape)
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value/batch_size
 
@@ -226,16 +245,18 @@ for step in range(1, epochs+1):
     if step % 10 == 0:
         Y_pred = []
         done = 0
-        for x, y in zip(X, Y):
-            x = x[:, :, jnp.newaxis] #fake 2D, but horizontal
+        for x1, x2, c, y in zip(X1, X2, C, Y):
+            x = [x1, x2, c] #batch of inputs
+            for index, input in enumerate(x):
+                x[index] = x[index][:, :, jnp.newaxis] #fake 2D
             logits, state_test = network.apply(params, state, x)
-            predictions = jnp.squeeze(logits, axis=1) #remove extra row
+            predictions = jnp.squeeze(logits, axis=-1) #remove extra dim, must match output vector type
             predictions = jnp.round(predictions).astype(np.uint8)
             predictions = jnp.packbits(predictions,axis=1)
             Y_pred.append(predictions)
             if done < 3:
-                x1 = jnp.round(x[0,:n]).astype(np.uint8)
-                x2 = jnp.round(x[0,n:]).astype(np.uint8)
+                x1 = jnp.round(x1[0,:n]).astype(np.uint8)
+                x2 = jnp.round(x2[0,n:]).astype(np.uint8)
                 y = y[0].astype(np.uint8)
                 print(jnp.packbits(x1,axis=0),jnp.packbits(x2,axis=0), predictions[0], jnp.packbits(y,axis=0))
                 done += 1
@@ -255,8 +276,9 @@ jnp.savez("tm_arithmetic_cells.npz",
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
             states=params['universe_lp']['s'], 
-            N=N, length=length, n=n, input_size=input_size, output_size=output_size,
-            input_offset=input_offset, output_offset=output_offset,
+            N=N, ctrl_bits=ctrl_bits, bit_depth=bit_depth, n=n, input_size=input_size, output_size=output_size,
+            input_offset_x1=input_offset_x1, input_offset_x2=input_offset_x2, 
+            crtl_size=ctrl_size, ctrl_offset=ctrl_offset, output_offset=output_offset,
             kernel_size=kernel_size,
             allow_pickle=False)
 
@@ -295,10 +317,12 @@ plt.show()
 
 #test performance
 Y_pred = []
-for x, y in zip(X_test, Y_test):
-    x = x[:, :, jnp.newaxis] #fake 2D, but horizontal
+for x1, x2, c, y in zip(X1_test, X2_test, C_test, Y_test):
+    x = [x1, x2, c] #batch of inputs
+    for index, input in enumerate(x):
+        x[index] = x[index][:, :, jnp.newaxis] #fake 2D
     logits, state_test = network.apply(params, state, x)
-    predictions = jnp.squeeze(logits, axis=1) #remove extra row
+    predictions = jnp.squeeze(logits, axis=-1) #remove extra dim, must match output vector type
     predictions = jnp.round(predictions).astype(np.uint8)
     predictions = jnp.packbits(predictions,axis=1)
     Y_pred.append(predictions)

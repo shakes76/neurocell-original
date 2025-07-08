@@ -18,7 +18,7 @@ bit_depth = 2**n
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
 length = 2*n
-samples = 32
+samples = 128
 batch_size = 16
 kernel_size = (13,13)
 num_batches = samples//batch_size
@@ -111,10 +111,17 @@ Cf = C.astype(np.float32) + rand3
 X_preproc = np.concatenate([X1f, X2f, Cf], axis=-1)
 print("X_preproc:", X_preproc.shape)
 
-X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
+X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.25, random_state=42)
 print("X shape", X.shape, "Y shape:", Y.shape, "Y test shape:", Y_test.shape)
 # print("X", X[:1])
 # print("Y", Y[:1])
+
+#split back to separate inputs
+X_splits = np.dsplit(X, 3)
+print("X Split:", X_splits[0].shape)
+X1 = np.around(X_splits[0]).astype(np.uint8)
+X2 = np.around(X_splits[1]).astype(np.uint8)
+C = np.around(X_splits[2]).astype(np.uint8)
 
 X1_packed = np.packbits(X1,axis=2)
 X2_packed = np.packbits(X2,axis=2)

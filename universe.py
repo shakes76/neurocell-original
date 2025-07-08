@@ -295,7 +295,7 @@ class UniverseLP(hk.Module):
         self.img_shape = (1,N,N,1)
         self.forward_op = None
 
-    def initialize(self, in_sizes, out_sizes, in_offsets, out_offsets, depth, kernel_size=(3,3)):
+    def initialize(self, in_sizes, out_sizes, in_offsets, out_offsets, depth, kernel_size=(3,3), directions=1):
         """
         Init all cells with a series of input and outputs as vectors, i.e. lists of vectors are provided, single values are also supported.
 
@@ -307,7 +307,7 @@ class UniverseLP(hk.Module):
         self.out_offset = out_offsets
         self.kernel_size = kernel_size
         self.depth = depth
-        self.directions = 1
+        self.directions = directions
         # print("depth:", self.depth)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
@@ -326,9 +326,11 @@ class UniverseLP(hk.Module):
         # hk.set_state("states", self.states)
         # we need input and out shaped array to force input/output states to be active, used later
         # assumes all ins and outs are same size by taking first element, TODO: remove this restriction
-        self.input_states = jnp.full(self.in_size[0], STATE_ACTIVE_VALUE, dtype=self.states_dtype)
-        self.output_states = jnp.full(self.out_size[0], STATE_ACTIVE_VALUE, dtype=self.states_dtype)
-        self.output_weights = jnp.full(self.out_size[0], 1., dtype=jnp.float32)
+        self.input_states = []
+        for in_size in in_sizes:
+            self.input_states.append(jnp.full(in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype))
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
 
         #init weights (random)
         self.w_init = VectorCells(in_sizes, out_sizes, in_offsets, out_offsets, is_states=False, clear=False, random_init=init_scale)
@@ -347,7 +349,7 @@ class UniverseLP(hk.Module):
                                 self.filters.shape,  # only ndim matters, not shape 
                                 ('NHWC', 'IHWO', 'NHWC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_full_mlp_list, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")    
         
@@ -604,7 +606,11 @@ class UniverseLP(hk.Module):
 
         # force input/output states to be active
         if not self.input_states is None:
-            states = jax.lax.dynamic_update_slice(states, self.input_states, self.in_offset)
+            if isinstance(self.input_states, list):
+                for input_state, in_offset in zip(self.input_states, self.in_offset):
+                    states = jax.lax.dynamic_update_slice(states, input_state, in_offset)
+            else:
+                states = jax.lax.dynamic_update_slice(states, self.input_states, self.in_offset)
         states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
         if not self.output_weights is None:
             weights = jax.lax.dynamic_update_slice(weights, self.output_weights, self.out_offset)
@@ -1095,6 +1101,23 @@ def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cell
     Propagate input across cellular net based on weights etc. as a traditional MLP
     """
     cells = jax.lax.dynamic_update_slice(cells, input, offset)
+
+    #propagate
+    for i in range(1, depth):
+        cells = _forward_full(1, cells, weights, biases, states, filters, activate, norm, dn) #not inplace
+    cells = _forward_full(1, cells, weights, biases, states, filters, final_activate, norm, dn) #final prop and activate
+    if not final_activate == None:
+        cells = final_activate(cells) #force final activation, assume output layer
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+
+@partial(jax.jit, static_argnums=(2,3,4,10,11,12,13))
+def _forward_propagate_full_mlp_list(inputs, offsets, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn):
+    """
+    Propagate input across cellular net based on weights etc. as a traditional MLP, inputs are list of inputs, one output still
+    """
+    for input, offset in zip(inputs, offsets): #place inputs to cells
+        cells = jax.lax.dynamic_update_slice(cells, input, offset)
 
     #propagate
     for i in range(1, depth):
