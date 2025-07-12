@@ -22,14 +22,14 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 40
+epochs = 1200
 n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
 samples = 32000
 batch_size = 1600
-kernel_size = (13,13)
+kernel_size = (17,17)
 num_batches = samples//batch_size
 delta = 0.2
 padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
@@ -149,7 +149,7 @@ print("Y_packed shape", Y_packed.shape)
 #inputs and outputs sequentially in 1D with gap
 center = N//2
 gap = 1
-input_top = center-n//2 #centre vertically
+input_top = center-2*n//2 #centre vertically
 input_left = center-n #mid of cells by half of 2*n
 output_mid = center+n//2+1-n//2 #centre vertically
 output_left = input_left+n+2*gap #include out layer
@@ -163,7 +163,7 @@ output_size = (n,1) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-directions = 2 #how many filters, i.e. possible directions, to learn
+directions = 4 #how many filters, i.e. possible directions, to learn
 depth = output_left-input_left
 print("depth:", depth)
 
@@ -194,7 +194,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
-plt.savefig("vnn_tm_arithmetic_states_init.png", dpi=75)
+plt.savefig("vnn_alu_arithmetic_states_init.png", dpi=75)
 plt.show()
 
 #loss function
@@ -285,26 +285,27 @@ jnp.savez("tm_arithmetic_cells.npz",
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
-plt.savefig("vnn_tm_arithmetic_weights.png", dpi=150)
+plt.savefig("vnn_alu_arithmetic_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
-plt.savefig("vnn_tm_arithmetic_biases.png", dpi=150)
+plt.savefig("vnn_alu_arithmetic_biases.png", dpi=150)
 plt.show()
 
-fig = plt.figure(figsize=(4,4))
+fig = plt.figure(figsize=(2,2*directions))
 for c in range(directions):
-    plt.subplot(2, 1, c+1)
+    plt.subplot(directions, 1, c+1)
     plt.imshow(params['universe_lp']['f'][0,:,:,c])
     plt.tight_layout()
+    plt.axis('off') # Hides both x and y axes
     plt.title("Filter "+str(c))
-plt.savefig("vnn_tm_arithmetic_filter.png", dpi=75)
+plt.savefig("vnn_alu_arithmetic_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_tm_arithmetic_states_final.png", dpi=75)
+plt.savefig("vnn_alu_arithmetic_states_final.png", dpi=75)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -313,7 +314,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_tm_arithmetic_states_final_thres.png", dpi=75)
+plt.savefig("vnn_alu_arithmetic_states_final_thres.png", dpi=75)
 plt.show()
 
 #test performance
