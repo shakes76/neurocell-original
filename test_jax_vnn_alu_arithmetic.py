@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 1200
+epochs = 2400
 n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
@@ -31,6 +31,7 @@ samples = 32000
 batch_size = 1600
 kernel_size = (17,17)
 num_batches = samples//batch_size
+# total_steps = num_batches*epochs
 delta = 0.2
 padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
@@ -148,22 +149,23 @@ print("Y_packed shape", Y_packed.shape)
 #setup network position, but in a line like a tape
 #inputs and outputs sequentially in 1D with gap
 center = N//2
-gap = 1
+gap = 4
+ctrl_gap = 3
 input_top = center-2*n//2 #centre vertically
 input_left = center-n #mid of cells by half of 2*n
-output_mid = center+n//2+1-n//2 #centre vertically
+output_mid = center-n//2 #centre vertically
 output_left = input_left+n+2*gap #include out layer
 #setup parameters and lengths
 input_size = (n,1) #column vec
 input_offset_x1 = (input_top,input_left)
-input_offset_x2 = (input_top+n+gap,input_left)
+input_offset_x2 = (input_top+n+1,input_left)
 ctrl_size = (1,n) #row vec
-ctrl_offset = (input_top,input_left+gap)
+ctrl_offset = (input_top-ctrl_gap,input_left+gap)
 output_size = (n,1) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-directions = 4 #how many filters, i.e. possible directions, to learn
+directions = 2 #how many filters, i.e. possible directions, to learn
 depth = output_left-input_left
 print("depth:", depth)
 
@@ -180,6 +182,8 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
+# lr_schedule = optax.warmup_cosine_decay_schedule(init_value=0.002, peak_value=0.02, warmup_steps=int(0.05*total_steps), decay_steps=total_steps)
+# opt = optax.adamw(lr_schedule)
 opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
@@ -218,7 +222,7 @@ def update(
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
     (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
-    updates, opt_state = opt.update(grads, opt_state)
+    updates, opt_state = opt.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     return new_params, opt_state, loss_value, state
 
