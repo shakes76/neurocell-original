@@ -18,7 +18,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 50
+epochs = 100
 length = 32
 pulse_width = 4
 amp = 1.0
@@ -93,13 +93,15 @@ plt.savefig("vnn_mlp_full_ae_states_init.png", dpi=75)
 plt.show()
 
 #loss function
-def loss(params: hk.Params, state, batch, labels) -> jnp.ndarray:
+def loss(params: hk.Params, state, batch, labels, epsilon=1e-8) -> jnp.ndarray:
     '''
     Cross entropy 
     '''
     logits, state = network.apply(params, state, batch)
+    ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
 
-    return optax.squared_error(predictions=logits, targets=labels).mean(), state
+    return ce, state
+    # return optax.squared_error(predictions=logits, targets=labels).mean(), state
 
 @jax.jit
 def update(
@@ -198,9 +200,9 @@ fig, axes = plt.subplots(
 fig.suptitle('1D Square Pulse Reconstructions', fontsize=16)
 
 for i, ax in enumerate(axes):
-    ax.plot(logits[i])
-    ax.set_title(f"Pulse Recon {i+1}")
-    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.plot(logits[i], 'r-')
+    ax.plot(x[i], 'g-')
+    ax.set_title(f"Pulse {i+1}")
 
 # Set common labels and limits
 axes[-1].set_xlabel("Sample Index")
