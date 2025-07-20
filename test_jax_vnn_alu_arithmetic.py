@@ -22,14 +22,14 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 2400
+epochs = 400
 n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
 samples = 32000
 batch_size = 1600
-kernel_size = (17,17)
+kernel_size = (23,11)
 num_batches = samples//batch_size
 # total_steps = num_batches*epochs
 delta = 0.2
@@ -149,8 +149,8 @@ print("Y_packed shape", Y_packed.shape)
 #setup network position, but in a line like a tape
 #inputs and outputs sequentially in 1D with gap
 center = N//2
-gap = 4
-ctrl_gap = 3
+gap = 5
+ctrl_gap = 5
 input_top = center-2*n//2 #centre vertically
 input_left = center-n #mid of cells by half of 2*n
 output_mid = center-n//2 #centre vertically
@@ -165,7 +165,7 @@ output_size = (n,1) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-directions = 2 #how many filters, i.e. possible directions, to learn
+directions = 1 #how many filters, i.e. possible directions, to learn
 depth = output_left-input_left
 print("depth:", depth)
 
