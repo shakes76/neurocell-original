@@ -18,15 +18,16 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 25
+epochs = 50
 length = 16
 pulse_width = 4
 amp = 1.0
-layers = 4
+layers = 5
 batch_size = 64
 samples = 12800
+noise_level = 0.01
 total_batches = samples//batch_size
-N = length*8
+N = length*6
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -38,6 +39,7 @@ for index in range(total_batches):
             pulse_width=pulse_width,
             amplitude=amp,
             batch_size=batch_size,
+            noise_level=noise_level,
             z_score_standardize=False
         ))
 X = jnp.array(X)
@@ -57,7 +59,7 @@ input_size = (length,1)
 input_offset = (input_top,input_left)
 output_size = (length,1)
 output_offset = (output_top,output_left)
-kernel_size = (17,3)
+kernel_size = (7,3)
 activation = jax.nn.tanh
 final_activation = None
 print("depth:", depth, "total batches:", total_batches)
