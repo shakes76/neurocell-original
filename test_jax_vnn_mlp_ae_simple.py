@@ -18,15 +18,15 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 100
-length = 32
+epochs = 25
+length = 16
 pulse_width = 4
 amp = 1.0
 layers = 4
-batch_size = 16
-samples = 3200
+batch_size = 64
+samples = 12800
 total_batches = samples//batch_size
-N = length*4
+N = length*8
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -37,7 +37,8 @@ for index in range(total_batches):
             length=length,
             pulse_width=pulse_width,
             amplitude=amp,
-            batch_size=batch_size
+            batch_size=batch_size,
+            z_score_standardize=False
         ))
 X = jnp.array(X)
 print("X Shape:", X.shape)
@@ -58,7 +59,7 @@ output_size = (length,1)
 output_offset = (output_top,output_left)
 kernel_size = (17,3)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+final_activation = None
 print("depth:", depth, "total batches:", total_batches)
 
 #===========
@@ -98,10 +99,10 @@ def loss(params: hk.Params, state, batch, labels, epsilon=1e-8) -> jnp.ndarray:
     Cross entropy 
     '''
     logits, state = network.apply(params, state, batch)
-    ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
+    # ce = -1 * jnp.mean(labels * jnp.log(logits + epsilon) + (1 - labels) * jnp.log(1. - logits + epsilon))
 
-    return ce, state
-    # return optax.squared_error(predictions=logits, targets=labels).mean(), state
+    # return ce, state
+    return optax.squared_error(predictions=logits, targets=labels).mean(), state
 
 @jax.jit
 def update(
@@ -207,7 +208,7 @@ for i, ax in enumerate(axes):
 # Set common labels and limits
 axes[-1].set_xlabel("Sample Index")
 fig.text(0.06, 0.5, 'Amplitude', va='center', rotation='vertical')
-plt.ylim(-amp * 0.1, amp * 1.1)
+# plt.ylim(-amp * 0.1, amp * 1.1)
 
 plt.tight_layout(rect=[0.07, 0.03, 1, 0.95])
 plt.show()
