@@ -27,8 +27,8 @@ n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
-samples = 32000
-batch_size = 1600
+samples = 64000
+batch_size = 800
 kernel_size = (23,11)
 num_batches = samples//batch_size
 # total_steps = num_batches*epochs
@@ -36,7 +36,7 @@ delta = 0.2
 padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
-N = 3*n + 2*padding
+N = 3*n + padding
 print("N:", N, "Epochs:", epochs, "bit depth:", bit_depth)
 
 #===========
@@ -164,9 +164,11 @@ ctrl_offset = (input_top-ctrl_gap,input_left+gap)
 output_size = (n,1) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+final_activation = None
 directions = 1 #how many filters, i.e. possible directions, to learn
-depth = output_left-input_left
+print("Distance rows:", (output_mid+output_size[0])-(ctrl_offset[0]+kernel_size[0]//2))
+print("Distance cols:", output_left-(input_left+kernel_size[1]//2))
+depth = max(output_left-(input_left+kernel_size[1]//2), (output_mid+output_size[0])-(ctrl_offset[0]+kernel_size[0]//2))
 print("depth:", depth)
 
 #===========
@@ -198,7 +200,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
-plt.savefig("vnn_alu_arithmetic_states_init.png", dpi=75)
+plt.savefig("vnn_alu_arithmetic_states_init.png", dpi=150)
 plt.show()
 
 #loss function
@@ -258,7 +260,7 @@ for step in range(1, epochs+1):
             predictions = jnp.round(predictions).astype(np.uint8)
             predictions = jnp.packbits(predictions,axis=1)
             Y_pred.append(predictions)
-            if done < 3:
+            if done < 10:
                 x1 = jnp.round(x1[0,:n]).astype(np.uint8)
                 x2 = jnp.round(x2[0,:n]).astype(np.uint8)
                 c = jnp.round(c[0,:n]).astype(np.uint8)
@@ -276,7 +278,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
 
-jnp.savez("tm_arithmetic_cells.npz", 
+jnp.savez("alu_arithmetic_cells.npz", 
             weights=params['universe_lp']['w'], 
             biases=params['universe_lp']['b'], 
             filters=params['universe_lp']['f'], 
@@ -309,7 +311,7 @@ plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_alu_arithmetic_states_final.png", dpi=75)
+plt.savefig("vnn_alu_arithmetic_states_final.png", dpi=150)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -318,7 +320,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_alu_arithmetic_states_final_thres.png", dpi=75)
+plt.savefig("vnn_alu_arithmetic_states_final_thres.png", dpi=150)
 plt.show()
 
 #test performance
