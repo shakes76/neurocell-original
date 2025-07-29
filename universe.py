@@ -1225,6 +1225,7 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
 
     This version computes the forward across the full array with the nethood applied to it
     The result is a full 2D convolution with the nethood, which can be expensive.
+    Multiple nethoods or filters are supported, returns the mean result of these filters
 
     All operations are done on the entire universe.
     """
@@ -1235,9 +1236,14 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     # sub_biases = biases[:,centre-width//2-padding:centre+width//2+padding]
     # sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
 
-    #conv
+    cells = cells[...,jnp.newaxis]
+    weights = weights[...,jnp.newaxis]
+    biases = biases[...,jnp.newaxis]
+    states = states[...,jnp.newaxis]
+
+    #conv to eval neighbourhood
     # result = _fast_conv(cells[:,centre-width//2-padding:centre+width//2+padding], filters, dn)
-    result = _fast_conv(cells, filters, dn)
+    result = _fast_conv(cells, filters, dn) #produces result channel dims matching filters channel dims
     # print(result.shape)
 
     if norm:
@@ -1256,7 +1262,7 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     else:
         result = result*weights*(1.0-states) + activate(result+biases)*states
 
-    return result
+    return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
 
 @partial(jax.jit, static_argnums=(0,6,7))
 def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activate, norm):
@@ -1319,19 +1325,20 @@ def _fft_1D(N, length, filters):
 def _fast_conv(sub_cells, filters, dn, padding_mode="SAME"):
     """
     2D conv done with filters. Supports multiple filters in channel dim.
+    Assumes sub_cells has matching channel dim to filters
 
     Cells is assumed to be the relevant sub-region to process
     """
     #Conv via 2D brute force
     #get weighted sum of neighbors using convolution
-    sub_cells_conv = jax.lax.conv_general_dilated(sub_cells[jnp.newaxis,:,:,jnp.newaxis], # lhs = NHWC image tensor
+    sub_cells_conv = jax.lax.conv_general_dilated(sub_cells[jnp.newaxis,...], # lhs = NHWC image tensor
                                         filters,  # rhs = OHWI conv kernel tensor
                                         (1,1),  # window strides
                                         padding_mode, # padding mode
                                         (1,1),  # lhs/image dilation
                                         (1,1),  # rhs/kernel dilation
                                         dn)     # dimension_numbers = lhs, rhs, out dimension permutation
-    return jnp.mean(sub_cells_conv[0], axis=-1) # NHWC, support for multi-filters, averaged
+    return sub_cells_conv[0] # NHWC, remove extra batch dim, return multi-filters result
 
 @partial(jax.jit, static_argnums=())
 def _fast_conv_1D(sub_cells, filter_ffts):

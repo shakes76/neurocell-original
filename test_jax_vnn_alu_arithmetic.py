@@ -22,13 +22,13 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 2400
+epochs = 400
 n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
 samples = 64000
-batch_size = 800
+batch_size = 1600
 kernel_size = (23,11)
 num_batches = samples//batch_size
 # total_steps = num_batches*epochs
@@ -165,7 +165,7 @@ output_size = (n,1) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = None
-directions = 1 #how many filters, i.e. possible directions, to learn
+directions = 2 #how many filters, i.e. possible directions, to learn
 print("Distance rows:", (output_mid+output_size[0])-(ctrl_offset[0]+kernel_size[0]//2))
 print("Distance cols:", output_left-(input_left+kernel_size[1]//2))
 depth = max(output_left-(input_left+kernel_size[1]//2), (output_mid+output_size[0])-(ctrl_offset[0]+kernel_size[0]//2))
