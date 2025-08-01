@@ -28,10 +28,10 @@ bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
 samples = 64000
-batch_size = 1600
+batch_size = 100
 kernel_size = (23,11)
 num_batches = samples//batch_size
-# total_steps = num_batches*epochs
+total_steps = num_batches*epochs
 delta = 0.2
 padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
@@ -165,7 +165,7 @@ output_size = (n,1) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = None
-directions = 2 #how many filters, i.e. possible directions, to learn
+directions = 8 #how many filters, i.e. possible directions, to learn
 print("Distance rows:", (output_mid+output_size[0])-(ctrl_offset[0]+kernel_size[0]//2))
 print("Distance cols:", output_left-(input_left+kernel_size[1]//2))
 depth = max(output_left-(input_left+kernel_size[1]//2), (output_mid+output_size[0])-(ctrl_offset[0]+kernel_size[0]//2))
@@ -184,9 +184,9 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-# lr_schedule = optax.warmup_cosine_decay_schedule(init_value=0.002, peak_value=0.02, warmup_steps=int(0.05*total_steps), decay_steps=total_steps)
-# opt = optax.adamw(lr_schedule)
-opt = optax.adam(learning_rate=0.01)
+lr_schedule = optax.warmup_cosine_decay_schedule(init_value=0.002, peak_value=0.02, warmup_steps=int(0.05*total_steps), decay_steps=total_steps)
+opt = optax.adamw(lr_schedule)
+# opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = [X1[0], X2[0], C[0]] #one batch
