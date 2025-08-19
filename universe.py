@@ -353,7 +353,7 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")    
         
-    def initialize_mlp(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3)):
+    def initialize_mlp(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3), directions=1):
         """
         Init all cells as a typical vertical set of layers like a traditional MLP
         """
@@ -364,7 +364,7 @@ class UniverseLP(hk.Module):
         self.kernel_size = kernel_size
         self.depth = depth
         # self.depth = self.out_offset[1]-self.in_offset[1]
-        self.directions = 1
+        self.directions = directions
         # print("depth:", self.depth)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
@@ -1189,10 +1189,16 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     #conv
     # print("cells",cells.shape)
     result_block = cells[:,index-width_pad:index-width_pad+width]
+
+    result_block = result_block[...,jnp.newaxis]
+    sub_weights = sub_weights[...,jnp.newaxis]
+    sub_biases = sub_biases[...,jnp.newaxis]
+    sub_states = sub_states[...,jnp.newaxis]
+
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach
     result_block = _fast_conv(result_block, filters, dn, padding_mode="VALID")
-    result_block = jnp.pad(result_block, ((height_pad,height_pad), (0,0)) ) #pad rows to undo valid conv in rows
+    result_block = jnp.pad(result_block, ((height_pad,height_pad), (0,0), (0,0)) ) #pad rows to undo valid conv in rows
     #Same mode approach
     # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")
     # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
@@ -1215,7 +1221,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     else:
         result_block = result_block*sub_weights*(1.0-sub_states) + activate(result_block+sub_biases)*sub_states
 
-    return result_block
+    return jnp.mean(result_block, axis=-1) # averaged across filters, back to 1 channel dim
 
 @partial(jax.jit, static_argnums=(0,6,7,8))
 def _forward_full(width, cells, weights, biases, states, filters, activate, norm, dn):

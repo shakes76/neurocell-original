@@ -76,6 +76,7 @@ output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth+1) #+1 output
 kernel_size = (17,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
+directions = 2 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
 
 #===========
@@ -85,7 +86,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = UniverseLP(N, sharpen=True)
-    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size)
+    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
@@ -95,7 +96,8 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 total_steps = epochs*num_batches
 schedule = optax.warmup_cosine_decay_schedule(init_value=0.0005,peak_value=0.03,warmup_steps=0.05*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=schedule)
+# opt = optax.adam(learning_rate=schedule)
+opt = optax.adamw(learning_rate=schedule)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
@@ -141,7 +143,7 @@ def update(
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
     (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
-    updates, opt_state = opt.update(grads, opt_state)
+    updates, opt_state = opt.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     return new_params, opt_state, loss_value, state
 
@@ -209,8 +211,13 @@ plt.title("Final Biases")
 plt.savefig("vnn_mlp_arith_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_lp']['f'][0,:,:,0])
-plt.title("Final Filter")
+fig = plt.figure(figsize=(2,2*directions))
+for c in range(directions):
+    plt.subplot(directions, 1, c+1)
+    plt.imshow(params['universe_lp']['f'][0,:,:,c])
+    plt.tight_layout()
+    plt.axis('off') # Hides both x and y axes
+    plt.title("Filter "+str(c))
 plt.savefig("vnn_mlp_arith_filter.png", dpi=75)
 plt.show()
 
