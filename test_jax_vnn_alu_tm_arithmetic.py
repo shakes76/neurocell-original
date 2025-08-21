@@ -29,7 +29,7 @@ ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
 samples = 64000
 batch_size = 64
-kernel_size = (23,13)
+kernel_size = (23,23)
 num_batches = samples//batch_size
 total_steps = num_batches*epochs
 delta = 0.2
@@ -165,10 +165,10 @@ output_size = (1,n) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = None
-directions = 4 #how many filters, i.e. possible directions, to learn
-stride = int(min(kernel_size[0], kernel_size[1])/2.+0.5) #rnd
-depth = 2*int((output_left-input_left)/stride + 0.5) #rnd, up and down vertically, hence x2
-# depth = 4
+directions = 8 #how many filters, i.e. possible directions, to learn
+# stride = int(min(kernel_size[0], kernel_size[1])/2.+0.5) #rnd
+# depth = 2*int((output_left-input_left)/stride + 0.5) #rnd, up and down vertically, hence x2
+depth = 8
 print("depth:", depth)
 
 #===========
@@ -200,7 +200,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
-plt.savefig("vnn_alu_arithmetic_states_init.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_states_init.png", dpi=150)
 plt.show()
 
 #loss function
@@ -291,12 +291,12 @@ jnp.savez("alu_arithmetic_cells.npz",
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
-plt.savefig("vnn_alu_arithmetic_weights.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
-plt.savefig("vnn_alu_arithmetic_biases.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_biases.png", dpi=150)
 plt.show()
 
 fig = plt.figure(figsize=(2,2*directions))
@@ -306,12 +306,12 @@ for c in range(directions):
     plt.tight_layout()
     plt.axis('off') # Hides both x and y axes
     plt.title("Filter "+str(c))
-plt.savefig("vnn_alu_arithmetic_filter.png", dpi=75)
+plt.savefig("vnn_alu_tm_arithmetic_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_alu_arithmetic_states_final.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_states_final.png", dpi=150)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -320,7 +320,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_alu_arithmetic_states_final_thres.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_states_final_thres.png", dpi=150)
 plt.show()
 
 #test performance
