@@ -36,7 +36,7 @@ delta = 0.2
 padding = 3*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
-N = 3*n + padding
+N = 4*n + padding
 print("N:", N, "Epochs:", epochs, "bit depth:", bit_depth)
 
 #===========
@@ -168,7 +168,7 @@ final_activation = None
 directions = 8 #how many filters, i.e. possible directions, to learn
 # stride = int(min(kernel_size[0], kernel_size[1])/2.+0.5) #rnd
 # depth = 2*int((output_left-input_left)/stride + 0.5) #rnd, up and down vertically, hence x2
-depth = 8
+depth = 6
 print("depth:", depth)
 
 #===========
@@ -278,7 +278,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("alu_arithmetic_cells.npz",
+jnp.savez("alu_tm_arithmetic_cells.npz",
             weights=params['universe_lp']['w'],
             biases=params['universe_lp']['b'],
             filters=params['universe_lp']['f'],
