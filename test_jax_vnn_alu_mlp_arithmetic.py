@@ -33,10 +33,12 @@ kernel_size = (23,3)
 num_batches = samples//batch_size
 total_steps = num_batches*epochs
 delta = 0.2
-padding = 3*max(kernel_size[0], kernel_size[1]) #on one side
+padding = 4*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
-N = 4*n + padding
+N = 3*n + padding
+layers = 5
+ctrl_gap = 1
 print("N:", N, "Epochs:", epochs, "bit depth:", bit_depth)
 
 #===========
@@ -117,8 +119,11 @@ X1f = X1.astype(np.float32) + rand1
 X2f = X2.astype(np.float32) + rand2
 Cf = C.astype(np.float32) + rand3
 
+#ctrl gap
+G = np.zeros((num_batches,batch_size,ctrl_gap), np.float32)
+
 #stack
-X_preproc = np.concatenate([X1f, X2f, Cf], axis=-1)
+X_preproc = np.concatenate([X1f, X2f, G, Cf], axis=-1)
 print("X_preproc:", X_preproc.shape)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
@@ -136,13 +141,13 @@ print("Y_packed shape", Y_packed.shape)
 #setup network position, but in a line like a tape
 #inputs and outputs sequentially in 1D with gap
 center = N//2
-gap = 5
-input_top = center-3*n//2 #centre vertically
+gap = 2*layers+1 #decision and signal layers, not including output
+input_top = center-(3*n+ctrl_gap)//2 #centre vertically
 input_left = center-gap//2 #mid of cells by half of 2*n
 output_mid = center-n//2 #centre vertically
-output_left = input_left+gap+1 #include out layer
+output_left = input_left+gap #include out layer
 #setup parameters and lengths
-input_size = (3*n,1) #column vec, x1, x2, c
+input_size = (3*n+ctrl_gap,1) #column vec, x1, x2, c
 input_offset = (input_top,input_left)
 output_size = (n,1) #column vec
 output_offset = (output_mid,output_left)
