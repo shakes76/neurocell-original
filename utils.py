@@ -11,7 +11,7 @@ from jax import vmap
 def jax_status():
     print("Total Devices:",jax.devices())
     print("Used Devices:",jax.local_devices())
-    print("Using", jnp.ones(3).device)
+    print("Using", jnp.ones(3).device.device_kind)
 
 # required to enable hk.Initializer to be pure func and accessed as func
 # see https://github.com/google-deepmind/dm-haiku/issues/24

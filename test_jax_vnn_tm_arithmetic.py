@@ -22,14 +22,15 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 400
+epochs = 100
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
 samples = 32000
-batch_size = 1600
+batch_size = 128
 kernel_size = (13,13)
 num_batches = samples//batch_size
+total_steps = num_batches*epochs
 delta = 0.2
 padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
@@ -85,7 +86,7 @@ input_offset = (input_mid,input_left)
 output_size = (1,n)
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+final_activation = None
 directions = 2 #how many filters, i.e. possible directions, to learn
 depth = output_left-input_left
 print("depth:", depth)
@@ -102,8 +103,9 @@ def _forward(batch) -> jnp.ndarray:
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
-# opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.01)
+lr_schedule = optax.warmup_cosine_decay_schedule(init_value=0.001, peak_value=0.03, warmup_steps=int(0.025*total_steps), decay_steps=total_steps)
+opt = optax.adamw(lr_schedule)
+# opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x = X[0]
@@ -122,7 +124,7 @@ plt.show()
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     #MSE loss
     logits, state = network.apply(params, state, batch)
@@ -140,7 +142,7 @@ def update(
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
     (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
-    updates, opt_state = opt.update(grads, opt_state)
+    updates, opt_state = opt.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     return new_params, opt_state, loss_value, state
 
@@ -186,13 +188,13 @@ for step in range(1, epochs+1):
         print(f"[Step {step}, Loss {loss_value}]")
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("tm_arithmetic_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("tm_arithmetic_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             N=N, length=length, n=n, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,
