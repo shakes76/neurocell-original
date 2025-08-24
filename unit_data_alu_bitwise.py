@@ -53,7 +53,7 @@ Y_raw = []
 # bit_ops = []
 for batch_numbers, batch_operands, batch_controls in zip(numbers, operands, controls):
     batch = []
-    bitwise_op = False
+    # bitwise_op = False
     # print("batch numbers shape",batch_numbers.shape)
     for number, operand, control in zip(batch_numbers, batch_operands, batch_controls):
         # if operand > number: #don't have negative outcomes

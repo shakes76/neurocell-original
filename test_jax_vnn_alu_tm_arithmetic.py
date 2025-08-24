@@ -28,8 +28,8 @@ bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
 samples = 64000
-batch_size = 64
-kernel_size = (23,23)
+batch_size = 128
+kernel_size = (23,13)
 num_batches = samples//batch_size
 total_steps = num_batches*epochs
 delta = 0.2
@@ -64,9 +64,12 @@ print("numbers shapes:", numbers.shape, operands.shape, controls.shape)
 # print("controls:", controls[:1])
 
 #create labels
+#two step process, first do the numerical ops, easy to do as numbers (packed)
 Y_raw = []
+# bit_ops = []
 for batch_numbers, batch_operands, batch_controls in zip(numbers, operands, controls):
     batch = []
+    # bitwise_op = False
     # print("batch numbers shape",batch_numbers.shape)
     for number, operand, control in zip(batch_numbers, batch_operands, batch_controls):
         # if operand > number: #don't have negative outcomes
@@ -77,7 +80,7 @@ for batch_numbers, batch_operands, batch_controls in zip(numbers, operands, cont
             batch.append(number)
         elif control == 1: #Increment
             batch.append(number+1)
-        elif control == 2 or control == 8: #Sum, AND
+        elif control == 2 or control == 8: #Sum
             batch.append(number+operand)
         elif control == 3: #Sum, Increment
             batch.append(number+operand+1)
@@ -87,12 +90,14 @@ for batch_numbers, batch_operands, batch_controls in zip(numbers, operands, cont
             batch.append(number-operand)
         elif control == 7: #Minus, decrement
             batch.append(number-operand-1)
-        elif control == 12: #Multiply
-            batch.append(number*operand)
         else: #Identity
             batch.append(number)
+            # bitwise_op = True
+            continue #bitwise op done later
     # print(batch)
     Y_raw.append(batch)
+    # bit_ops.append(bitwise_op)
+
 Y_raw = np.array(Y_raw)
 print("Y_raw:", Y_raw.shape)
 Y_raw = Y_raw.reshape(num_batches,batch_size,1)
@@ -108,6 +113,30 @@ print("X1 shape:", X1.shape)
 # print("X2:", X2[:1])
 # print("C:", C[:1])
 # print("Y_raw:", Y_raw[:1])
+
+#then do the bitwise ops (unpacked)
+for batch_index, (batch_numbers, batch_operands, batch_controls, batch_y) in enumerate(zip(X1, X2, C, Y_raw)):
+    # print("control:", batch_controls)
+    batch_controls = np.packbits(batch_controls,axis=1)
+    # print("control shape",batch_controls.shape)
+    # print("control packed:", batch_controls)
+    for index, (number, operand, control, y) in enumerate(zip(batch_numbers, batch_operands, batch_controls, batch_y)):
+        # print("control:", control, "x1:", number, "x2:", operand, "Y_raw:", Y_raw[batch_index][index])
+        if control == 8: #OR
+            Y_raw[batch_index][index] = np.bitwise_or(number, operand)
+            # print("Y_raw OR:", Y_raw[batch_index][index])
+        elif control == 10: #XOR
+            Y_raw[batch_index][index] = np.bitwise_xor(number, operand)
+            # print("Y_raw XOR:", Y_raw[batch_index][index])
+        elif control == 12: #AND
+            Y_raw[batch_index][index] = np.bitwise_and(number, operand)
+            # print("Y_raw AND:", Y_raw[batch_index][index])
+        elif control == 14: #NOT
+            #need to ensure bit depth is 1, so use bool type then go back
+            Y_raw[batch_index][index] = np.bitwise_not(number.astype(np.bool), operand.astype(np.bool)).astype(np.uint8)
+            # print("Y_raw NOT:", Y_raw[batch_index][index])
+        else: #Identity
+            continue #should have been done numerically above, so ignore
 
 #add noise
 rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
