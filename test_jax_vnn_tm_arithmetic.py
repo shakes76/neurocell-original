@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 100
+epochs = 200
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n

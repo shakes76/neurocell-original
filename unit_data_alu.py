@@ -7,12 +7,7 @@ import numpy as np
 
 from sklearn.model_selection import train_test_split
 
-import utils #local
-
-utils.jax_status()
-
 #parameters
-epochs = 400
 n = 8
 bit_depth = 2**n
 ctrl_bits = 4
@@ -27,7 +22,7 @@ padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
 N = length + 2*padding
-print("N:", N, "Epochs:", epochs, "batch_size:", batch_size, "bit depth:", bit_depth, "ctrl bit depth:", ctrl_bit_depth)
+print("N:", N, "batch_size:", batch_size, "bit depth:", bit_depth, "ctrl bit depth:", ctrl_bit_depth)
 
 #===========
 ##data
