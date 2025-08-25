@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 100
+epochs = 200
 n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
@@ -133,7 +133,7 @@ for batch_index, (batch_numbers, batch_operands, batch_controls, batch_y) in enu
             # print("Y_raw AND:", Y_raw[batch_index][index])
         elif control == 14: #NOT
             #need to ensure bit depth is 1, so use bool type then go back
-            Y_raw[batch_index][index] = np.bitwise_not(number.astype(np.bool), operand.astype(np.bool)).astype(np.uint8)
+            Y_raw[batch_index][index] = np.bitwise_not(number.astype(bool), operand.astype(bool)).astype(np.uint8)
             # print("Y_raw NOT:", Y_raw[batch_index][index])
         else: #Identity
             continue #should have been done numerically above, so ignore
