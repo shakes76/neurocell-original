@@ -59,6 +59,8 @@
 %\title{Neural circuits with self-engineered cellular machines}
 \title{Neural networks as self-engineered cellular machines}
 %\title{Self-engineered neural networks via learnable cellular machines} 
+%\title{Self-engineered networks with learnable neural circuits} 
+%\title{Neural self-engineering of networks with learnable cellular circuits} 
 
 \author{Shekhar S. Chandra\\
 	%\thanks{shekhar.chandra@uq.edu.au}
@@ -76,12 +78,15 @@
 \end{abstract}
 	
 \section{Introduction}\label{sec::Introduction}
-In this paper, we unite the modern deep learning framework of learning to solve tasks through neural networks with cellular automata that use simple rules to assemble structures. The resulting framework allows neural networks to additionally learn their architecture and cellular automata to learn the rules for their assembly.
-%Artificial neural networks have become very successful recently through the advancements achievements by deep learning.
+%In this work, we unite the modern deep learning framework to solve tasks through neural networks with cellular automata that use simple rules to assemble structures. The resulting framework allows neural networks to additionally learn their architecture and cellular automata to learn the rules for their assembly.
+%Artificial neural networks have become very successful recently through the advancements in deep learning.
 
-In the mid-twentieth century, John von Neumann proposed machines as a simulation of a system comprising a lattice of cells that evolve via rules based on the current status of each cell. These cells have different specialised roles depending on the task, where they were originally introduced during machine replication, a process that resulted in the first independent construction of cellular automata~\citep[published post-humorously]{von_neumann_theory_1966}. He envisioned that machines such as these consist of cells that approximate neurons that behave much like the McCulloch and Pits formulation of an artificial neuron devised around the same time~\citep{mcculloch_logical_1943}. His key insight was that these cells would make decisions like neurons in the brain but would also maintain states depending on their purpose~\citep{neumann_computer_1958}. However, this original intent of von Neumann in using neurons for self-replication and cellular automata has been largely unexplored since it was originally proposed in favour of simpler designs; see a brief review of this area provided in~\ref{sec::review-replication}.
+In the mid-twentieth century, John von Neumann envisioned a simple neural system to mimic the human brain comprising cells of neurons, each of which maintaining a state or purpose and used it to construct a theory of self-replicating machines~\citep[published post-humorously]{von_neumann_theory_1966}. This work resulted in one of the founding works of cellular automata, which is a simulation within a lattice of cells that evolve via simple rules based on the current status of each cell. He envisioned that the cells in these cellular systems would approximate neurons that behave much like the McCulloch and Pits formulation of an artificial neuron devised around the same time~\citep{mcculloch_logical_1943}. His key insight was that these cells would make decisions like neurons in the brain but would also maintain states depending on their purpose~\citep{neumann_computer_1958}.
+%proposed machines as . These cells have different specialised roles depending on the task, where they were originally introduced during machine replication, a process that resulted in the first independent construction of cellular automata~\citep[published post-humorously]{von_neumann_theory_1966}. He envisioned that machines such as these consist of cells that approximate neurons that behave much like the McCulloch and Pits formulation of an artificial neuron devised around the same time~\citep{mcculloch_logical_1943}. His key insight was that these cells would make decisions like neurons in the brain but would also maintain states depending on their purpose~\citep{neumann_computer_1958}. 
+However, the majority of advancements since von Neumann's original proposal has been largely focused on simplifying the rules and states required of the cellular automata in order to produce Turing complete systems; see a brief review of this area provided in Appendix~\ref{sec::review-replication}.
+%this original intent of von Neumann in using neurons for self-replication and cellular automata has been largely unexplored since it was originally proposed in favour of simpler designs; see a brief review of this area provided in~\ref{sec::review-replication}.
 
-In recent decades, the area of deep learning has solved many problems associated with artificial neural networks and has been used to solve a number of important problems~\citep{lecun_deep_2015}.
+In recent years, the area of deep learning has solved many problems associated with artificial neural networks and has been used to solve a large number of important problems~\citep{lecun_deep_2015}.
 % neurons improvements
 Neurons have evolved from~\citet{mcculloch_logical_1943} style designs to the modern definition of how a single neuron activates as
 \begin{equation}
