@@ -8,7 +8,7 @@ hence convolution with forward is equivalent to correlation with backward
 Notes:
 Integer values are used for the kernels and they are not normalised in general
 
-See: https://en.wikipedia.org/wiki/Kernel_(image_processing) 
+See: https://en.wikipedia.org/wiki/Kernel_(image_processing)
 """
 import jax.numpy as jnp
 
@@ -50,7 +50,7 @@ def forward(dtype=jnp.int32, norm=False):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape, kernel)
     return kernel
-    
+
 def forwardPropagation(dtype=jnp.int32, norm=False):
     '''
     Returns the forward derivative kernel
@@ -100,7 +100,7 @@ def gaussian(dtype=jnp.int32):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
-    
+
 def sobelVertical(dtype=jnp.int32):
     '''
     Returns the Sobel vertical kernel, usually used for edge detection
@@ -111,7 +111,7 @@ def sobelVertical(dtype=jnp.int32):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
-    
+
 def sobelHorizontal(dtype=jnp.int32):
     '''
     Returns the Sobel horizontal kernel, usually used for edge detection
@@ -122,7 +122,7 @@ def sobelHorizontal(dtype=jnp.int32):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
-    
+
 def edge1(dtype=jnp.int32):
     '''
     Returns a diagonal edge kernel, usually used for edge detection
@@ -136,7 +136,7 @@ def edge1(dtype=jnp.int32):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
-    
+
 def edge2(dtype=jnp.int32):
     '''
     Returns a center diagonal edge kernel, usually used for edge detection
@@ -150,7 +150,7 @@ def edge2(dtype=jnp.int32):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
-    
+
 def edge3(dtype=jnp.int32):
     '''
     Returns an edge kernel, usually used for edge detection
@@ -164,7 +164,7 @@ def edge3(dtype=jnp.int32):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
-    
+
 def haar(dtype=jnp.int32):
     '''
     Returns the Haar kernel, usually used for edge detection
@@ -176,7 +176,7 @@ def haar(dtype=jnp.int32):
     kernel = jnp.array(kernel, dtype=dtype)
     # print(kernel.shape)
     return kernel
-    
+
 def sharpen(dtype=jnp.int32, norm=False):
     '''
     Returns the sharpen kernel, usually used for edge enhancement
@@ -191,6 +191,28 @@ def sharpen(dtype=jnp.int32, norm=False):
     if norm:
         kernel = kernel / 5.
     # print(kernel.shape)
+    return kernel
+
+def sharpen_3D(dtype=jnp.int32, norm=False):
+    '''
+    Returns the 3D sharpen kernel, usually used for edge enhancement
+    [[0, -1, 0],
+    [-1, 5, -1],
+    [0, -1, 0]]
+    '''
+    kernel =   [[[0, 0, 0],
+                [0, -1, 0],
+                [0, 0, 0]],
+                [[0, -1, 0],
+                [-1, 5, -1],
+                [0, -1, 0]],
+                [[0, 0, 0],
+                [0, -1, 0],
+                [0, 0, 0]]]
+    kernel = jnp.array(kernel, dtype=dtype)
+    if norm:
+        kernel = kernel / 5.
+    print("sharpen shape:", kernel.shape)
     return kernel
 
 def filter(N, filterType='smooth', x0 = 0, y0 = 0):
@@ -227,7 +249,7 @@ def filter(N, filterType='smooth', x0 = 0, y0 = 0):
         kernel = gaussian()
     else:
         kernel = smooth()
-    
+
     kernelImage[x0:x0+kernel.shape[0], y0:y0+kernel.shape[1]] = kernel
     # print(kernelImage)
     return kernelImage
