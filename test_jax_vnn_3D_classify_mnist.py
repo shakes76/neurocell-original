@@ -27,7 +27,7 @@ N = 32
 epochs = 8
 num_classes = 10
 layers = 4
-batch_size = 64
+batch_size = 128
 length = 28
 print("N:", N, "Epochs:", epochs)
 
@@ -65,11 +65,11 @@ input_size = (length,length,1)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (3,3,3)
+kernel_size = (7,7,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
-directions = 4 #how many filters, i.e. possible directions, to learn
+directions = 8 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "total batches:", total_batches)
 
 #===========
@@ -153,7 +153,7 @@ for step in range(epochs+1):
         total_loss += loss_value/batch_size
     total_loss /= total_batches
 
-    if step % 2 == 0:
+    if step % 1 == 0:
         # Periodically evaluate on train & test sets.
         correct = 0
         total = 0
