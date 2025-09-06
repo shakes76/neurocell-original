@@ -212,7 +212,7 @@ def sharpen_3D(dtype=jnp.int32, norm=False):
     kernel = jnp.array(kernel, dtype=dtype)
     if norm:
         kernel = kernel / 5.
-    print("sharpen shape:", kernel.shape)
+    # print("sharpen shape:", kernel.shape)
     return kernel
 
 def filter(N, filterType='smooth', x0 = 0, y0 = 0):

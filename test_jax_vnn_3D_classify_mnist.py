@@ -27,7 +27,7 @@ N = 64
 epochs = 8
 num_classes = 10
 layers = 4
-batch_size = 32
+batch_size = 64
 length = 28
 print("N:", N, "Epochs:", epochs)
 
@@ -91,12 +91,12 @@ dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
 x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 # x = jnp.reshape(x, (x.shape[0], length, 1))
-print("INIT SHAPE", x[0:1].shape)
+# print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), [x[0:1]])
 opt_state = opt.init(params)
 # print(params)
 
-plt.imshow(params['universe_lp']['s'][...,center])
+plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Initial States")
 plt.savefig("vnn_3D_full_classify_mnist_states_init.png", dpi=150)
 plt.show()
@@ -119,7 +119,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
-    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
+    return optax.softmax_cross_entropy(logits=logits, labels=labels[...,jnp.newaxis]).mean(), state
 
 @jax.jit
 def update(
@@ -178,10 +178,10 @@ elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
 jnp.savez("3D_classify_mnist_cells.npz",
-            weights=params['universe_lp']['w'],
-            biases=params['universe_lp']['b'],
-            filters=params['universe_lp']['f'],
-            states=params['universe_lp']['s'],
+            weights=params['universe3_d']['w'],
+            biases=params['universe3_d']['b'],
+            filters=params['universe3_d']['f'],
+            states=params['universe3_d']['s'],
             N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,
@@ -206,27 +206,27 @@ for x, y in tqdm(test_loader):
 accuracy = 100 * correct / total
 print(f"[Final Test Accuracy {accuracy}]")
 
-plt.imshow(params['universe_lp']['w'][...,center])
+plt.imshow(params['universe3_d']['w'][...,center])
 plt.title("Final Weights")
 plt.savefig("vnn_3D_classify_mnist_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_lp']['b'][...,center])
+plt.imshow(params['universe3_d']['b'][...,center])
 plt.title("Final Biases")
 plt.savefig("vnn_3D_classify_mnist_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_lp']['f'][0,:,:,center,0])
+plt.imshow(params['universe3_d']['f'][0,:,:,center,0])
 plt.title("Final Filter")
 plt.savefig("vnn_3D_classify_mnist_filter.png", dpi=75)
 plt.show()
 
-plt.imshow(params['universe_lp']['s'][...,center])
+plt.imshow(params['universe3_d']['s'][...,center])
 plt.title("Final States")
 plt.savefig("vnn_3D_full_classify_mnist_states.png", dpi=75)
 plt.show()
 
-states = params['universe_lp']['s']
+states = params['universe3_d']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
