@@ -23,7 +23,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-N = 64
+N = 32
 epochs = 8
 num_classes = 10
 layers = 4
@@ -36,7 +36,8 @@ path = '/home/shakes/'
 
 #===========
 #transform preproc
-transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
+#lambda for channel last
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,)), transforms.Lambda(lambda x: x.permute(1, 2, 0))])
 
 ##data
 trainset = torchvision.datasets.MNIST(root=path+'data/mnist', train=True, download=True, transform=transform)
@@ -89,8 +90,8 @@ opt = optax.adam(learning_rate=0.001)
 # Initialize network and optimiser; note we draw an input to get shapes.
 dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
-x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-# x = jnp.reshape(x, (x.shape[0], length, 1))
+x = jnp.asarray(x.numpy())
+# x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 # print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), [x[0:1]])
 opt_state = opt.init(params)
@@ -102,6 +103,7 @@ plt.savefig("vnn_3D_full_classify_mnist_states_init.png", dpi=150)
 plt.show()
 
 #loss function
+@jax.jit
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
     Cross entropy
@@ -109,8 +111,8 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
+    # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # print("LOSS SHAPE", labels.shape, logits.shape)
-    # print("LOSS", jnp.mean(labels * jax.nn.log_softmax(logits)).shape, logits.shape)
 
     #L2 norm of weights loss
     # filters = params['universe_lp']['f']
@@ -119,7 +121,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
-    return optax.softmax_cross_entropy(logits=logits, labels=labels[...,jnp.newaxis]).mean(), state
+    return optax.softmax_cross_entropy(logits=logits[...,0], labels=labels).mean(), state
 
 @jax.jit
 def update(
@@ -144,9 +146,7 @@ for step in range(epochs+1):
         x = jnp.asarray(x.numpy())
         y = jnp.asarray(y.numpy())
 
-        x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
-        # print("TRAIN SHAPE", x.shape)
-        # x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
+        # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
         # print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, [x], y)
@@ -160,13 +160,14 @@ for step in range(epochs+1):
         for x, y in tqdm(test_loader):
             x = jnp.asarray(x.numpy())
             y = jnp.asarray(y.numpy())
+            # y = jax.nn.one_hot(y, num_classes)
 
-            x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
-            # x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
+            # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, [x]) #if reshaped, use squeeze
             predicted = jnp.squeeze(logits, axis=-1)
-            predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+            # predicted = jnp.squeeze(predicted, axis=-1)
+            predicted = jnp.argmax(predicted[...,0], axis=-1)
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
         accuracy = 100 * correct / total
@@ -194,12 +195,12 @@ for x, y in tqdm(test_loader):
     x = jnp.asarray(x.numpy())
     y = jnp.asarray(y.numpy())
 
-    x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
-    # x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
+    # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, [x])
     predicted = jnp.squeeze(logits, axis=-1)
-    predicted = jnp.argmax(jnp.array(predicted), axis=-1)
+    # predicted = jnp.squeeze(predicted, axis=-1)
+    predicted = jnp.argmax(predicted[...,0], axis=-1)
     correct += jnp.sum(predicted == y)
     total += y.shape[0]
 

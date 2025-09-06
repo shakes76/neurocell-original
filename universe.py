@@ -294,6 +294,7 @@ class UniverseLP(hk.Module):
         # print("filter:", self.nethood_forward)
         self.filters_shape = None
         self.img_shape = (1,N,N,1)
+        self.window_stride = (1,1)
         self.forward_op = None
 
     def initialize(self, in_sizes, out_sizes, in_offsets, out_offsets, depth, kernel_size=(3,3), directions=1):
@@ -594,7 +595,7 @@ class UniverseLP(hk.Module):
 
         #smooth/sharpen weights
         if self.sharpen:
-            weights = _filter(weights, self.sharpen_filter, self.dn, (1,1))
+            weights = _filter(weights, self.sharpen_filter, self.dn, self.window_stride)
 
         #precompute FFTs of filters
         filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
@@ -626,7 +627,7 @@ class UniverseLP(hk.Module):
         # cells = _forward_propagate_fast_mlp(inputs, self.in_offset, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
         # cells = _forward_propagate_fast_1D(self.in_offset[1], self.depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm)
         # forward_propagate_fast = jax.vmap(_forward_propagate_fast_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
-        cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, (1,1))
+        cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, self.window_stride)
         hk.set_state("universe", cells[0]) #remove vmap batch dim
 
         #read output
@@ -985,6 +986,7 @@ class Universe3D(UniverseLP):
         super().__init__(N, sharpen=sharpen, dtype=dtype, name=name)
         self.grid_size = (N,N,N)
         self.img_shape = (1,N,N,N,1)
+        self.window_stride= (1,1,1)
         self.sharpen_filter = filters.sharpen_3D(dtype=jnp.float32, norm=True)[jnp.newaxis,...,jnp.newaxis] # 8 connected kernel
 
     def initialize_3D(self, in_sizes, out_sizes, in_offsets, out_offsets, depth, kernel_size=(3,3,3), directions=1):
@@ -1062,7 +1064,7 @@ class Universe3D(UniverseLP):
 
         #smooth/sharpen weights
         if self.sharpen:
-            weights = _filter(weights, self.sharpen_filter, self.dn, (1,1,1))
+            weights = _filter(weights, self.sharpen_filter, self.dn, self.window_stride)
 
         #precompute FFTs of filters
         filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
@@ -1084,7 +1086,7 @@ class Universe3D(UniverseLP):
         # cells = _forward_propagate_fast_mlp(inputs, self.in_offset, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
         # cells = _forward_propagate_fast_1D(self.in_offset[1], self.depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm)
         # forward_propagate_fast = jax.vmap(_forward_propagate_fast_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
-        cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, (1,1,1))
+        cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, self.window_stride)
         hk.set_state("universe", cells[0]) #remove vmap batch dim
 
         return outputs
