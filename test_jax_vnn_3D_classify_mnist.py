@@ -32,7 +32,8 @@ length = 28
 print("N:", N, "Epochs:", epochs)
 
 #network IO paths
-path = '/home/shakes/'
+# path = '/home/shakes/'
+path = 'I:/'
 
 #===========
 #transform preproc
@@ -53,6 +54,7 @@ num_classes = 10
 #setup network position
 center = N//2
 depth = layers*2+1 #1 col of signal cells per layer
+depth //= 2
 input_top = center-length//2
 input_left = center-length//2
 input_inner = center-(depth-1)//2
@@ -65,7 +67,7 @@ input_size = (length,length,1)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (7,7,3)
+kernel_size = (7,7,5)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
@@ -207,22 +209,22 @@ for x, y in tqdm(test_loader):
 accuracy = 100 * correct / total
 print(f"[Final Test Accuracy {accuracy}]")
 
-plt.imshow(params['universe3_d']['w'][...,center])
+plt.imshow(params['universe3_d']['w'][center,...])
 plt.title("Final Weights")
 plt.savefig("vnn_3D_classify_mnist_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['b'][...,center])
+plt.imshow(params['universe3_d']['b'][center,...])
 plt.title("Final Biases")
 plt.savefig("vnn_3D_classify_mnist_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['f'][0,:,:,center,0])
+plt.imshow(params['universe3_d']['f'][0,center,:,:,0])
 plt.title("Final Filter")
 plt.savefig("vnn_3D_classify_mnist_filter.png", dpi=75)
 plt.show()
 
-plt.imshow(params['universe3_d']['s'][...,center])
+plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Final States")
 plt.savefig("vnn_3D_full_classify_mnist_states.png", dpi=75)
 plt.show()
@@ -231,7 +233,7 @@ states = params['universe3_d']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
-plt.imshow(states[...,center])
+plt.imshow(states[center,...])
 plt.title("Final States (Thresholded)")
 plt.savefig("vnn_3D_full_classify_mnist_states_thres.png", dpi=75)
 plt.show()
