@@ -1191,8 +1191,8 @@ def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, fil
     result_block = _forward_fast_1D(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm)
     return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
-@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
-def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn):
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
+def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
 
@@ -1205,18 +1205,18 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
     index = offset[1]+1 #first col next to input
     # print("forward index",index)
     for i in range(depth): #0 to depth-1, depth in total
-        result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn)
+        result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
         cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
     # print("forward index final",index+depth)
-    result_block = _forward_column(index+depth, cells, weights, biases, states, filters, final_activate, norm, dn)
+    result_block = _forward_column(index+depth, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides)
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
-@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
-def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn):
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
+def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
     """
@@ -1224,8 +1224,8 @@ def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cell
 
     #propagate
     for i in range(1, depth):
-        cells = _forward_full(1, cells, weights, biases, states, filters, activate, norm, dn) #not inplace
-    cells = _forward_full(1, cells, weights, biases, states, filters, final_activate, norm, dn) #final prop and activate
+        cells = _forward_full(1, cells, weights, biases, states, filters, activate, norm, dn, window_strides) #not inplace
+    cells = _forward_full(1, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides) #final prop and activate
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 
@@ -1283,8 +1283,8 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
 
     return cells
 
-@partial(jax.jit, static_argnums=(0,6,7,8))
-def _forward_column(index, cells, weights, biases, states, filters, activate, norm, dn):
+@partial(jax.jit, static_argnums=(0,6,7,8,9))
+def _forward_column(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
     """
     Compute the forward pass by computing each neuron depending on its state for a subregion.
 
@@ -1317,7 +1317,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach
-    result_block = _fast_conv(result_block, filters, dn, padding_mode="VALID")
+    result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
     result_block = jnp.pad(result_block, ((height_pad,height_pad), (0,0), (0,0)) ) #pad rows to undo valid conv in rows
     #Same mode approach
     # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")

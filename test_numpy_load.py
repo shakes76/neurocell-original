@@ -10,14 +10,14 @@ import matplotlib.pyplot as plt
 N = 1 #unused
 # filename = "mlp_classify_cells.npz"
 filename = "alu_tm_arithmetic_cells.npz"
-length = None
-num_classes = None
+# length = None
+# num_classes = None
 input_size = None
 input_offset = None
 output_size = None
 output_offset = None
-layer_size = None
-layer_offset = None
+# layer_size = None
+# layer_offset = None
 kernel_size = None
 
 """

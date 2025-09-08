@@ -27,16 +27,16 @@ N = 1024
 epochs = 8
 num_classes = 10
 layers = 4
-batch_size = 10
+batch_size = 64
 length = 28*28
 print("N:", N, "Epochs:", epochs)
 
 #network IO paths
-path = '/home/uqscha22/'
+path = '/home/shakes/'
 
 #===========
 #transform preproc
-transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,)), transforms.Lambda(lambda x: x.permute(1, 2, 0))])
 
 ##data
 trainset = torchvision.datasets.MNIST(root=path+'data/mnist', train=True, download=True, transform=transform)
@@ -62,7 +62,7 @@ input_size = (length,1)
 input_offset = (input_top,input_left)
 output_size = (num_classes,1)
 output_offset = (output_top,output_left)
-kernel_size = (101,3)
+kernel_size = (71,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
@@ -86,8 +86,8 @@ opt = optax.adam(learning_rate=0.001)
 # Initialize network and optimiser; note we draw an input to get shapes.
 dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
-x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-x = jnp.reshape(x, (x.shape[0], length, 1))
+# x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+x = jnp.reshape(x.numpy(), (x.shape[0], length, 1))
 # print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
@@ -96,7 +96,7 @@ opt_state = opt.init(params)
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
@@ -136,7 +136,7 @@ for step in range(epochs+1):
         x = jnp.asarray(x.numpy())
         y = jnp.asarray(y.numpy())
 
-        x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+        # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
         # print("TRAIN SHAPE", x.shape)
         x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
         # print("TRAIN SHAPE", x.shape)
@@ -153,7 +153,7 @@ for step in range(epochs+1):
             x = jnp.asarray(x.numpy())
             y = jnp.asarray(y.numpy())
 
-            x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+            # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
             x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
@@ -167,13 +167,13 @@ for step in range(epochs+1):
         print(f"[Step {step}, Loss {total_loss}]")
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("mlp_classify_mnist_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("mlp_classify_mnist_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,
@@ -186,7 +186,7 @@ for x, y in tqdm(test_loader):
     x = jnp.asarray(x.numpy())
     y = jnp.asarray(y.numpy())
 
-    x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+    # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
     x = jnp.reshape(x, (x.shape[0], length, 1)) #image to vector
 
     logits, state_test = network.apply(params, state, x)
@@ -210,12 +210,12 @@ plt.show()
 
 plt.imshow(params['universe_lp']['f'][0,:,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_mlp_classify_mnist_filter.png", dpi=75)
+plt.savefig("vnn_mlp_classify_mnist_filter.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_mlp_full_classify_mnist_states.png", dpi=75)
+plt.savefig("vnn_mlp_full_classify_mnist_states.png", dpi=150)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -224,7 +224,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_mlp_full_classify_mnist_states_thres.png", dpi=75)
+plt.savefig("vnn_mlp_full_classify_mnist_states_thres.png", dpi=150)
 plt.show()
 
 print("END")
