@@ -26,7 +26,7 @@ def generate_square_pulses(
 
     Returns:
         np.ndarray: A 2D NumPy array of shape (batch_size, length).
-    
+
     Raises:
         ValueError: If pulse_width is greater than the signal length.
 
@@ -45,11 +45,11 @@ def generate_square_pulses(
         # the pulse fits entirely within the signal array.
         max_start_index = length - pulse_width
         start_index = np.random.randint(0, max_start_index + 1)
-        
+
         # "Turn on" the pulse for the calculated duration
         end_index = start_index + pulse_width
         signals[i, start_index:end_index] = amplitude
-    
+
     # 3. Add Gaussian noise if specified
     if noise_level > 0:
         # Generate noise from a normal distribution and scale it by noise_level
@@ -62,10 +62,88 @@ def generate_square_pulses(
         # keepdims=True ensures the output shape is (batch_size, 1) for broadcasting
         mean = np.mean(signals, axis=1, keepdims=True)
         std = np.std(signals, axis=1, keepdims=True)
-        
+
         # Add a small epsilon to the standard deviation to avoid division by zero
         # in case a signal is completely flat (has zero variance).
         epsilon = 1e-8
         signals = (signals - mean) / (std + epsilon)
 
     return signals
+
+def generate_arithmetic_logic(samples, n = 8, ctrl_bits = 4, batch_size = 64, noise_level: float = 0.2):
+    """
+    Generate data that follows the following truth table:
+    #   S_2     S_1     S_0     C_in    |   Out        C_out
+    #   0       0       0       0       |   F = A       0 Identity
+    #   0       0       0       1       |   F = A+1     0 Increment
+    #   0       0       1       0       |   F = A+B     0 Sum
+    #   0       0       1       1       |   F = A+B+1   1 Carry
+    #   0       1       1       1       |   F = A-B-1   1 Borrow
+    #   0       1       1       0       |   F = A-B     0 Subtract
+    #   0       1       0       1       |   F = A-1     0 Decrement
+    #   0       1       0       0       |   F = A       0 Identity
+    #   1       0       0       0       |   F = A+B     0 OR
+    #   1       0       1       0       |   F = Acirc+B 0 XOR
+    #   1       1       0       0       |   F = AB      0 AND
+    #   1       1       1       0       |   F = A'      0 NOT
+    @author: Shakes
+    """
+    bit_depth = 2**(n-1)
+    ctrl_bit_depth = 2**ctrl_bits
+    num_batches = samples//batch_size
+    delta = noise_level
+
+    numbers = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
+    operands = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
+    controls = np.random.randint(1, ctrl_bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
+    print("numbers shapes:", numbers.shape, operands.shape, controls.shape)
+
+    #create labels
+    #two step process, first do the numerical ops, easy to do as numbers (packed)
+    Y_raw = []
+    for batch_numbers, batch_operands, batch_controls in zip(numbers, operands, controls):
+        batch = []
+        # print("batch numbers shape",batch_numbers.shape)
+        for number, operand, control in zip(batch_numbers, batch_operands, batch_controls):
+            # print(number)
+            if control == 0 or control == 4: #Identity
+                batch.append(number)
+            elif control == 1: #Increment
+                batch.append(number+1)
+            elif control == 2 or control == 8: #Sum
+                batch.append(number+operand)
+            elif control == 3: #Sum, Increment
+                batch.append(number+operand+1)
+            elif control == 5: #Decrement
+                batch.append(number-1)
+            elif control == 6: #Minus
+                batch.append(number-operand)
+            elif control == 7: #Minus, decrement
+                batch.append(number-operand-1)
+            else: #Identity
+                batch.append(number)
+                continue #bitwise op done later
+        # print(batch)
+        Y_raw.append(batch)
+
+    Y_raw = np.array(Y_raw)
+    # print("Y_raw:", Y_raw.shape)
+    Y_raw = Y_raw.reshape(num_batches,batch_size,1)
+    # print("Y_raw:", Y_raw.shape)
+
+    #to bits
+    X1 = np.unpackbits(numbers, axis=2, count=n)
+    X2 = np.unpackbits(operands, axis=2, count=n)
+    C = np.unpackbits(controls, axis=2, count=n) #count < 8 doesn't work :(
+    Y_raw = np.unpackbits(Y_raw, axis=2, count=n)
+    # print("X1 shape:", X1.shape)
+
+    #add noise
+    rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
+    rand2 = np.random.uniform(-delta,+delta,size=X2.shape)
+    rand3 = np.random.uniform(-delta,+delta,size=C.shape)
+    X1f = X1.astype(np.float32) + rand1
+    X2f = X2.astype(np.float32) + rand2
+    Cf = C.astype(np.float32) + rand3
+
+    return X1f, X2f, Cf, Y_raw

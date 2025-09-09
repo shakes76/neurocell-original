@@ -17,6 +17,7 @@ import time
 from sklearn.model_selection import train_test_split
 
 from universe import UniverseLP #local
+import data
 import utils #local
 
 utils.jax_status()
@@ -40,111 +41,8 @@ N = 4*n + padding
 print("N:", N, "Epochs:", epochs, "bit depth:", bit_depth)
 
 #===========
-##data
-#   S_2     S_1     S_0     C_in    |   Out        C_out
-#   0       0       0       0       |   F = A       0 Identity
-#   0       0       0       1       |   F = A+1     0 Increment
-#   0       0       1       0       |   F = A+B     0 Sum
-#   0       0       1       1       |   F = A+B+1   1 Carry
-#   0       1       1       1       |   F = A-B-1   1 Borrow
-#   0       1       1       0       |   F = A-B     0 Subtract
-#   0       1       0       1       |   F = A-1     0 Decrement
-#   0       1       0       0       |   F = A       0 Identity
-#   1       0       0       0       |   F = A+B     0 OR
-#   1       0       1       0       |   F = Acirc+B 0 XOR
-#   1       1       0       0       |   F = AB      0 AND
-#   1       1       1       0       |   F = A'      0 NOT
 #data
-numbers = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
-operands = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
-controls = np.random.randint(1, ctrl_bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
-print("numbers shapes:", numbers.shape, operands.shape, controls.shape)
-# print("numbers:", numbers[:1])
-# print("operands:", operands[:1])
-# print("controls:", controls[:1])
-
-#create labels
-#two step process, first do the numerical ops, easy to do as numbers (packed)
-Y_raw = []
-# bit_ops = []
-for batch_numbers, batch_operands, batch_controls in zip(numbers, operands, controls):
-    batch = []
-    # bitwise_op = False
-    # print("batch numbers shape",batch_numbers.shape)
-    for number, operand, control in zip(batch_numbers, batch_operands, batch_controls):
-        # if operand > number: #don't have negative outcomes
-        #     continue
-        # print("number shape",number.shape)
-        # print(number)
-        if control == 0 or control == 4: #Identity
-            batch.append(number)
-        elif control == 1: #Increment
-            batch.append(number+1)
-        elif control == 2 or control == 8: #Sum
-            batch.append(number+operand)
-        elif control == 3: #Sum, Increment
-            batch.append(number+operand+1)
-        elif control == 5: #Decrement
-            batch.append(number-1)
-        elif control == 6: #Minus
-            batch.append(number-operand)
-        elif control == 7: #Minus, decrement
-            batch.append(number-operand-1)
-        else: #Identity
-            batch.append(number)
-            # bitwise_op = True
-            continue #bitwise op done later
-    # print(batch)
-    Y_raw.append(batch)
-    # bit_ops.append(bitwise_op)
-
-Y_raw = np.array(Y_raw)
-print("Y_raw:", Y_raw.shape)
-Y_raw = Y_raw.reshape(num_batches,batch_size,1)
-print("Y_raw:", Y_raw.shape)
-
-#to bits
-X1 = np.unpackbits(numbers, axis=2, count=n)
-X2 = np.unpackbits(operands, axis=2, count=n)
-C = np.unpackbits(controls, axis=2, count=n) #count < 8 doesn't work :(
-Y_raw = np.unpackbits(Y_raw, axis=2, count=n)
-print("X1 shape:", X1.shape)
-# print("X1:", X1[:1])
-# print("X2:", X2[:1])
-# print("C:", C[:1])
-# print("Y_raw:", Y_raw[:1])
-
-#then do the bitwise ops (unpacked)
-for batch_index, (batch_numbers, batch_operands, batch_controls, batch_y) in enumerate(zip(X1, X2, C, Y_raw)):
-    # print("control:", batch_controls)
-    batch_controls = np.packbits(batch_controls,axis=1)
-    # print("control shape",batch_controls.shape)
-    # print("control packed:", batch_controls)
-    for index, (number, operand, control, y) in enumerate(zip(batch_numbers, batch_operands, batch_controls, batch_y)):
-        # print("control:", control, "x1:", number, "x2:", operand, "Y_raw:", Y_raw[batch_index][index])
-        if control == 8: #OR
-            Y_raw[batch_index][index] = np.bitwise_or(number, operand)
-            # print("Y_raw OR:", Y_raw[batch_index][index])
-        elif control == 10: #XOR
-            Y_raw[batch_index][index] = np.bitwise_xor(number, operand)
-            # print("Y_raw XOR:", Y_raw[batch_index][index])
-        elif control == 12: #AND
-            Y_raw[batch_index][index] = np.bitwise_and(number, operand)
-            # print("Y_raw AND:", Y_raw[batch_index][index])
-        elif control == 14: #NOT
-            #need to ensure bit depth is 1, so use bool type then go back
-            Y_raw[batch_index][index] = np.bitwise_not(number.astype(bool), operand.astype(bool)).astype(np.uint8)
-            # print("Y_raw NOT:", Y_raw[batch_index][index])
-        else: #Identity
-            continue #should have been done numerically above, so ignore
-
-#add noise
-rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
-rand2 = np.random.uniform(-delta,+delta,size=X2.shape)
-rand3 = np.random.uniform(-delta,+delta,size=C.shape)
-X1f = X1.astype(np.float32) + rand1
-X2f = X2.astype(np.float32) + rand2
-Cf = C.astype(np.float32) + rand3
+X1f, X2f, Cf, Y_raw = data.generate_arithmetic_logic(samples, n, ctrl_bits, batch_size, delta)
 
 #stack
 X_preproc = np.concatenate([X1f, X2f, Cf], axis=-1)
@@ -237,7 +135,7 @@ plt.show()
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    MSE
     '''
     #MSE loss
     logits, state = network.apply(params, state, batch)
@@ -307,15 +205,15 @@ for step in range(1, epochs+1):
         print(f"[Step {step}, Loss {loss_value}]")
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("alu_arithmetic_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("alu_arithmetic_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             N=N, ctrl_bits=ctrl_bits, bit_depth=bit_depth, n=n, input_size=input_size, output_size=output_size,
-            input_offset_x1=input_offset_x1, input_offset_x2=input_offset_x2, 
+            input_offset_x1=input_offset_x1, input_offset_x2=input_offset_x2,
             crtl_size=ctrl_size, ctrl_offset=ctrl_offset, output_offset=output_offset,
             kernel_size=kernel_size,
             allow_pickle=False)
