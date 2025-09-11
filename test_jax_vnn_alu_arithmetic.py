@@ -30,14 +30,14 @@ ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
 samples = 64000
 batch_size = 128
-kernel_size = (23,11)
+kernel_size = (23,13)
 num_batches = samples//batch_size
 total_steps = num_batches*epochs
 delta = 0.2
 padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
-N = 4*n + padding
+N = 2*n + padding
 print("N:", N, "Epochs:", epochs, "bit depth:", bit_depth)
 
 #===========
@@ -213,9 +213,9 @@ jnp.savez("alu_arithmetic_cells.npz",
             filters=params['universe_lp']['f'],
             states=params['universe_lp']['s'],
             N=N, ctrl_bits=ctrl_bits, bit_depth=bit_depth, n=n, input_size=input_size, output_size=output_size,
-            input_offset_x1=input_offset_x1, input_offset_x2=input_offset_x2,
-            crtl_size=ctrl_size, ctrl_offset=ctrl_offset, output_offset=output_offset,
-            kernel_size=kernel_size,
+            depth=depth, input_offset_x1=input_offset_x1, input_offset_x2=input_offset_x2,
+            ctrl_size=ctrl_size, ctrl_offset=ctrl_offset, output_offset=output_offset,
+            kernel_size=kernel_size, directions=directions, gap=gap, ctrl_gap=ctrl_gap,
             allow_pickle=False)
 
 plt.imshow(params['universe_lp']['w'])
