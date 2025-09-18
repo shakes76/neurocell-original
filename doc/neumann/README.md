@@ -6,7 +6,8 @@ This means that there can be UVMs possible and that machines that can self-repli
 In this branch, we take notes of von Nuemann's work and discuss the implications in various sections:
 
 * [Goals](goals.md) of his work
-* [Models](models.md) of Self-replication 
+* Notes on the [Brain](brain.md)
+* [Models](models.md) of Self-replication
 
 ## References
 [1] J. Von Neumann, Theory of self-reproducing automata / Edited and completed by Arthur W. Burks. Urbana Ill.}: University of Illinois Press, 1966.
