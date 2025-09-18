@@ -81,7 +81,7 @@
 %In this work, we unite the modern deep learning framework to solve tasks through neural networks with cellular automata that use simple rules to assemble structures. The resulting framework allows neural networks to additionally learn their architecture and cellular automata to learn the rules for their assembly.
 %Artificial neural networks have become very successful recently through the advancements in deep learning.
 
-In the mid-twentieth century, John von Neumann envisioned a computational system comprising infinite array of square cells in which each cell contained some finite state or purpose and used it to construct a machine capable of reproducing itself within this cellular structure~\citep[published post-humorously]{von_neumann_theory_1966}. This theory of self-replicating machines is one of the founding works of cellular automata, in which simulations evolve the cells in the array via a set of simple rules based on the state of each cell~\citep{sipper_fifty_1998}. He was motivated in understanding how the human brain functioned and could be modelled as a digital machine~\citep[pg. 43]{neumann_computer_1958} and how these simplified cellular structures could approximate it as a model of self-replication~\citep[pg. 93]{von_neumann_theory_1966}. His key insight was that these square cells could make decisions like neurons in the brain but would also maintain states depending on their purpose, eventually proposing a continuous version of the model would be ``a system of of non-linear PDEs, essentially of the diffusion type'' but he would not be able to write up this work before his death in 1957~\citep[pg. 95]{von_neumann_theory_1966}.
+In the mid-twentieth century, John von Neumann envisioned a computational system comprising an infinite array of square cells in which each cell contained some finite state or purpose and used it to construct a machine capable of reproducing itself within this cellular structure~\citep[published post-humorously]{von_neumann_theory_1966}. This theory of self-replicating machines is one of the founding works of \ac{CA}, in which simulations evolve the cells in the array via a set of simple rules based on the state of each cell~\citep{sipper_fifty_1998}. He was motivated in understanding how the human brain functioned and could be modelled as a digital machine~\citep[pg. 43]{neumann_computer_1958} and how these simplified cellular structures could approximate it as a model of self-replication~\citep[pg. 93]{von_neumann_theory_1966}. His key insight was that these square cells could make decisions like neurons in the brain but would also maintain states depending on their purpose, eventually proposing a continuous version of the model would be ``a system of of non-linear PDEs, essentially of the diffusion type'' but he would not be able to write up this work before his death in 1957~\citep[pg. 95]{von_neumann_theory_1966}.
 %through digital signals, i.e. an absence of a pulse representing zero and sending a pulse to represent a one,
 %neurons that behave much like the~\citet{mcculloch_logical_1943} formulation of an artificial neuron devised around the same time.
 %proposed machines as . These cells have different specialised roles depending on the task, where they were originally introduced during machine replication, a process that resulted in the first independent construction of cellular automata~\citep[published post-humorously]{von_neumann_theory_1966}. He envisioned that machines such as these consist of cells that approximate neurons that behave much like the McCulloch and Pits formulation of an artificial neuron devised around the same time~\citep{mcculloch_logical_1943}. His key insight was that these cells would make decisions like neurons in the brain but would also maintain states depending on their purpose~\citep{neumann_computer_1958}. 
@@ -96,21 +96,31 @@ Neurons have evolved from~\citet{mcculloch_logical_1943} style designs to the mo
 \end{equation}
 where $x$ is the input, $W$ represents the weights of the various (usually fixed) connections to this neuron, $b$ is the bias of the neuron and $\sigma$ is an activation function applied when firing.
 
-In what follows, we present a framework that integrates a discrete non-linear partial differential equation approach of diffusion type on infinite square cells to model neural networks embedded within these cells. It models each cell as a modern deep learning neuron with continuous state, their interaction with other neurons with convolutional operators and their impulses as finite difference steps, so that each neuron's state is decided through stochastic gradient descent, thereby allowing cells to learn their own rules of evolution. Not only does this allow networks to learn their own architectures and assume arbitrary shapes beyond that of layered, feed-forward perceptrons, but also enable to learn multiple spatially based connections (filters) between these learnt structures.
+In what follows, we present a computational framework on infinite square cells to model each cell as a modern deep learning neuron with the addition of a continuous state. The proposed neurocell framework simulates the interaction of neurons efficiently with convolutional operators and propagates their impulses using finite differences, so that each neuron's state can be decided through stochastic gradient descent, thereby allowing cells to learn their own (continuous) rules of evolution.  The result is a discrete system that integrates a non-linear partial differential equation of diffusion type that models neural networks embedded within these cells that we will call \acp{VNN}. Not only does this allow networks to learn their own architectures and assume arbitrary shapes beyond that of layered, feed-forward perceptrons within these structures, but also enable them to learn multiple spatially based connections (filters) between these learnt structures. In this work specifically, we show the following:
+\begin{enumerate}
+	\item Construction of \acp{VNN} that are neural networks directly embedded with the universe of square cells and prove their equivalence to corresponding deep learning \acp{MLP} of similar shape and size.
+	\item Show that \acp{VNN} are capable of learning their own architecture and connectivity across multiple `layers' through gradient descent across the universe of cells.
+	\item Show that \acp{VNN} are capable of solving not only similar problems to deep learning at similar complexity, but allow the construction of neural circuits for building \acp{CM} and \ac{CM} based \acp{CPU} for cellular computers. 
+	\item We provide three proofs of the universality of \acp{VNN} and discuss the extension of computational power that \acp{CM} might provide with \ac{MMA} systems.
+\end{enumerate}
 %In this work, we create a framework for deep learning as cellular automata by imbuing an artificial neuron with a learnable (continuous) state as John von Neumann originally intended. This allows us to replicate deep learning entirely on cells, resulting in artificial neural networks running as a cellular automata, which we will refer to as~\acp{VNN}.
 
 \section{Related Works}
-Since von Neumann's self-replicating machine, majority of advancements have been largely focused on simplifying the number of states required and creating various rule sets of the cellular automata in order to produce Turing complete systems; see a brief review of this area provided in Appendix~\ref{sec::review-replication}.
+Since von Neumann's initial proposal of a self-replicating machine through cells having one of a possible 29 states~\citep[pg. 132]{von_neumann_theory_1966}, majority of advancements have been largely focused on simplifying the number of states required, while creating various rule sets of \ac{CA} that produce Turing complete systems; see a brief review of this area provided in Appendix~\ref{sec::review-replication}.
+
+The recent work of~\citet{mordvintsev_growing_2020} has involved applying modern deep learning models to learn to generate patterns within \ac{CA}. Since it is impossible to know \emph{apriori} if a pattern produces complex behaviour without first simulating it, therefore generating patterns for applications is highly desirable. In their formulation however, each cell contains an \ac{MLP} that processes the neighbourhood and learns to produce a particular target pattern or image. These neural \ac{CA} together with morphogensis originally proposed by~\citet{turing_chemical_1990} are very well suited for generating textures on images~\citep{mordvintsev_nca_2021} and meshes~\citep{pajouheshgar_mesh_2024}. Recently, \citet{miotti_differentiable_2025} have even proposed using these neural \ac{CA} to represent logic systems.
+
 % mixing mechanisms
 % architectures
 % back prop
-Various attempts have been made to add memory and states to deep learning, but these have had largely unstable training, although they were able to learn to solve simple problems~\citep{graves_neural_2014, graves_hybrid_2016}. A few attempts have been made to produce learnable cellular automata including CoDI~\citep{gers_codi-1bit_1998} that relies on spiking networks and genetic encoding to simulate its network.
+Various attempts have been made to add memory and states to deep learning, but these have had largely unstable training, although they were able to learn to solve simple problems~\citep{graves_neural_2014, graves_hybrid_2016}. A few attempts have been made to produce learnable \ac{CA} including CoDI~\citep{gers_codi-1bit_1998} that relies on spiking networks and genetic encoding to simulate its network.
 
+\section*{Appendix}
 \appendix
 \section{Review of Self-replicating machines}\label{sec::review-replication}
-John von Neumann used 29 different states in his original formulation to imbue his cellular neurons with special functions during the self-replication process of his machine, where the machine encodes instructions of a universal Turing machine that eventually computes the replication~\citep{von_neumann_theory_1966}. Significant progress has been made in implementing~\citep{mange_macroscopic_2004,buckley_signal_2008} and extending self-replicating machines of von Neumann in the decades following his work. \citet{codd_cellular_1968}, with subsequent recent amendments from~\citet{hutton_codds_2010}, reduced the requirement of self-replication requiring 29 states to a total of only 8 states. Others have further simplified self-replication to fewer states, reduced the dimensionality, and removed universal requirements~\citep{banks_information_1971,wolfram_statistical_1983,langton_self-reproduction_1984}. A more detailed review of this area can be found in~\citet{sipper_fifty_1998}.
+John von Neumann used 29 different states in his original formulation to imbue his cellular neurons with special functions during the self-replication process of his machine, where the machine encodes instructions of a \ac{UTM} that eventually computes the replication~\citep{von_neumann_theory_1966}. Significant progress has been made in implementing~\citep{mange_macroscopic_2004,buckley_signal_2008} and extending self-replicating machines of von Neumann in the decades following his work. \citet{codd_cellular_1968}, with subsequent recent amendments from~\citet{hutton_codds_2010}, reduced the requirement of self-replication requiring 29 states to a total of only 8 states. Others have further simplified self-replication to fewer states, reduced the dimensionality, and removed universal requirements~\citep{banks_information_1971,wolfram_statistical_1983,langton_self-reproduction_1984}. A more detailed review of this area can be found in~\citet{sipper_fifty_1998}.
 
-More recent work has focused on simpler cellular automata with as few rules as possible, while maintaining complex behaviour. The most famous of these is John Conway's Game of Life~\citep{gardner_mathematical_1970}, where the cells have only 2 states and rules that change the state of cells based on its neighbours. Surprisingly, even this simple 2-state cellular system is Turing complete~\citep{rendell_fully_2013}. More complex rules have been developed to simulate artificial life~\citep{hong_kong_lenia_2019} and are the subject of ongoing research~\citep{chan_lenia_2020}.
+More recent work has focused on simpler \ac{CA} with as few rules as possible, while maintaining complex behaviour. The most famous of these is John Conway's Game of Life~\citep{gardner_mathematical_1970}, where the cells have only 2 states and rules that change the state of cells based on its neighbours. Surprisingly, even this simple 2-state cellular system is Turing complete~\citep{rendell_fully_2013}. More complex rules have been developed to simulate artificial life~\citep{hong_kong_lenia_2019} and are the subject of ongoing research~\citep{chan_lenia_2020}.
 
 \bibliographystyle{elsarticle-harv} %elsarticle-num
 \bibliography{references}
@@ -120,18 +130,23 @@ More recent work has focused on simpler cellular automata with as few rules as p
 \acro{1D}{one dimensional}
 \acro{2D}{two dimensional}
 \acro{3D}{three dimensional}
-\acro{VNN}{Von Neumann Neural Network}
+\acro{VNN}{von Neumann network}
 \acro{GCD}{greatest common divisor}
 \acro{ACE}{automatic computing engine}
-\acro{FSM}{Finite State Machine}
-\acro{UTM}{Universal Turing Machine}
-\acro{UC}{Universal Computation}
-\acro{UR}{Universal Replication}
+\acro{FSM}{finite state machine}
+\acro{UTM}{universal Turing machine}
+\acro{CM}{cellular machine}
+\acro{UCM}{universal cellular machine}
+%\acro{UC}{Universal Computation}
+%\acro{UR}{Universal Replication}
 \acro{CPU}{central processing unit}
 \acro{GPU}{graphical processing unit}
 \acro{ALU}{arithmetic logic unit}
+\acro{CA}{cellular automata}
 \acro{GoL}{Game of Life}
 \acro{QM}{quantum mechanics}
+\acro{MLP}{multi-layered perceptron}
+\acro{MMA}{massive multi-agent}
 \end{acronym}
 
 \end{document}
