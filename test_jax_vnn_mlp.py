@@ -19,7 +19,7 @@ utils.jax_status()
 
 #parameters
 N = 7
-epochs = 200
+epochs = 100
 samples = 120
 batch_size = 12
 num_batches = samples//batch_size
@@ -30,7 +30,7 @@ print("N:", N, "Epochs:", epochs)
 
 #===========
 ##data
-# reshapes to get 2D arrays 
+# reshapes to get 2D arrays
 X = np.arange(-1.5, 1.5, 0.025, dtype=np.float32).reshape(-1,1)
 Y = np.zeros(samples, dtype=np.float32).reshape(-1,1)
 print("X shape", X.shape, "Y shape", Y.shape)
@@ -82,7 +82,7 @@ opt_state = opt.init(params)
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-4) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     # labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
@@ -138,13 +138,13 @@ for step in range(1, epochs+1):
     # break
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("mlp_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("mlp_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             allow_pickle=False)
 
 plt.imshow(params['universe_lp']['w'])
