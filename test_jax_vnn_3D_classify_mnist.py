@@ -94,7 +94,7 @@ dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
 x = jnp.asarray(x.numpy())
 # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-print("INIT SHAPE", x[0:1].shape)
+# print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)

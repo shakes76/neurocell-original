@@ -1043,7 +1043,8 @@ class Universe3D(UniverseLP):
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        # self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -1294,31 +1295,37 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
 
     All operations are done on the sub-region defined by width of nethood and central index
     """
-    height = filters.shape[1] #shape is (1,rows,cols,1)
-    width = filters.shape[2] #shape is (1,rows,cols,1)
-    height_pad = (height-1)//2
-    width_pad = (width-1)//2
-    # print("index",index,"width",width,"width_pad",width_pad)
+    # height = filters.shape[1] #shape is (1,rows,cols,1)
+    # width = filters.shape[2] #shape is (1,rows,cols,1)
+    filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
+    width = filter_shape[-1] # last dim
+    height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape[:-1])) # half of other dims of filter
+    height_pad_shape = height_pad_shape + (0,) + (0,) #padding for each dim plus nth dim and filter dim
+    height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
+    width_pad = (width-1)//2 # half of last dim of filter
+    # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
+    #selects hyper plane (n-1)D
     # sub_cells = cells[:,index-1:index-1+width]
-    sub_weights = weights[:,index].reshape(-1,1) #reshape promotes to column vec
-    sub_biases = biases[:,index].reshape(-1,1) #reshape promotes to column vec
-    sub_states = states[:,index].reshape(-1,1) #reshape promotes to column vec
+    sub_weights = weights[...,index]
+    sub_biases = biases[...,index]
+    sub_states = states[...,index]
     # print("sub_states",sub_states.shape)
 
-    #conv
+    #extract sub array of filter width to conv
     # print("cells",cells.shape)
-    result_block = cells[:,index-width_pad:index-width_pad+width]
+    result_block = cells[...,index-width_pad:index-width_pad+width]
 
-    result_block = result_block[...,jnp.newaxis]
-    sub_weights = sub_weights[...,jnp.newaxis]
-    sub_biases = sub_biases[...,jnp.newaxis]
-    sub_states = sub_states[...,jnp.newaxis]
+    #restore to nD
+    result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
+    sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach
     result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
-    result_block = jnp.pad(result_block, ((height_pad,height_pad), (0,0), (0,0)) ) #pad rows to undo valid conv in rows
+    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #Same mode approach
     # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")
     # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
