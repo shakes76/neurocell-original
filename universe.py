@@ -1021,9 +1021,7 @@ class Universe3D(UniverseLP):
         # hk.set_state("states", self.states)
         # we need input and out shaped array to force input/output states to be active, used later
         # assumes all ins and outs are same size by taking first element, TODO: remove this restriction
-        self.input_states = []
-        for in_size in in_sizes:
-            self.input_states.append(jnp.full(in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype))
+        self.input_states = jnp.full(in_sizes, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
         self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
         self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
 
@@ -1045,7 +1043,7 @@ class Universe3D(UniverseLP):
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_full_mlp_list, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 

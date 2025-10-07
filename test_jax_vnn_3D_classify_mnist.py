@@ -81,7 +81,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = Universe3D(N)
-    mlp.initialize_3D([input_size], output_size, [input_offset], output_offset, depth, kernel_size, directions=directions)
+    mlp.initialize_3D(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
@@ -94,8 +94,8 @@ dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
 x = jnp.asarray(x.numpy())
 # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-# print("INIT SHAPE", x[0:1].shape)
-params, state = network.init(jax.random.PRNGKey(42), [x[0:1]])
+print("INIT SHAPE", x[0:1].shape)
+params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
 
@@ -151,7 +151,7 @@ for step in range(epochs+1):
         # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
         # print("TRAIN SHAPE", x.shape)
 
-        params, opt_state, loss_value, state = update(params, opt_state, state, [x], y)
+        params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
         total_loss += loss_value/batch_size
     total_loss /= total_batches
 
@@ -166,7 +166,7 @@ for step in range(epochs+1):
 
             # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
 
-            logits, state_test = network.apply(params, state, [x]) #if reshaped, use squeeze
+            logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
             predicted = jnp.squeeze(logits, axis=-1)
             # predicted = jnp.squeeze(predicted, axis=-1)
             predicted = jnp.argmax(predicted[...,0], axis=-1)
@@ -199,7 +199,7 @@ for x, y in tqdm(test_loader):
 
     # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
 
-    logits, state_test = network.apply(params, state, [x])
+    logits, state_test = network.apply(params, state, x)
     predicted = jnp.squeeze(logits, axis=-1)
     # predicted = jnp.squeeze(predicted, axis=-1)
     predicted = jnp.argmax(predicted[...,0], axis=-1)
