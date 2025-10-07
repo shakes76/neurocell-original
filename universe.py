@@ -1199,19 +1199,21 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
     Uses column based computation for efficiency and propagates up to provided depth and
     then one more for output layer.
     """
+    zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
+
     cells = jax.lax.dynamic_update_slice(cells, input, offset)
 
     #propagate
-    index = offset[1]+1 #first col next to input
+    index = offset[-1]+1 #first col (or hyper plane) next to input
     # print("forward index",index)
     for i in range(depth): #0 to depth-1, depth in total
         result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
-        cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i))
+        cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
     # print("forward index final",index+depth)
     result_block = _forward_column(index+depth, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides)
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
-    cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
