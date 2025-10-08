@@ -1043,8 +1043,65 @@ class Universe3D(UniverseLP):
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
+        self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+
+        return hk.get_state("universe")
+
+    def initialize_hyperplane(self, in_sizes, out_sizes, in_offsets, out_offsets, depth, kernel_size=(3,3,3), directions=1):
+        """
+        Init all cells with a series of input and outputs as vectors, i.e. lists of vectors are provided, single values are also supported.
+
+        Assumes inputs or outputs are of same length, different number of inputs and outputs can be provided.
+        """
+        self.in_size = in_sizes
+        self.out_size = out_sizes
+        self.in_offset = in_offsets
+        self.out_offset = out_offsets
+        self.kernel_size = kernel_size
+        self.depth = depth
+        self.directions = directions
+        # print("depth:", self.depth)
+
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
+
+        # init_scale = 1./jnp.sqrt(self.depth*self.N*self.N)
+        init_scale = 1./jnp.sqrt(self.depth*self.N)
+        init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]*self.kernel_size[2]*self.directions) #shape is (rows,cols) before array creation
+
+        #init states
+        self.s_init = VectorCells(in_sizes, out_sizes, in_offsets, out_offsets, is_states=True, clear=False, random_init=init_scale)
+        # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        # passives = jnp.full(layer_size, STATE_ACTIVE, dtype=self.states_dtype)
+        # self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
+        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # print("States:", self.states)
+        # hk.set_state("states", self.states)
+        # we need input and out shaped array to force input/output states to be active, used later
+        # assumes all ins and outs are same size by taking first element, TODO: remove this restriction
+        self.input_states = jnp.full(in_sizes, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
+
+        #init weights (random)
+        self.w_init = VectorCells(in_sizes, out_sizes, in_offsets, out_offsets, is_states=False, clear=False, random_init=init_scale)
+        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+
+        #init biases
+        self.b_init = jnp.zeros
+        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        #init filters
+        self.filters_shape = (1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions)
+        self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
+        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
+
+        self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
+                                self.filters.shape,  # only ndim matters, not shape
+                                ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
+
         self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
-        # self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 

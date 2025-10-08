@@ -54,20 +54,19 @@ num_classes = 10
 #setup network position
 center = N//2
 depth = layers*2+1 #1 col of signal cells per layer
-depth //= 2
 input_top = center-length//2
 input_left = center-length//2
 input_inner = center-(depth-1)//2
 output_top = center-num_classes//2
 output_left = center
-output_inner = input_left+depth+1 #include out layer
+output_inner = input_inner+depth+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (length,length,1)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (7,7,5)
+kernel_size = (7,7,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
@@ -81,7 +80,7 @@ def _forward(batch) -> jnp.ndarray:
     Forward pass through network
     '''
     mlp = Universe3D(N)
-    mlp.initialize_3D(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
+    mlp.initialize_hyperplane(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
@@ -101,7 +100,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Initial States")
-plt.savefig("vnn_3D_full_classify_mnist_states_init.png", dpi=150)
+plt.savefig("vnn_3D_hplane_classify_mnist_states_init.png", dpi=150)
 plt.show()
 
 #loss function
@@ -180,7 +179,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("3D_classify_mnist_cells.npz",
+jnp.savez("3D_hplane_classify_mnist_cells.npz",
             weights=params['universe3_d']['w'],
             biases=params['universe3_d']['b'],
             filters=params['universe3_d']['f'],
@@ -211,22 +210,22 @@ print(f"[Final Test Accuracy {accuracy}]")
 
 plt.imshow(params['universe3_d']['w'][center,...])
 plt.title("Final Weights")
-plt.savefig("vnn_3D_classify_mnist_weights.png", dpi=150)
+plt.savefig("vnn_3D_hplane_classify_mnist_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe3_d']['b'][center,...])
 plt.title("Final Biases")
-plt.savefig("vnn_3D_classify_mnist_biases.png", dpi=150)
+plt.savefig("vnn_3D_hplane_classify_mnist_biases.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe3_d']['f'][0,center,:,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_3D_classify_mnist_filter.png", dpi=75)
+plt.savefig("vnn_3D_hplane_classify_mnist_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Final States")
-plt.savefig("vnn_3D_full_classify_mnist_states.png", dpi=75)
+plt.savefig("vnn_3D_hplane_full_classify_mnist_states.png", dpi=75)
 plt.show()
 
 states = params['universe3_d']['s']
@@ -235,7 +234,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states[center,...])
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_3D_full_classify_mnist_states_thres.png", dpi=75)
+plt.savefig("vnn_3D_hplane_full_classify_mnist_states_thres.png", dpi=75)
 plt.show()
 
 print("END")

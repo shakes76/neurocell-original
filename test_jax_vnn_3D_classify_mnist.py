@@ -60,7 +60,7 @@ input_left = center-length//2
 input_inner = center-(depth-1)//2
 output_top = center-num_classes//2
 output_left = center
-output_inner = input_left+depth+1 #include out layer
+output_inner = input_inner+depth+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (length,length,1)
@@ -101,7 +101,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Initial States")
-plt.savefig("vnn_3D_full_classify_mnist_states_init.png", dpi=150)
+plt.savefig("vnn_3D_classify_mnist_states_init.png", dpi=150)
 plt.show()
 
 #loss function
