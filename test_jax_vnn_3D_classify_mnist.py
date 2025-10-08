@@ -67,11 +67,11 @@ input_size = (length,length,1)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (7,7,5)
+kernel_size = (9,9,5)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
-directions = 8 #how many filters, i.e. possible directions, to learn
+directions = 1 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "total batches:", total_batches)
 
 #===========
@@ -87,7 +87,7 @@ def _forward(batch) -> jnp.ndarray:
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(learning_rate=0.005)
-opt = optax.adam(learning_rate=0.001)
+opt = optax.adam(learning_rate=0.01)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 dataset_iter = iter(train_loader)
