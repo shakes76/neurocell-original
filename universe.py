@@ -1380,7 +1380,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
 
     # print("result_block",result_block.shape, "filters", filters.shape)
-    #valid mode approach
+    #valid mode approach, reduced complexity, handles boundaries better?
     result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
     result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #Same mode approach
@@ -1421,6 +1421,11 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     """
     # centre = cells.shape[1]//2
     # padding = filters.shape[1]-1
+    filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
+    height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape)) # half of all dims of filter
+    height_pad_shape = height_pad_shape + (0,) #padding for each dim plus filter dim
+    height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
+    # print("height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
     # sub_weights = weights[:,centre-width//2-padding:centre+width//2+padding]
     # sub_biases = biases[:,centre-width//2-padding:centre+width//2+padding]
@@ -1432,8 +1437,12 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     states = states[...,jnp.newaxis]
 
     #conv to eval neighbourhood
+    # padding VALID mode approach, reduced complexity, handles boundaries better?
+    result = _fast_conv(cells, filters, dn, window_strides, padding_mode="VALID")
+    result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows
     # result = _fast_conv(cells[:,centre-width//2-padding:centre+width//2+padding], filters, dn)
-    result = _fast_conv(cells, filters, dn, window_strides) #produces result channel dims matching filters channel dims
+    # padding SAME mode approach
+    # result = _fast_conv(cells, filters, dn, window_strides) #produces result channel dims matching filters channel dims
     # print(result.shape)
 
     if norm:
