@@ -176,8 +176,8 @@ for x, y in tqdm(test_loader):
             im2 = axes[1,plot].imshow(logits[plot,...,0], cmap='gray')
             axes[1,plot].set_title('Reconstruction')
             axes[1,plot].axis('off')
-        plt.tight_layout()
-        plt.savefig("vnn_3D_autoenc_result_"+str(step)+".png", dpi=75)
+            plt.tight_layout()
+            plt.savefig("vnn_3D_autoenc_result_"+str(step)+"_"+str(plot)+".png", dpi=75)
 
     mse = optax.squared_error(predictions=logits, targets=x).mean()
     correct += mse
@@ -187,6 +187,7 @@ for x, y in tqdm(test_loader):
 ave_mse = correct / total
 print(f"[Final Average MSE {ave_mse}]")
 
+fig = plt.figure()
 plt.imshow(params['universe3_d']['w'][center,...])
 plt.title("Final Weights")
 plt.savefig("vnn_3D_autoenc_mnist_weights.png", dpi=150)
