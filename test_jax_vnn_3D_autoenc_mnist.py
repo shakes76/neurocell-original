@@ -30,6 +30,7 @@ layers = 4
 batch_size = 128
 length = 28
 plot_no = 4
+apply_bneck = False
 print("N:", N, "Epochs:", epochs)
 
 #network IO paths
@@ -73,6 +74,48 @@ total_batches = len(train_loader)
 directions = 1 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "total batches:", total_batches)
 
+#bottlenecks
+bneck_length = length//4
+# bneck_sizes = [] #first clear col, then bneck
+bneck_sizes = [(bneck_length,1)] #first clear col, then bneck
+bneck_top = center-bneck_length//2
+bneck_left = input_left+depth//2+1 #middle
+# bneck_offsets = []
+bneck_offsets = [(bneck_top,bneck_left)]
+
+bnecks_values = []
+bneck_offsets_raw = []
+# vertical bottle necks, assume filter width is 3
+for bneck_size, bneck_offset in zip(bneck_sizes, bneck_offsets):
+    #disconnect before
+    # bnecks_values += [jnp.zeros((N,1), dtype=jnp.float32)] #first clear col, then bneck
+    # bneck_offsets_raw += [(0,bneck_offset[1]-4)]
+    # bnecks_values += [jnp.zeros((N,1), dtype=jnp.float32)] #first clear col, then bneck
+    # bneck_offsets_raw += [(0,bneck_offset[1]-3)]
+    # bnecks_values += [jnp.zeros((N,1), dtype=jnp.float32)] #first clear col, then bneck
+    # bneck_offsets_raw += [(0,bneck_offset[1]-2)]
+    bnecks_values += [jnp.full((N,1), jnp.nan, dtype=jnp.float32)] #first clear col, then bneck
+    bneck_offsets_raw += [(0,bneck_offset[1]-1)]
+    #actual bneck
+    bnecks_values += [jnp.full((N,1), jnp.nan, dtype=jnp.float32), jnp.ones(bneck_size, dtype=jnp.float32)] #first clear col, then bneck
+    bneck_offsets_raw += [(0,bneck_offset[1]), bneck_offset]
+    #disconnect after
+    bnecks_values += [jnp.full((N,1), jnp.nan, dtype=jnp.float32)] #first clear col, then bneck
+    bneck_offsets_raw += [(0,bneck_offset[1]+1)]
+    # bnecks_values += [jnp.zeros((N,1), dtype=jnp.float32)] #first clear col, then bneck
+    # bneck_offsets_raw += [(0,bneck_offset[1]+2)]
+    # bnecks_values += [jnp.zeros((N,1), dtype=jnp.float32)] #first clear col, then bneck
+    # bneck_offsets_raw += [(0,bneck_offset[1]+3)]
+    # bnecks_values += [jnp.zeros((N,1), dtype=jnp.float32)] #first clear col, then bneck
+    # bneck_offsets_raw += [(0,bneck_offset[1]+4)]
+
+freeze_cells = None
+if apply_bneck:
+    print("bneck_offsets:", bneck_offsets_raw)
+    freeze_cells = jnp.ones((N,N), dtype=jnp.float32)
+    for bneck, bneck_offset in zip(bnecks_values, bneck_offsets_raw):
+        freeze_cells = jax.lax.dynamic_update_slice(freeze_cells, bneck, bneck_offset)
+
 #===========
 ##create model
 def _forward(batch) -> jnp.ndarray:
@@ -97,6 +140,17 @@ x = jnp.asarray(x.numpy())
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
+
+if apply_bneck:
+    for bneck, bneck_offset in zip(bnecks_values, bneck_offsets_raw):
+        # params['universe3_d']['w'] = jax.lax.dynamic_update_slice(params['universe3_d']['w'], bneck, bneck_offset)
+        params['universe3_d']['s'] = jax.lax.dynamic_update_slice(params['universe3_d']['s'], bneck, bneck_offset)
+        # params['universe3_d']['b'] = jax.lax.dynamic_update_slice(params['universe3_d']['b'], bneck, bneck_offset)
+
+    plt.imshow(freeze_cells)
+    plt.title("Bottleneck")
+    plt.savefig("vnn_3D_autoenc_mnist_states_bneck.png", dpi=75)
+    plt.show()
 
 plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Initial States")
