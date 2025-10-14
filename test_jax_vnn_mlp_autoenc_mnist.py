@@ -24,15 +24,15 @@ utils.jax_status()
 
 #parameters
 N = 1024
-epochs = 8
+epochs = 4
 num_classes = 10
 layers = 4
-batch_size = 64
+batch_size = 128
 img_size = 28
 length = img_size*img_size
 plot_no = 4
-q_value = -jnp.inf #jnp.nan
-apply_bneck = False
+q_value = -jnp.inf #ignore in calculations (much like att masking)
+apply_bneck = True
 print("N:", N, "Epochs:", epochs)
 
 #network IO paths
@@ -67,7 +67,7 @@ input_size = (length,1)
 input_offset = (input_top,input_left)
 output_size = (length,1)
 output_offset = (output_top,output_left)
-kernel_size = (71,3)
+kernel_size = (23,3)
 activation = jax.nn.tanh
 final_activation = None
 total_batches = len(train_loader)
