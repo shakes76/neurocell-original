@@ -23,7 +23,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-N = 32
+N = 36
 epochs = 8
 num_classes = 10
 layers = 4
@@ -53,26 +53,26 @@ num_classes = 10
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween
 #setup network position
 center = N//2
-depth = layers*2+1 #1 col of signal cells per layer
-depth //= 2
+depth_full = layers*2+1 #1 col of signal cells per layer
+depth = depth_full // 2
 input_top = center-length//2
 input_left = center-length//2
-input_inner = center-(depth-1)//2
+input_inner = center-(depth_full-1)//2
 output_top = center-num_classes//2
 output_left = center
-output_inner = input_inner+depth+1 #include out layer
+output_inner = input_inner+depth_full+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (length,length,1)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (9,9,5)
+kernel_size = (9,9,7)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
 directions = 1 #how many filters, i.e. possible directions, to learn
-print("depth:", depth, "total batches:", total_batches)
+print("depth:", depth_full, "total batches:", total_batches)
 
 #===========
 ##create model
