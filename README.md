@@ -8,3 +8,13 @@ Includes implementation of the Game of Life (GoL) in JAX.
 
 Notes can be found in the [docs](doc/README.md) page.
 
+## Requirements
+The following setup was needed for Ubuntu 24.04. Firstly, we needed to install JAX with this particular version found to be stable
+```
+pip install -U "jax[cuda13]"==0.7.2
+```
+Then we need to install Haiku and other dependencies with stable versions found where indicated
+```
+pip install optax einops flax==0.10.7 dm-haiku==0.0.14
+pip install scikit-learn scikit-image seaborn
+```
