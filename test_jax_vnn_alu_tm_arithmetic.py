@@ -37,7 +37,7 @@ delta = 0.2
 padding = 3*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
-N = 4*n + padding
+N = 2*n + padding
 print("N:", N, "Epochs:", epochs, "bit depth:", bit_depth)
 
 #===========
@@ -92,7 +92,7 @@ output_size = (1,n) #column vec
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = None
-directions = 8 #how many filters, i.e. possible directions, to learn
+directions = 16 #how many filters, i.e. possible directions, to learn
 # stride = int(min(kernel_size[0], kernel_size[1])/2.+0.5) #rnd
 # depth = 2*int((output_left-input_left)/stride + 0.5) #rnd, up and down vertically, hence x2
 depth = 6
@@ -127,7 +127,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
-plt.savefig("vnn_alu_tm_arithmetic_states_init.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_states_init.png", dpi=300)
 plt.show()
 
 #loss function
@@ -218,12 +218,12 @@ jnp.savez("alu_tm_arithmetic_cells.npz",
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
-plt.savefig("vnn_alu_tm_arithmetic_weights.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_weights.png", dpi=300)
 plt.show()
 
 plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
-plt.savefig("vnn_alu_tm_arithmetic_biases.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_biases.png", dpi=300)
 plt.show()
 
 fig = plt.figure(figsize=(2,2*directions))
@@ -238,7 +238,7 @@ plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_alu_tm_arithmetic_states_final.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_states_final.png", dpi=300)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -247,7 +247,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_alu_tm_arithmetic_states_final_thres.png", dpi=150)
+plt.savefig("vnn_alu_tm_arithmetic_states_final_thres.png", dpi=300)
 plt.show()
 
 #test performance
