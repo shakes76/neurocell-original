@@ -1267,7 +1267,7 @@ class Universe3D(UniverseLP):
         #reset cells
         # cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         cells = hk.get_state("universe")
-        cells = cells.at[:,:,:].set(0.)  #clear cells
+        cells = cells.at[...].set(0.)  #clear cells
         # hk.set_state("universe", cells)
 
         #smooth/sharpen weights
@@ -1433,7 +1433,7 @@ def _forward_propagate_mlp_row(input, offset, out_offset, out_size, depth, cells
     Uses row/second-last hyperplane based computation for efficiency and propagates up to provided depth and
     then one more for output layer.
     """
-    zeros_tuple = (0,) * (len(offset)-2) #offset for entire hyper plane
+    zeros_tuple = (0,) * (len(offset)-2) #offset for entire hyper plane upto second last
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset)
 
@@ -1619,9 +1619,9 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
 
     #restore to nD
     result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
-    sub_weights = sub_weights[...,jnp.newaxis,:,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
-    sub_biases = sub_biases[...,jnp.newaxis,:,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
-    sub_states = sub_states[...,jnp.newaxis,:,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_weights = sub_weights[...,jnp.newaxis,:,jnp.newaxis] #promotes to row vec (2D) or back to nD and support filter channel
+    sub_biases = sub_biases[...,jnp.newaxis,:,jnp.newaxis] #promotes to row vec (2D) or back to nD and support filter channel
+    sub_states = sub_states[...,jnp.newaxis,:,jnp.newaxis] #promotes to row vec (2D) or back to nD and support filter channel
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach, reduced complexity, handles boundaries better?

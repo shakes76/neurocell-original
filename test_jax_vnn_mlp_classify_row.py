@@ -23,7 +23,7 @@ utils.jax_status()
 
 #parameters
 N = 32
-epochs = 10
+epochs = 7
 batch_size = 2
 layers = 2
 epsilon = 1e-8
@@ -103,7 +103,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
-plt.savefig("vnn_mlp_classify_states_init.png", dpi=75)
+plt.savefig("vnn_mlp_classify_rows_states_init.png", dpi=75)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -112,7 +112,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Initial States (Thresholded)")
-plt.savefig("vnn_mlp_classify_states_init_thres.png", dpi=75)
+plt.savefig("vnn_mlp_classify_rows_states_init_thres.png", dpi=75)
 plt.show()
 
 #loss function
@@ -183,24 +183,29 @@ jnp.savez("mlp_classify_cells.npz",
             kernel_size=kernel_size,
             allow_pickle=False)
 
+# plt.imshow(state['universe_lp']['universe'])
+# plt.title("Final Cells")
+# plt.savefig("vnn_mlp_classify_rows_cells.png", dpi=150)
+# plt.show()
+
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
-plt.savefig("vnn_mlp_classify_weights.png", dpi=150)
+plt.savefig("vnn_mlp_classify_rows_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['b'])
 plt.title("Final Biases")
-plt.savefig("vnn_mlp_classify_biases.png", dpi=150)
+plt.savefig("vnn_mlp_classify_rows_biases.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['f'][0,:,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_mlp_classify_filter.png", dpi=75)
+plt.savefig("vnn_mlp_classify_rows_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Final States")
-plt.savefig("vnn_mlp_classify_states_final.png", dpi=75)
+plt.savefig("vnn_mlp_classify_rows_states_final.png", dpi=75)
 plt.show()
 
 states = params['universe_lp']['s']
@@ -209,7 +214,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states)
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_mlp_classify_states_final_thres.png", dpi=75)
+plt.savefig("vnn_mlp_classify_rows_states_final_thres.png", dpi=75)
 plt.show()
 
 #test performance
