@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import jax.nn as nn
 import jax.scipy.signal as jsignal
 import haiku as hk
+import math
 
 import filters #local
 
@@ -29,9 +30,9 @@ STATE_SIGNAL_VALUE = 0.0
 
 class VectorCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting vertical/horizontal cells."""
-    def __init__(self, in_sizes, out_sizes, in_offsets, out_offsets, is_states=False, clear=False, random_init=1.0):
+    def __init__(self, in_sizes, out_sizes, in_offsets, out_offsets, is_states=False, clear=False, random_init=1.0, col=True):
         """
-        Constructs a :class:`RandomNormal` like initializer with vertical cells.
+        Constructs a :class:`RandomNormal` like initializer with vector cells.
 
         in_sizes etc. can be single or a list. in_sizes and in_offsets must be same in number, likewise out_*
         """
@@ -42,17 +43,28 @@ class VectorCells(hk.initializers.Initializer):
         self.is_states = is_states
         self.clear = clear
         self.random_init = random_init
+        self.col = col
         # self.initializer = jax.nn.initializers.uniform(self.random_init)
         self.initializer = jax.nn.initializers.variance_scaling(self.random_init, mode="fan_in", distribution="truncated_normal")
 
     def clear_cells_vertical(self, cells, offset, after=False):
         """
-        Clears cells upto and including offset positions
+        Clears cells vertically upto and including offset positions, assumes 2D
         """
         if after:
             result = cells.at[:,offset[1]:].set(0)  #clear cells after
         else:
             result = cells.at[:,:offset[1]+1].set(0) #clear cells before
+        return result
+
+    def clear_cells_horizontal(self, cells, offset, after=False):
+        """
+        Clears cells horizontally upto and including offset positions, assumes 2D
+        """
+        if after:
+            result = cells.at[offset[0]:,:].set(0)  #clear cells after
+        else:
+            result = cells.at[:offset[0]+1,:].set(0) #clear cells before
         return result
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
@@ -87,7 +99,10 @@ class VectorCells(hk.initializers.Initializer):
                 inputs = jnp.ones(in_size, dtype=dtype)
 
             if self.clear:
-                cells = self.clear_cells_vertical(cells, in_offset, after=False)
+                if self.col:
+                    cells = self.clear_cells_vertical(cells, in_offset, after=False)
+                else:
+                    cells = self.clear_cells_horizontal(cells, in_offset, after=False)
 
             cells = jax.lax.dynamic_update_slice(cells, inputs, in_offset)
 
@@ -105,15 +120,30 @@ class VectorCells(hk.initializers.Initializer):
                 outputs = jnp.ones(out_size, dtype=dtype)
 
             if self.clear:
-                cells = self.clear_cells_vertical(cells, out_offset, after=True)
+                if self.col:
+                    cells = self.clear_cells_vertical(cells, out_offset, after=True)
+                else:
+                    cells = self.clear_cells_horizontal(cells, out_offset, after=True)
 
             cells = jax.lax.dynamic_update_slice(cells, outputs, out_offset)
 
         return cells
 
-VerticalCells: TypeAlias = VectorCells #same as VectorCells, just use column vectors
+class VerticalCells(VectorCells):
+    """Initializes by sampling from a normal distribution and setting vertical cells."""
+    def __init__(self, in_sizes, out_sizes, in_offsets, out_offsets, is_states=False, clear=False, random_init=1.0):
+        """
+        Constructs a :class:`RandomNormal` like initializer with vertical cells. See base class VectorCells.
+        """
+        super().__init__(in_sizes, out_sizes, in_offsets, out_offsets, is_states, clear, random_init, col=True)
 
-HorizontalCells: TypeAlias = VectorCells #same as VectorCells, just use row vectors
+class HorizontalCells(VectorCells):
+    """Initializes by sampling from a normal distribution and setting horizontal cells."""
+    def __init__(self, in_sizes, out_sizes, in_offsets, out_offsets, is_states=False, clear=False, random_init=1.0):
+        """
+        Constructs a :class:`RandomNormal` like initializer with horizontal cells. See base class VectorCells.
+        """
+        super().__init__(in_sizes, out_sizes, in_offsets, out_offsets, is_states, clear, random_init, col=False)
 
 class SquareCells(hk.initializers.Initializer):
     """Initializes by sampling from a normal distribution and setting open square (shape of a C) cells."""
@@ -374,7 +404,7 @@ class UniverseLP(hk.Module):
         hk.set_state("universe", cells)
 
         init_scale = 1./jnp.sqrt(self.depth*self.N)
-        init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]) #shape is (rows,cols) before array creation
+        init_filter_scale = 1./jnp.sqrt(math.prod(self.kernel_size)*self.directions) #shape is (rows,cols) before array creation
 
         #init states
         self.s_init = VerticalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=init_scale)
@@ -408,6 +438,61 @@ class UniverseLP(hk.Module):
                                 ('NHWC', 'IHWO', 'NHWC'))  # the important bit
 
         self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+
+        return hk.get_state("universe")
+
+    def initialize_mlp_row(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3), directions=1):
+        """
+        Init all cells as a typical vertical set of layers like a traditional MLP
+        """
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.kernel_size = kernel_size
+        self.depth = depth
+        # self.depth = self.out_offset[1]-self.in_offset[1]
+        self.directions = directions
+        # print("depth:", self.depth)
+
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
+
+        init_scale = 1./jnp.sqrt(self.depth*self.N)
+        init_filter_scale = 1./jnp.sqrt(math.prod(self.kernel_size)*self.directions) #shape is (rows,cols) before array creation
+
+        #init states
+        self.s_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=init_scale)
+        # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        # passives = jnp.full(layer_size, STATE_ACTIVE, dtype=self.states_dtype)
+        # self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
+        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # print("States:", self.states)
+        # hk.set_state("states", self.states)
+        # we need input and out shaped array to force input/output states to be active, used later
+        self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
+
+        #init weights (random)
+        self.w_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=init_scale)
+        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+
+        #init biases
+        self.b_init = jnp.zeros
+        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        #init filters
+        self.filters_shape = (1,kernel_size[0],kernel_size[1],self.directions)
+        self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
+        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
+        self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
+
+        self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
+                                self.filters.shape,  # only ndim matters, not shape
+                                ('NHWC', 'IHWO', 'NHWC'))  # the important bit
+
+        self.forward_op = jax.vmap(_forward_propagate_mlp_row, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -1319,7 +1404,7 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
 
-    Uses column based computation for efficiency and propagates up to provided depth and
+    Uses column/last hyperplane based computation for efficiency and propagates up to provided depth and
     then one more for output layer.
     """
     zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
@@ -1327,7 +1412,7 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
     cells = jax.lax.dynamic_update_slice(cells, input, offset)
 
     #propagate
-    index = offset[-1]+1 #first col (or hyper plane) next to input
+    index = offset[-1]+1 #first col (or last hyper plane) next to input
     # print("forward index",index)
     for i in range(depth): #0 to depth-1, depth in total
         result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
@@ -1337,6 +1422,32 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
+def _forward_propagate_mlp_row(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
+    """
+    Propagate input across cellular net based on weights etc. as a traditional MLP
+
+    Uses row/second-last hyperplane based computation for efficiency and propagates up to provided depth and
+    then one more for output layer.
+    """
+    zeros_tuple = (0,) * (len(offset)-2) #offset for entire hyper plane
+
+    cells = jax.lax.dynamic_update_slice(cells, input, offset)
+
+    #propagate
+    index = offset[-2]+1 #first row (or second-last hyper plane) next to input
+    # print("forward index",index)
+    for i in range(depth): #0 to depth-1, depth in total
+        result_block = _forward_row(index+i, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
+        cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)+(0,)) #place back into row (or hyper plane)
+    # print("forward index final",index+depth)
+    result_block = _forward_row(index+depth, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides)
+    if not final_activate == None:
+        result_block = final_activate(result_block) #force final activation, assume output layer
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)+(0,)) #place back into final row (or hyper plane)
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
@@ -1489,10 +1600,8 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     """
     filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
     width = filter_shape[-2] # second-last dim, row in 2D
-    # half of other dims of filter, no padding in second last dim
-    height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape))
-    height_pad_shape[-2] = 0
-    height_pad_shape = height_pad_shape + (0,) #padding for each dim and add filter dim
+    height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape[:-2])) # half of other dims of filter, no padding in second last dim
+    height_pad_shape = height_pad_shape + (0,) + ((filter_shape[-1]-1)//2,) + (0,) #padding for each dim and add filter dim
     height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
     width_pad = (width-1)//2 # half of last dim of filter
     # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
