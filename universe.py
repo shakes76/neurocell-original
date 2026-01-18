@@ -654,6 +654,73 @@ class UniverseLP(hk.Module):
         self.dtype = self.weights.dtype
         self.universe = jnp.zeros(self.grid_size, dtype=self.dtype)
 
+class UniverseTM(UniverseLP):
+    """
+    Represents cellular structured universe of Von Neumann networks (VNNs) as a Turing machine (TM)
+
+    You must use the initialize_* members to create the type of layered perceptron, e.g. MLP etc. first
+    Then call usual JAX/Haiku type networks calls that will call this classes implementation of the VNNs
+    """
+    def __init__(self, N, sharpen=True, dtype=jnp.float32, name=None):
+        super().__init__(N, sharpen=sharpen, dtype=dtype, name=name)
+        self.grid_size = (1,self.N)
+        self.filters_shape = None
+        self.img_shape = (1,1,N,1)
+
+    def initialize(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3), directions=1):
+        """
+        Init all cells as a typical vertical set of layers like a traditional MLP
+        """
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_offset = in_offset
+        self.out_offset = out_offset
+        self.kernel_size = kernel_size
+        self.depth = depth
+        # self.depth = self.out_offset[1]-self.in_offset[1]
+        self.directions = directions
+        # print("depth:", self.depth)
+
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        hk.set_state("universe", cells)
+
+        init_scale = 1./jnp.sqrt(self.depth*self.N)
+        init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]) #shape is (rows,cols) before array creation
+
+        #init states
+        self.s_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=init_scale)
+        # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
+        # passives = jnp.full(layer_size, STATE_ACTIVE, dtype=self.states_dtype)
+        # self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
+        self.states = hk.get_parameter("s", shape=self.grid_size, dtype=self.states_dtype, init=self.s_init)
+        # print("States:", self.states)
+        # hk.set_state("states", self.states)
+        # we need input and out shaped array to force input/output states to be active, used later
+        self.input_states = jnp.full(self.in_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
+
+        #init weights (random)
+        self.w_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=init_scale)
+        self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
+
+        #init biases
+        self.b_init = jnp.zeros
+        self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
+
+        #init filters
+        self.filters_shape = (1,kernel_size[0],kernel_size[1],self.directions)
+        self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
+        self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
+
+        self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
+                                self.filters.shape,  # only ndim matters, not shape
+                                ('NHWC', 'IHWO', 'NHWC'))  # the important bit
+
+        self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+
+        return hk.get_state("universe")
+
 class Universe:
     """
     Represents cellular structured universe of Von Neumann networks
@@ -1351,18 +1418,18 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     plus one before and one after it.
 
     All operations are done on the sub-region defined by width of nethood and central index
+
+    Supports row/column in 2D and second-last/last hyperplane in nD
     """
-    # height = filters.shape[1] #shape is (1,rows,cols,1)
-    # width = filters.shape[2] #shape is (1,rows,cols,1)
     filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
-    width = filter_shape[-1] # last dim
+    width = filter_shape[-1] # last dim, column in 2D
     height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape[:-1])) # half of other dims of filter
-    height_pad_shape = height_pad_shape + (0,) + (0,) #padding for each dim plus nth dim and filter dim
+    height_pad_shape = height_pad_shape + (0,) + (0,) #padding for each dim plus nth dim and add filter dim
     height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
     width_pad = (width-1)//2 # half of last dim of filter
     # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
-    #selects hyper plane (n-1)D
+    #selects hyper plane (n-1)D at last dim
     # sub_cells = cells[:,index-1:index-1+width]
     sub_weights = weights[...,index]
     sub_biases = biases[...,index]
@@ -1378,6 +1445,74 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+
+    # print("result_block",result_block.shape, "filters", filters.shape)
+    #valid mode approach, reduced complexity, handles boundaries better?
+    result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
+    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
+    #Same mode approach
+    # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")
+    # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
+    # print("result_block padded",result_block.shape)
+
+    if norm:
+        #norm
+        result_block = jax.nn.standardize(result_block, axis=(0,1))
+
+    #norm states to 0-1 range
+    sub_states = jax.nn.sigmoid(sub_states)
+    # sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
+
+    #check states
+    #if passive apply activation, else signal state so weight, let the grad descent decide
+    #the operation is akin to adversarial states
+    # print("result_block",result_block.shape, "sub_weights", sub_weights.shape)
+    if activate == None:
+        result_block = result_block*sub_weights*(1.0-sub_states) + (result_block+sub_biases)*sub_states
+    else:
+        result_block = result_block*sub_weights*(1.0-sub_states) + activate(result_block+sub_biases)*sub_states
+
+    return jnp.mean(result_block, axis=-1) # averaged across filters, back to 1 channel dim
+
+@partial(jax.jit, static_argnums=(0,6,7,8,9))
+def _forward_row(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+    """
+    Compute the forward pass by computing each neuron depending on its state for a subregion.
+
+    This version computes the forward WRT a central row/column (provided by index) with the nethood applied to it
+    according to the width of the nethood. For a nethood of width 3, that means central row/column
+    plus one before and one after it.
+
+    All operations are done on the sub-region defined by width of nethood and central index
+
+    Supports row/column in 2D and second-last/last hyperplane in nD
+    """
+    filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
+    width = filter_shape[-2] # second-last dim, row in 2D
+    # half of other dims of filter, no padding in second last dim
+    height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape))
+    height_pad_shape[-2] = 0
+    height_pad_shape = height_pad_shape + (0,) #padding for each dim and add filter dim
+    height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
+    width_pad = (width-1)//2 # half of last dim of filter
+    # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
+
+    #selects hyper plane (n-1)D at second-last dim
+    # sub_cells = cells[:,index-1:index-1+width]
+    sub_weights = weights[...,index,:]
+    sub_biases = biases[...,index,:]
+    sub_states = states[...,index,:]
+    # print("sub_states",sub_states.shape)
+
+    #extract sub array of filter width to conv
+    # print("cells",cells.shape)
+    result_block = cells[...,index-width_pad:index-width_pad+width,:]
+
+    #restore to nD
+    result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
+    sub_weights = sub_weights[...,jnp.newaxis,:,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_biases = sub_biases[...,jnp.newaxis,:,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_states = sub_states[...,jnp.newaxis,:,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach, reduced complexity, handles boundaries better?
