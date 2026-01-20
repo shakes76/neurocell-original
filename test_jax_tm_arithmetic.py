@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 200
+epochs = 10
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
@@ -67,15 +67,15 @@ print("Y_packed shape", Y_packed.shape)
 #MLP with inputs and outputs, depth layers inbetween
 #setup
 center = (1, N//2)
-depth = 1
 input_size = (1,length)
 input_offset = (1,center[1]-(2*n+1))
 output_size = (1,n)
 output_offset = (1,center[1]+(n+1)) #+1 output layer
-kernel_size = (1,4*n) #(1,3*n+2)
+kernel_size = (1,4*n+1) #(1,3*n+2)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-directions = 16 #how many instructions, i.e. possible directions, to learn
+directions = 24 #how many instructions, i.e. possible directions, to learn
+depth = length + n + 1
 print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
 
 #===========
@@ -86,7 +86,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     tm = UniverseTM(N, sharpen=True)
     tm.initialize(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
-    return tm(batch, activation, final_activation, norm=True)
+    return tm(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
@@ -115,7 +115,7 @@ plt.show()
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     #MSE loss
     logits, state = network.apply(params, state, batch)
@@ -144,7 +144,7 @@ for step in range(1, epochs+1):
     loss_value = 0
     for x, y in zip(X, Y):
         x = x[:, jnp.newaxis, :] #fake 2D
-        
+
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value/batch_size
 
@@ -179,13 +179,13 @@ for step in range(1, epochs+1):
         print(f"[Step {step}, Loss {loss_value}]")
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("tm_arith_cells.npz", 
-            weights=params['universe_tm']['w'], 
-            biases=params['universe_tm']['b'], 
-            filters=params['universe_tm']['f'], 
-            states=params['universe_tm']['s'], 
+jnp.savez("tm_arith_cells.npz",
+            weights=params['universe_tm']['w'],
+            biases=params['universe_tm']['b'],
+            filters=params['universe_tm']['f'],
+            states=params['universe_tm']['s'],
             N=N, length=length, n=n, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,

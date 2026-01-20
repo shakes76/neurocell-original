@@ -802,7 +802,7 @@ class UniverseTM(UniverseLP):
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWC', 'IHWO', 'NHWC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_tape, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -1409,7 +1409,7 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
     """
     zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
 
-    cells = jax.lax.dynamic_update_slice(cells, input, offset)
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
     #propagate
     index = offset[-1]+1 #first col (or last hyper plane) next to input
@@ -1433,9 +1433,9 @@ def _forward_propagate_mlp_row(input, offset, out_offset, out_size, depth, cells
     Uses row/second-last hyperplane based computation for efficiency and propagates up to provided depth and
     then one more for output layer.
     """
-    zeros_tuple = (0,) * (len(offset)-2) #offset for entire hyper plane upto second last
+    zeros_tuple = (0,) * (len(offset)-2) #offset for entire hyper plane upto second last (row)
 
-    cells = jax.lax.dynamic_update_slice(cells, input, offset)
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
     #propagate
     index = offset[-2]+1 #first row (or second-last hyper plane) next to input
@@ -1452,11 +1452,36 @@ def _forward_propagate_mlp_row(input, offset, out_offset, out_size, depth, cells
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
 @partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
+def _forward_propagate_tape(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
+    """
+    Propagate input across cellular net based on weights etc. as a Turing machine like tape.
+
+    Uses 1D computations for efficiency and propagates up to provided depth.
+    """
+    zeros_tuple = (0,) * (len(offset)-2) #offset for entire hyper plane upto second last (row)
+
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
+
+    #propagate
+    index = offset[-2] #first and only row, all computations to be done in 1D, no layers
+    # print("forward index",index)
+    for i in range(depth): #0 to depth-1, depth in total, i unused as there are no layers
+        result_block = _forward_row(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
+        cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index,)+(0,)) #place back into row (or hyper plane)
+    # print("forward index final",index+depth)
+    result_block = _forward_row(index, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides)
+    if not final_activate == None:
+        result_block = final_activate(result_block) #force final activation, assume output layer
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index,)+(0,)) #place back into final row (or hyper plane)
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
 def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
     """
-    cells = jax.lax.dynamic_update_slice(cells, input, offset)
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
     #propagate
     for i in range(1, depth):
@@ -1531,13 +1556,15 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     All operations are done on the sub-region defined by width of nethood and central index
 
     Supports row/column in 2D and second-last/last hyperplane in nD
+
+    Assumes filters are odd sized @todo generalise
     """
     filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
     width = filter_shape[-1] # last dim, column in 2D
     height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape[:-1])) # half of other dims of filter
     height_pad_shape = height_pad_shape + (0,) + (0,) #padding for each dim plus nth dim and add filter dim
     height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
-    width_pad = (width-1)//2 # half of last dim of filter
+    width_pad = max(1, (width-1)//2) # half of last dim of filter
     # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
     #selects hyper plane (n-1)D at last dim
@@ -1597,13 +1624,15 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     All operations are done on the sub-region defined by width of nethood and central index
 
     Supports row/column in 2D and second-last/last hyperplane in nD
+
+    Assumes filters are odd sized @todo generalise
     """
     filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
     width = filter_shape[-2] # second-last dim, row in 2D
     height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape[:-2])) # half of other dims of filter, no padding in second last dim
     height_pad_shape = height_pad_shape + (0,) + ((filter_shape[-1]-1)//2,) + (0,) #padding for each dim and add filter dim
     height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
-    width_pad = (width-1)//2 # half of last dim of filter
+    width_pad = max(1, (width-1)//2) # half of last dim of filter
     # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
     #selects hyper plane (n-1)D at second-last dim
@@ -1616,6 +1645,7 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     #extract sub array of filter width to conv
     # print("cells",cells.shape)
     result_block = cells[...,index-width_pad:index-width_pad+width,:]
+    # print("result_block",result_block.shape)
 
     #restore to nD
     result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
