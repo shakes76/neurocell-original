@@ -675,7 +675,7 @@ class UniverseLP(hk.Module):
         #reset cells
         # cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         cells = hk.get_state("universe")
-        cells = cells.at[:,:].set(0.)  #clear cells
+        cells = cells.at[...].set(0.)  #clear cells
         # hk.set_state("universe", cells)
 
         #smooth/sharpen weights
@@ -703,7 +703,8 @@ class UniverseLP(hk.Module):
                     states = jax.lax.dynamic_update_slice(states, input_state, in_offset)
             else:
                 states = jax.lax.dynamic_update_slice(states, self.input_states, self.in_offset)
-        states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
+        if not self.output_states is None:
+            states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
         if not self.output_weights is None:
             weights = jax.lax.dynamic_update_slice(weights, self.output_weights, self.out_offset)
 
@@ -773,7 +774,7 @@ class UniverseTM(UniverseLP):
         init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]) #shape is (rows,cols) before array creation
 
         #init states
-        self.s_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=True, random_init=init_scale)
+        self.s_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=True, clear=False, random_init=init_scale)
         # states = self.s_init(shape=self.grid_size, dtype=self.states_dtype)
         # passives = jnp.full(layer_size, STATE_ACTIVE, dtype=self.states_dtype)
         # self.states = jax.lax.dynamic_update_slice(states, passives, layer_offset)
@@ -786,7 +787,7 @@ class UniverseTM(UniverseLP):
         self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
 
         #init weights (random)
-        self.w_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=True, random_init=init_scale)
+        self.w_init = HorizontalCells(in_size, out_size, in_offset, out_offset, is_states=False, clear=False, random_init=init_scale)
         self.weights = hk.get_parameter("w", shape=self.grid_size, dtype=self.dtype, init=self.w_init)
 
         #init biases
@@ -1466,13 +1467,13 @@ def _forward_propagate_tape(input, offset, out_offset, out_size, depth, cells, w
     index = offset[-2] #first and only row, all computations to be done in 1D, no layers
     # print("forward index",index)
     for i in range(depth): #0 to depth-1, depth in total, i unused as there are no layers
-        result_block = _forward_row(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
-        cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index,)+(0,)) #place back into row (or hyper plane)
+        cells = _forward_row(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
+        # cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index,)+(0,)) #place back into row (or hyper plane)
     # print("forward index final",index+depth)
-    result_block = _forward_row(index, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides)
+    cells = _forward_row(index, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides)
     if not final_activate == None:
-        result_block = final_activate(result_block) #force final activation, assume output layer
-    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index,)+(0,)) #place back into final row (or hyper plane)
+        cells = final_activate(cells) #force final activation, assume output layer
+    # cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index,)+(0,)) #place back into final row (or hyper plane)
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
@@ -1632,7 +1633,7 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape[:-2])) # half of other dims of filter, no padding in second last dim
     height_pad_shape = height_pad_shape + (0,) + ((filter_shape[-1]-1)//2,) + (0,) #padding for each dim and add filter dim
     height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
-    width_pad = max(1, (width-1)//2) # half of last dim of filter
+    width_pad = (width-1)//2 # half of last dim of filter
     # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
     #selects hyper plane (n-1)D at second-last dim
