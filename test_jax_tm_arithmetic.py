@@ -20,7 +20,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 100
+epochs = 200
 n = 8
 bit_depth = 2**(n-1)
 length = 2*n
@@ -29,7 +29,7 @@ samples = 6400
 batch_size = 160
 num_batches = samples//batch_size
 delta = 0.1
-padding = 4*(length+n)
+padding = 4*(length+n+blanks)
 N = length + n + blanks + 4*padding
 print("N:", N, "Epochs:", epochs)
 
@@ -69,14 +69,14 @@ print("Y_packed shape", Y_packed.shape)
 #setup
 center = (1, N//2)
 input_size = (1,length)
-input_offset = (0,center[1]-(2*n+1)-blanks) #add blanks
+input_offset = (0,center[1]-(2*n+1)-blanks//2) #add blanks
 output_size = (1,n)
-output_offset = (0,center[1]+(n+1)+blanks) #+1 output layer, add blanks
+output_offset = (0,center[1]+(n+1)+blanks//2) #+1 output layer, add blanks
 kernel_size = (1,4*n+1) #(1,3*n+2)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 directions = 24 #how many instructions, i.e. possible directions, to learn
-depth = 5
+depth = 4
 print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
 
 #===========
