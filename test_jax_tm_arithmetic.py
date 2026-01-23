@@ -72,11 +72,11 @@ input_size = (1,length)
 input_offset = (0,center[1]-(2*n+1)-blanks) #add blanks
 output_size = (1,n)
 output_offset = (0,center[1]+(n+1)+blanks) #+1 output layer, add blanks
-kernel_size = (1,3*n+1) #(1,3*n+2)
+kernel_size = (1,4*n+1) #(1,3*n+2)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
-directions = 32 #how many instructions, i.e. possible directions, to learn
-depth = 4
+directions = 24 #how many instructions, i.e. possible directions, to learn
+depth = 5
 print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
 
 #===========
