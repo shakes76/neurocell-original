@@ -25,3 +25,8 @@ Then we need to install Haiku and other dependencies with stable versions found 
 pip install optax einops flax==0.10.7 dm-haiku==0.0.14
 pip install scikit-learn scikit-image seaborn
 ```
+
+## License
+This software and notes are made available under the GNU Lesser General Public License v. 3 (“LGPL”). This means you are able to use it as a library, while keeping your source code closed as long as LGPL requirements are met. Changes to the library or notes need to be released under the same license as per the LGPL.
+
+Private licenses are available on request.
