@@ -1,6 +1,9 @@
 # Neurocell Library
 Cellular machines library for automated systems and self assembly with John von Neumann Networks (VNNs).
 
+## Structure
+In general, driver scripts are prefixed with tests_* and unit tests as unit_*.
+
 The descriptions of the various scripts can be found on the [experiments page](experiments.md)
 
 ## Implementation

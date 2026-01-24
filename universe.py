@@ -742,7 +742,7 @@ class UniverseLP(hk.Module):
 
 class UniverseTM(UniverseLP):
     """
-    Represents cellular structured universe of Von Neumann networks (VNNs) as a Turing machine (TM)
+    Represents cellular structured universe of Von Neumann networks (VNNs) as a Turing machine (TM) pure 1D tape model.
 
     You must use the initialize_* members to create the type of layered perceptron, e.g. MLP etc. first
     Then call usual JAX/Haiku type networks calls that will call this classes implementation of the VNNs
@@ -1133,7 +1133,7 @@ class Universe:
 
 class Universe3D(UniverseLP):
     """
-    For 3D networks to support imaging etc. like CNNs
+    For 3D MLP-like networks to support imaging etc.
     """
     def __init__(self, N, sharpen=True, dtype=jnp.float32, name=None):
         super().__init__(N, sharpen=sharpen, dtype=dtype, name=name)
@@ -1147,6 +1147,8 @@ class Universe3D(UniverseLP):
         Init all cells with a series of input and outputs as vectors, i.e. lists of vectors are provided, single values are also supported.
 
         Assumes inputs or outputs are of same length, different number of inputs and outputs can be provided.
+
+        Uses full 3D convs as the forward operator, expensive.
         """
         self.in_size = in_sizes
         self.out_size = out_sizes
@@ -1205,6 +1207,8 @@ class Universe3D(UniverseLP):
         Init all cells with a series of input and outputs as vectors, i.e. lists of vectors are provided, single values are also supported.
 
         Assumes inputs or outputs are of same length, different number of inputs and outputs can be provided.
+
+        Uses hyperplanes (n-1 D) convs per layer as the forward operator, more efficient.
         """
         self.in_size = in_sizes
         self.out_size = out_sizes

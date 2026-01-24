@@ -1,5 +1,5 @@
 '''
-Von Neumann network that mimics an MLP with a Turing machine structure.
+Von Neumann network that mimics an MLP with a Turing machine structure for arithmetic.
 
 We use cells like a tape
 '''

@@ -1,5 +1,5 @@
 '''
-Von Neumann network that mimics an MLP for arithmetic
+Von Neumann network that mimics a TM with a tape model for arithmetic
 '''
 import numpy as np
 import jax
