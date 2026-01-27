@@ -1,5 +1,7 @@
 '''
-Von Neumann network that mimics an MLP for classifying MNIST dataset
+Von Neumann network that creates a 3D MLP for classifying MNIST dataset
+
+Uses full 3D convs as the forward operator, expensive.
 '''
 import jax
 import jax.numpy as jnp

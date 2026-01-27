@@ -1,7 +1,7 @@
 '''
-Von Neumann network that mimics an MLP with a Turing machine structure.
+Von Neumann network that mimics an MLP for creating an ALU.
 
-We use cells like a tape
+We use cells like a MLP
 '''
 import numpy as np
 import jax

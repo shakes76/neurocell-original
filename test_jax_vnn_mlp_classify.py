@@ -23,7 +23,7 @@ utils.jax_status()
 
 #parameters
 N = 32
-epochs = 10
+epochs = 7
 batch_size = 2
 layers = 2
 epsilon = 1e-8
@@ -118,7 +118,7 @@ plt.show()
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     labels = jax.nn.one_hot(labels, num_classes)
 
@@ -171,17 +171,22 @@ for step in range(1, epochs+1):
         print(f"[Step {step}, Loss {loss_value}]")
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("mlp_classify_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("mlp_classify_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,
             allow_pickle=False)
+
+# plt.imshow(state['universe_lp']['universe'])
+# plt.title("Final Cells")
+# plt.savefig("vnn_mlp_classify_cells.png", dpi=150)
+# plt.show()
 
 plt.imshow(params['universe_lp']['w'])
 plt.title("Final Weights")
