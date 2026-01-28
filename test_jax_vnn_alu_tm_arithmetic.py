@@ -12,7 +12,7 @@ import optax
 # mpl.use('Agg')
 import matplotlib.pyplot as plt
 from typing import Tuple
-import time
+import time, math
 
 from sklearn.model_selection import train_test_split
 
@@ -226,14 +226,17 @@ plt.title("Final Biases")
 plt.savefig("vnn_alu_tm_arithmetic_biases.png", dpi=300)
 plt.show()
 
-fig = plt.figure(figsize=(2,2*directions))
-for c in range(directions):
-    plt.subplot(directions, 1, c+1)
-    plt.imshow(params['universe_lp']['f'][0,:,:,c])
-    plt.tight_layout()
-    plt.axis('off') # Hides both x and y axes
-    plt.title("Filter "+str(c))
-plt.savefig("vnn_alu_tm_arithmetic_filter.png", dpi=75)
+fig_width = int(math.sqrt(directions))
+fig = plt.figure(figsize=(2*fig_width,2*fig_width))
+for c1 in range(fig_width):
+    for c2 in range(fig_width):
+        c = c1*fig_width+c2
+        plt.subplot(fig_width, fig_width, c+1)
+        plt.imshow(params['universe_lp']['f'][0,:,:,c])
+        plt.tight_layout()
+        plt.axis('off') # Hides both x and y axes
+        plt.title("Filter "+str(c))
+plt.savefig("vnn_alu_tm_arithmetic_filter.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])
