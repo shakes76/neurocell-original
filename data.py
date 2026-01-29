@@ -3,6 +3,8 @@ Misc data pipelines for training
 '''
 import numpy as np
 
+from sklearn.model_selection import train_test_split
+
 def generate_square_pulses(
     length: int = 128,
     pulse_width: int = 8,
@@ -70,9 +72,48 @@ def generate_square_pulses(
 
     return signals
 
+def generate_arithmetic(samples, operation: str = "add", n = 8, batch_size = 64, noise_level: float = 0.2):
+    """
+    Generate data that follows arithmetic operations such as addition, subtraction and exclusive OR
+
+    The pairwise inputs are returned with the outputs. All the arrays returned are in binary.
+
+    n is the bit depth of the numbers involved
+    operations supported include "add", "minus" and "xor"
+    """
+    bit_depth = 2**(n-1)
+    num_batches = samples//batch_size
+    delta = noise_level
+
+    numbers = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
+    operands = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
+
+    #operation
+    operation = operation.lower()
+    if operation == "minus":
+        results = numbers - operands
+    elif operation == "xor":
+        results = numbers ^ operands
+    else:
+        results = numbers + operands
+
+    #to bits
+    X1 = np.unpackbits(numbers, axis=2, count=n)
+    X2 = np.unpackbits(operands, axis=2, count=n)
+    Y_raw = np.unpackbits(results, axis=2, count=n)
+    # print(X1.shape)
+
+    #add noise
+    rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
+    rand2 = np.random.uniform(-delta,+delta,size=X2.shape)
+    X1f = X1.astype(np.float32) + rand1
+    X2f = X2.astype(np.float32) + rand2
+
+    return  X1f, X2f, Y_raw
+
 def generate_arithmetic_logic(samples, n = 8, ctrl_bits = 4, batch_size = 64, noise_level: float = 0.2):
     """
-    Generate data that follows the following truth table:
+    Generate data that follows the following truth table for an Arithmetic Logic Unit (ALU):
     #   S_2     S_1     S_0     C_in    |   Out        C_out
     #   0       0       0       0       |   F = A       0 Identity
     #   0       0       0       1       |   F = A+1     0 Increment

@@ -17,6 +17,7 @@ import time
 from sklearn.model_selection import train_test_split
 
 from universe import UniverseLP #local
+import data
 import utils #local
 
 utils.jax_status()
@@ -24,7 +25,7 @@ utils.jax_status()
 #parameters
 epochs = 200
 n = 8
-bit_depth = 2**(n-1)
+# bit_depth = 2**(n-1)
 length = 2*n
 samples = 32000
 batch_size = 128
@@ -40,24 +41,10 @@ print("N:", N, "Epochs:", epochs)
 
 #===========
 ##data
-#data
-numbers = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
-operands = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
-results = numbers + operands
-#to bits
-X1 = np.unpackbits(numbers, axis=2, count=n)
-X2 = np.unpackbits(operands, axis=2, count=n)
-Y_raw = np.unpackbits(results, axis=2, count=n)
-print(X1.shape)
-
-#add noise
-rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
-rand2 = np.random.uniform(-delta,+delta,size=X2.shape)
-X1 = X1.astype(np.float32) + rand1
-X2 = X2.astype(np.float32) + rand2
+X1f, X2f, Y_raw = data.generate_arithmetic(samples, "add", n, batch_size, delta)
 
 #stack
-X_preproc = np.concatenate([X1, X2], axis=-1)
+X_preproc = np.concatenate([X1f, X2f], axis=-1)
 # print(X_preproc.shape)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)

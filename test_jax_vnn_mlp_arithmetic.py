@@ -15,19 +15,20 @@ import time
 from sklearn.model_selection import train_test_split
 
 from universe import UniverseLP #local
+import data
 import utils #local
 
 utils.jax_status()
 
 #parameters
-epochs = 500
+epochs = 200
 n = 8
-bit_depth = 2**(n-1)
+# bit_depth = 2**(n-1)
 length = 2*n
-samples = 6400
-batch_size = 160
+samples = 32000
+batch_size = 128
 num_batches = samples//batch_size
-delta = 0.1
+delta = 0.2
 padding = 4*length
 layers = 5
 N = length + 4*padding
@@ -35,23 +36,10 @@ print("N:", N, "Epochs:", epochs)
 
 #===========
 #data
-numbers = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
-operands = np.random.randint(1, bit_depth, size=(num_batches,batch_size,1), dtype=np.uint8)
-results = numbers + operands
-#to bits
-X1 = np.unpackbits(numbers, axis=2, count=n)
-X2 = np.unpackbits(operands, axis=2, count=n)
-Y_raw = np.unpackbits(results, axis=2, count=n)
-print(X1.shape)
-
-#add noise
-rand1 = np.random.uniform(-delta,+delta,size=X1.shape)
-rand2 = np.random.uniform(-delta,+delta,size=X2.shape)
-X1 = X1.astype(np.float32) + rand1
-X2 = X2.astype(np.float32) + rand2
+X1f, X2f, Y_raw = data.generate_arithmetic(samples, "add", n, batch_size, delta)
 
 #stack
-X_preproc = np.concatenate([X1, X2], axis=-1)
+X_preproc = np.concatenate([X1f, X2f], axis=-1)
 # print(X_preproc.shape)
 
 X, X_test, Y, Y_test = train_test_split(X_preproc, Y_raw, test_size=0.2, random_state=42)
@@ -75,7 +63,7 @@ output_size = (n,1)
 output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth+1) #+1 output layer
 kernel_size = (17,3)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+final_activation = None
 directions = 2 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
 
@@ -85,7 +73,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = UniverseLP(N, sharpen=True)
+    mlp = UniverseLP(N, sharpen=False)
     mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
@@ -94,7 +82,7 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 
 #optimizer
 total_steps = epochs*num_batches
-schedule = optax.warmup_cosine_decay_schedule(init_value=0.0005,peak_value=0.03,warmup_steps=0.05*total_steps,decay_steps=total_steps,end_value=0.0005)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.025*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.sgd(learning_rate=0.005)
 # opt = optax.adam(learning_rate=schedule)
 opt = optax.adamw(learning_rate=schedule)
@@ -125,7 +113,7 @@ plt.savefig("vnn_mlp_arith_states_init_thres.png", dpi=75)
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     #MSE loss
     logits, state = network.apply(params, state, batch)
@@ -154,7 +142,7 @@ for step in range(1, epochs+1):
     loss_value = 0
     for x, y in zip(X, Y):
         x = x[:, :, jnp.newaxis] #fake 2D
-        
+
         params, opt_state, value, state = update(params, opt_state, state, x, y)
         loss_value += value/batch_size
 
@@ -189,13 +177,13 @@ for step in range(1, epochs+1):
         print(f"[Step {step}, Loss {loss_value}]")
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("mlp_arith_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("mlp_arith_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             N=N, length=length, n=n, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,
