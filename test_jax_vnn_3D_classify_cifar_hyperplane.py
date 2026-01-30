@@ -38,7 +38,7 @@ print("N:", N, "Epochs:", epochs)
 
 #network IO paths
 path = '/home/shakes/'
-# path = 'I:/'
+# path = 'F:/'
 
 #===========
 #transform preproc
@@ -81,11 +81,11 @@ input_size = (length,length,channels)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (7,7,7)
+kernel_size = (9,9,7)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
-directions = 8 #how many filters, i.e. possible directions, to learn
+directions = 64 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "total batches:", total_batches)
 
 #===========
