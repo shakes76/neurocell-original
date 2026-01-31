@@ -130,7 +130,7 @@ opt_state = opt.init(params)
 
 plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Initial States")
-plt.savefig("vnn_3D_hplane_classify_mnist_states_init.png", dpi=150)
+plt.savefig("vnn_3D_hplane_classify_cifar_states_init.png", dpi=150)
 plt.show()
 
 #loss function
@@ -209,7 +209,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("3D_hplane_classify_mnist_cells.npz",
+jnp.savez("3D_hplane_classify_cifar_cells.npz",
             weights=params['universe3_d']['w'],
             biases=params['universe3_d']['b'],
             filters=params['universe3_d']['f'],
@@ -240,22 +240,22 @@ print(f"[Final Test Accuracy {accuracy}]")
 
 plt.imshow(params['universe3_d']['w'][center,...])
 plt.title("Final Weights")
-plt.savefig("vnn_3D_hplane_classify_mnist_weights.png", dpi=150)
+plt.savefig("vnn_3D_hplane_classify_cifar_weights.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe3_d']['b'][center,...])
 plt.title("Final Biases")
-plt.savefig("vnn_3D_hplane_classify_mnist_biases.png", dpi=150)
+plt.savefig("vnn_3D_hplane_classify_cifar_biases.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe3_d']['f'][0,center,:,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_3D_hplane_classify_mnist_filter.png", dpi=75)
+plt.savefig("vnn_3D_hplane_classify_cifar_filter.png", dpi=75)
 plt.show()
 
 plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Final States")
-plt.savefig("vnn_3D_hplane_full_classify_mnist_states.png", dpi=75)
+plt.savefig("vnn_3D_hplane_full_classify_cifar_states.png", dpi=75)
 plt.show()
 
 states = params['universe3_d']['s']
@@ -264,7 +264,12 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states[center,...])
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_3D_hplane_full_classify_mnist_states_thres.png", dpi=75)
+plt.savefig("vnn_3D_hplane_full_classify_cifar_states_thres.png", dpi=75)
+plt.show()
+
+plt.imshow(state['universe3_d']['universe'][center,...])
+plt.title("Final Universe")
+plt.savefig("vnn_3D_hplane_full_classify_cifar_universe.png", dpi=75)
 plt.show()
 
 print("END")
