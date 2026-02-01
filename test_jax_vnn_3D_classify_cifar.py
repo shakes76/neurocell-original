@@ -45,7 +45,7 @@ depth_full = layers*2+1 #1 col of signal cells per layer
 depth = depth_full // 2
 padding = 1*(length+depth_full-1)
 N = 0*length + padding
-print("N:", N, "Epochs:", epochs)
+print("N:", N, "Epochs:", epochs, "depth:", depth)
 
 #network IO paths
 path = '/home/shakes/'
@@ -113,21 +113,26 @@ def _forward(batch) -> jnp.ndarray:
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
 
 # Make the network and optimizer. Haiku standard
-decay = 5e-4
-learning_rate = 0.1
-pct_start = 15./epochs #15
-pct_final = 30./epochs #30
-div_factor = 20.
-final_div_factor = 200.
-num_train_steps = (total_batches*epochs)
-lr_schedule = optax.linear_onecycle_schedule(
-        transition_steps=num_train_steps,
-        peak_value=learning_rate,
-        pct_start=pct_start,
-        pct_final=pct_final,
-        div_factor=div_factor,
-        final_div_factor=final_div_factor)
-opt = optax.sgd(lr_schedule, momentum=0.9)
+# decay = 5e-4
+# learning_rate = 0.1
+# pct_start = 15./epochs #15
+# pct_final = 30./epochs #30
+# div_factor = 20.
+# final_div_factor = 200.
+# num_train_steps = (total_batches*epochs)
+# lr_schedule = optax.linear_onecycle_schedule(
+#         transition_steps=num_train_steps,
+#         peak_value=learning_rate,
+#         pct_start=pct_start,
+#         pct_final=pct_final,
+#         div_factor=div_factor,
+#         final_div_factor=final_div_factor)
+# opt = optax.sgd(lr_schedule, momentum=0.9)
+total_steps = (total_batches*epochs)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.025*total_steps,decay_steps=total_steps,end_value=0.0005)
+# opt = optax.sgd(learning_rate=0.005)
+# opt = optax.adam(learning_rate=schedule)
+opt = optax.adamw(learning_rate=schedule)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 dataset_iter = iter(train_loader)
@@ -175,7 +180,8 @@ def update(
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
     (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
-    updates, opt_state = opt.update(grads, opt_state)
+    # updates, opt_state = opt.update(grads, opt_state)
+    updates, opt_state = opt.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     return new_params, opt_state, loss_value, state
 
