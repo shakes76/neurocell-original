@@ -1590,8 +1590,10 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
 
     # print("result_block",result_block.shape, "filters", filters.shape)
-    #valid mode approach, reduced complexity, handles boundaries better?
+    #valid mode approach in all dims, reduced complexity by deliberately squishing last hyperplane as well to current index
+    #handles boundaries better?
     result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
+    # print("result_block conv",result_block.shape)
     result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #Same mode approach
     # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")
