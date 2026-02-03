@@ -37,15 +37,16 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 8
-batch_size = 64
+layers = 6
+batch_size = 100
 length = 32
 channels = 3
-depth_full = layers*2+1 #1 col of signal cells per layer
-depth = depth_full // 2
-padding = 1*(length+depth_full-1)
+kernel_size = (9,9,7)
+depth_full = layers*(kernel_size[-1]-1)//2-(channels-1) #(k-1)/2 hyperplanes per layer, counting from first channel
+depth = layers-1 #depth_full // 2 - 1 # propagation speed is (kernel_size-1)//2 per step
+padding = 1*(length+depth_full) #+ max(kernel_size[0],kernel_size[1],kernel_size[2])+1
 N = 0*length + padding
-print("N:", N, "Epochs:", epochs, "depth:", depth)
+print("N:", N, "Epochs:", epochs, "layers:", depth_full, "depth:", depth)
 
 #network IO paths
 path = '/home/shakes/'
@@ -92,12 +93,11 @@ input_size = (length,length,channels)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (7,7,7)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
 directions = 32 #how many filters, i.e. possible directions, to learn
-print("depth:", depth, "total batches:", total_batches)
+# print("depth:", depth, "total batches:", total_batches)
 
 #===========
 ##create model
@@ -177,11 +177,12 @@ for step in range(epochs+1):
         x = jnp.asarray(x.numpy())
         y = jnp.asarray(y.numpy())
 
-        # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+        x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
         # print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
         total_loss += loss_value/batch_size
+        # break
     total_loss /= total_batches
 
     if step % 1 == 0:
@@ -193,7 +194,7 @@ for step in range(epochs+1):
             y = jnp.asarray(y.numpy())
             # y = jax.nn.one_hot(y, num_classes)
 
-            # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+            x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
             predicted = jnp.squeeze(logits, axis=-1)
@@ -226,7 +227,7 @@ for x, y in tqdm(test_loader):
     x = jnp.asarray(x.numpy())
     y = jnp.asarray(y.numpy())
 
-    # x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+    x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, x)
     predicted = jnp.squeeze(logits, axis=-1)
