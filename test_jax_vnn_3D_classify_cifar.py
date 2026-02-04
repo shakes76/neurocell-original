@@ -37,13 +37,13 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 6
+layers = 8
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (9,9,7)
-depth_full = layers*(kernel_size[-1]-1)//2-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
-depth = layers+2 # propagation speed is (kernel_size-1)//2 per step, go upto first channel
+kernel_size = (9,9,9)
+depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
+depth = depth_full//( (kernel_size[-1]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 padding = 1*(length+depth_full) #+ max(kernel_size[0],kernel_size[1],kernel_size[2])+1
 N = 0*length + padding
 print("N:", N, "Epochs:", epochs, "layers:", depth_full, "depth:", depth)
@@ -170,7 +170,7 @@ def update(
 
 # Train/eval loop.
 start = time.time() #time generation
-for step in range(epochs+1):
+for step in range(epochs):
     total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
