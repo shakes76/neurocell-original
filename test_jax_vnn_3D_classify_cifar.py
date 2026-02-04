@@ -120,8 +120,7 @@ opt = optax.adamw(learning_rate=schedule)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x, y = next(iter(train_loader))
-x = jnp.asarray(x.to(memory_format=torch.channels_last).numpy())
-# x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
@@ -142,7 +141,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
-    # print("LOSS SHAPE", labels.shape, logits.shape)
+    # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape)
 
     #L2 norm of weights loss
     # filters = params['universe_lp']['f']
@@ -173,27 +172,25 @@ for step in range(epochs):
     total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
-        x = jnp.asarray(x.to(memory_format=torch.channels_last).numpy())
         y = jnp.asarray(y.numpy())
 
-        # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-        # print("TRAIN SHAPE", x.shape)
+        x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+        print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
-        total_loss += loss_value/batch_size
+        # total_loss += loss_value/batch_size
         # break
-    # total_loss /= total_batches
+    total_loss /= total_batches
 
     if step % 1 == 0:
         # Periodically evaluate on train & test sets.
         correct = 0
         total = 0
         for x, y in tqdm(test_loader):
-            x = jnp.asarray(x.to(memory_format=torch.channels_last).numpy())
             y = jnp.asarray(y.numpy())
             # y = jax.nn.one_hot(y, num_classes)
 
-            # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+            x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
             predicted = jnp.squeeze(logits, axis=-1)
@@ -223,10 +220,9 @@ jnp.savez("3D_classify_cifar_cells.npz",
 correct = 0
 total = 0
 for x, y in tqdm(test_loader):
-    x = jnp.asarray(x.to(memory_format=torch.channels_last).numpy())
     y = jnp.asarray(y.numpy())
 
-    # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+    x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, x)
     predicted = jnp.squeeze(logits, axis=-1)
