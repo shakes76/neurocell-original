@@ -37,11 +37,11 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 8
+layers = 9
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (9,9,9)
+kernel_size = (13,13,13)
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth = depth_full//( (kernel_size[-1]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 padding = 1*(length+depth_full) #+ max(kernel_size[0],kernel_size[1],kernel_size[2])+1
@@ -114,16 +114,15 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 
 # Make the network and optimizer. Haiku standard
 total_steps = (total_batches*epochs)
-schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.025*total_steps,decay_steps=total_steps,end_value=0.0005)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.0005,peak_value=0.02,warmup_steps=0.015*total_steps,decay_steps=total_steps,end_value=0.0002)
 # opt = optax.adam(learning_rate=schedule)
 opt = optax.adamw(learning_rate=schedule)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
-dataset_iter = iter(train_loader)
-x, y = next(dataset_iter)
-# x = jnp.asarray(x.numpy())
-x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-# print("INIT SHAPE", x[0:1].shape)
+x, y = next(iter(train_loader))
+x = jnp.asarray(x.to(memory_format=torch.channels_last).numpy())
+# x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
@@ -174,27 +173,27 @@ for step in range(epochs):
     total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
-        # x = jnp.asarray(x.numpy())
+        x = jnp.asarray(x.to(memory_format=torch.channels_last).numpy())
         y = jnp.asarray(y.numpy())
 
-        x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+        # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
         # print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
         total_loss += loss_value/batch_size
         # break
-    total_loss /= total_batches
+    # total_loss /= total_batches
 
     if step % 1 == 0:
         # Periodically evaluate on train & test sets.
         correct = 0
         total = 0
         for x, y in tqdm(test_loader):
-            # x = jnp.asarray(x.numpy())
+            x = jnp.asarray(x.to(memory_format=torch.channels_last).numpy())
             y = jnp.asarray(y.numpy())
             # y = jax.nn.one_hot(y, num_classes)
 
-            x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+            # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
             predicted = jnp.squeeze(logits, axis=-1)
@@ -224,10 +223,10 @@ jnp.savez("3D_classify_cifar_cells.npz",
 correct = 0
 total = 0
 for x, y in tqdm(test_loader):
-    # x = jnp.asarray(x.numpy())
+    x = jnp.asarray(x.to(memory_format=torch.channels_last).numpy())
     y = jnp.asarray(y.numpy())
 
-    x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+    # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, x)
     predicted = jnp.squeeze(logits, axis=-1)
