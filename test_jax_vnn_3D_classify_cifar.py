@@ -42,8 +42,8 @@ batch_size = 100
 length = 32
 channels = 3
 kernel_size = (9,9,7)
-depth_full = layers*(kernel_size[-1]-1)//2-(channels-1) #(k-1)/2 hyperplanes per layer, counting from first channel
-depth = layers-1 #depth_full // 2 - 1 # propagation speed is (kernel_size-1)//2 per step
+depth_full = layers*(kernel_size[-1]-1)//2-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
+depth = layers+2 # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 padding = 1*(length+depth_full) #+ max(kernel_size[0],kernel_size[1],kernel_size[2])+1
 N = 0*length + padding
 print("N:", N, "Epochs:", epochs, "layers:", depth_full, "depth:", depth)
@@ -121,8 +121,8 @@ opt = optax.adamw(learning_rate=schedule)
 # Initialize network and optimiser; note we draw an input to get shapes.
 dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
-x = jnp.asarray(x.numpy())
-# x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+# x = jnp.asarray(x.numpy())
+x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 # print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
@@ -174,10 +174,10 @@ for step in range(epochs+1):
     total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
-        x = jnp.asarray(x.numpy())
+        # x = jnp.asarray(x.numpy())
         y = jnp.asarray(y.numpy())
 
-        x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+        x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
         # print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
@@ -190,11 +190,11 @@ for step in range(epochs+1):
         correct = 0
         total = 0
         for x, y in tqdm(test_loader):
-            x = jnp.asarray(x.numpy())
+            # x = jnp.asarray(x.numpy())
             y = jnp.asarray(y.numpy())
             # y = jax.nn.one_hot(y, num_classes)
 
-            x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+            x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
             predicted = jnp.squeeze(logits, axis=-1)
@@ -224,10 +224,10 @@ jnp.savez("3D_classify_cifar_cells.npz",
 correct = 0
 total = 0
 for x, y in tqdm(test_loader):
-    x = jnp.asarray(x.numpy())
+    # x = jnp.asarray(x.numpy())
     y = jnp.asarray(y.numpy())
 
-    x = jnp.transpose(x, (0, 2, 3, 1)) #channel last
+    x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, x)
     predicted = jnp.squeeze(logits, axis=-1)
