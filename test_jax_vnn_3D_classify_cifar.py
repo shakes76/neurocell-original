@@ -81,20 +81,20 @@ num_classes = 10
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween
 #setup network position
 center = N//2
-input_top = center-length//2
+input_top = center-(depth_full-1)//2 #center-length//2
 input_left = center-length//2
-input_inner = center-(depth_full-1)//2
-output_top = center-num_classes//2
+input_inner = center-length//2 #center-(depth_full-1)//2
+output_top = input_inner+depth_full+1 #include out layer #center-num_classes//2
 output_left = center
-output_inner = input_inner+depth_full+1 #include out layer
+output_inner = center-num_classes//2 # input_inner+depth_full+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
-input_size = (length,length,channels)
+input_size = (channels,length,length)
 input_offset = (input_top,input_left,input_inner)
-output_size = (num_classes,1,1)
+output_size = (1,1,num_classes)
 output_offset = (output_top,output_left,output_inner)
-activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+activation = jax.nn.hard_tanh
+final_activation = jax.nn.gelu
 total_batches = len(train_loader)
 directions = 32 #how many filters, i.e. possible directions, to learn
 # print("depth:", depth, "total batches:", total_batches)
@@ -114,19 +114,20 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 
 # Make the network and optimizer. Haiku standard
 total_steps = (total_batches*epochs)
-schedule = optax.warmup_cosine_decay_schedule(init_value=0.0005,peak_value=0.02,warmup_steps=0.015*total_steps,decay_steps=total_steps,end_value=0.0002)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0001)
 # opt = optax.adam(learning_rate=schedule)
 opt = optax.adamw(learning_rate=schedule)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x, y = next(iter(train_loader))
-x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+x = jnp.asarray(x.numpy())
+# x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
 
-plt.imshow(params['universe3_d']['s'][center,...])
+plt.imshow(params['universe3_d']['s'][:,center,:])
 plt.title("Initial States")
 plt.savefig("vnn_3D_classify_cifar_states_init.png", dpi=150)
 plt.show()
@@ -139,18 +140,14 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
-    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
-    # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape)
-
-    #L2 norm of weights loss
-    # filters = params['universe_lp']['f']
-    # l2 = jnp.mean(filters**2)
+    # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
+    # print("LOSS SHAPE SQUEEZE", labels.shape, logits[:,0,0,:].shape)
 
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
-    return optax.softmax_cross_entropy(logits=logits[...,0], labels=labels).mean(), state
+    return optax.softmax_cross_entropy(logits=logits[:,0,0,:], labels=labels).mean(), state
 
 @jax.jit
 def update(
@@ -172,13 +169,14 @@ for step in range(epochs):
     total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
+        x = jnp.asarray(x.numpy())
         y = jnp.asarray(y.numpy())
 
-        x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-        print("TRAIN SHAPE", x.shape)
+        # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+        # print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
-        # total_loss += loss_value/batch_size
+        total_loss += loss_value
         # break
     total_loss /= total_batches
 
@@ -187,15 +185,16 @@ for step in range(epochs):
         correct = 0
         total = 0
         for x, y in tqdm(test_loader):
+            x = jnp.asarray(x.numpy())
             y = jnp.asarray(y.numpy())
             # y = jax.nn.one_hot(y, num_classes)
 
-            x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+            # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
-            predicted = jnp.squeeze(logits, axis=-1)
+            # predicted = jnp.squeeze(logits, axis=-1)
             # predicted = jnp.squeeze(predicted, axis=-1)
-            predicted = jnp.argmax(predicted[...,0], axis=-1)
+            predicted = jnp.argmax(logits[:,0,0,:], axis=-1)
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
         accuracy = 100 * correct / total
@@ -220,52 +219,53 @@ jnp.savez("3D_classify_cifar_cells.npz",
 correct = 0
 total = 0
 for x, y in tqdm(test_loader):
+    x = jnp.asarray(x.numpy())
     y = jnp.asarray(y.numpy())
 
-    x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
+    # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, x)
-    predicted = jnp.squeeze(logits, axis=-1)
+    # predicted = jnp.squeeze(logits, axis=-1)
     # predicted = jnp.squeeze(predicted, axis=-1)
-    predicted = jnp.argmax(predicted[...,0], axis=-1)
+    predicted = jnp.argmax(logits[:,0,0,:], axis=-1)
     correct += jnp.sum(predicted == y)
     total += y.shape[0]
 
 accuracy = 100 * correct / total
 print(f"[Final Test Accuracy {accuracy}]")
 
-plt.imshow(params['universe3_d']['w'][center,...])
+plt.imshow(params['universe3_d']['w'][:,center,:])
 plt.title("Final Weights")
 plt.savefig("vnn_3D_classify_cifar_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['b'][center,...])
+plt.imshow(params['universe3_d']['b'][:,center,:])
 plt.title("Final Biases")
 plt.savefig("vnn_3D_classify_cifar_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['f'][0,center,:,:,0])
+plt.imshow(params['universe3_d']['f'][0,:,center,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_3D_classify_cifar_filter.png", dpi=75)
+plt.savefig("vnn_3D_classify_cifar_filter.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['s'][center,...])
+plt.imshow(params['universe3_d']['s'][:,center,:])
 plt.title("Final States")
-plt.savefig("vnn_3D_classify_cifar_states.png", dpi=75)
+plt.savefig("vnn_3D_classify_cifar_states.png", dpi=150)
 plt.show()
 
 states = params['universe3_d']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
-plt.imshow(states[center,...])
+plt.imshow(states[:,center,:])
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_3D_classify_cifar_states_thres.png", dpi=75)
+plt.savefig("vnn_3D_classify_cifar_states_thres.png", dpi=150)
 plt.show()
 
-plt.imshow(state['universe3_d']['universe'][center,...])
+plt.imshow(state['universe3_d']['universe'][:,center,:])
 plt.title("Final Universe")
-plt.savefig("vnn_3D_classify_cifar_universe.png", dpi=75)
+plt.savefig("vnn_3D_classify_cifar_universe.png", dpi=150)
 plt.show()
 
 print("END")

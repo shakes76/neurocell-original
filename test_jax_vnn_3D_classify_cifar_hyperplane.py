@@ -27,7 +27,7 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 12
+layers = 18
 batch_size = 100
 length = 32
 channels = 3
@@ -37,8 +37,8 @@ N = length + padding + depth
 print("N:", N, "Epochs:", epochs)
 
 #network IO paths
-# path = '/home/shakes/'
-path = 'F:/'
+path = '/home/shakes/'
+# path = 'F:/'
 
 #===========
 #transform preproc
@@ -119,14 +119,12 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 # opt = optax.sgd(lr_schedule, momentum=0.9)
 total_steps = (total_batches*epochs)
 schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0001)
-# opt = optax.sgd(learning_rate=0.005)
 # opt = optax.adam(learning_rate=schedule)
 opt = optax.adamw(learning_rate=schedule)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
-# x = jnp.asarray(x.numpy())
 x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
@@ -148,10 +146,6 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     logits, state = network.apply(params, state, batch)
     logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # print("LOSS SHAPE", labels.shape, logits.shape)
-
-    #L2 norm of weights loss
-    # filters = params['universe_lp']['f']
-    # l2 = jnp.mean(filters**2)
 
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
@@ -178,11 +172,9 @@ for step in range(epochs+1):
     total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
-        # x = jnp.asarray(x.numpy())
         y = jnp.asarray(y.numpy())
 
         x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-        # print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
         total_loss += loss_value/batch_size
@@ -226,7 +218,6 @@ jnp.savez("3D_hplane_classify_cifar_cells.npz",
 correct = 0
 total = 0
 for x, y in tqdm(test_loader):
-    # x = jnp.asarray(x.numpy())
     y = jnp.asarray(y.numpy())
 
     x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
@@ -252,12 +243,12 @@ plt.show()
 
 plt.imshow(params['universe3_d']['f'][0,center,:,:,0])
 plt.title("Final Filter")
-plt.savefig("vnn_3D_hplane_classify_cifar_filter.png", dpi=75)
+plt.savefig("vnn_3D_hplane_classify_cifar_filter.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Final States")
-plt.savefig("vnn_3D_hplane_full_classify_cifar_states.png", dpi=75)
+plt.savefig("vnn_3D_hplane_full_classify_cifar_states.png", dpi=150)
 plt.show()
 
 states = params['universe3_d']['s']
@@ -266,12 +257,12 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 
 plt.imshow(states[center,...])
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_3D_hplane_full_classify_cifar_states_thres.png", dpi=75)
+plt.savefig("vnn_3D_hplane_full_classify_cifar_states_thres.png", dpi=150)
 plt.show()
 
 plt.imshow(state['universe3_d']['universe'][center,...])
 plt.title("Final Universe")
-plt.savefig("vnn_3D_hplane_full_classify_cifar_universe.png", dpi=75)
+plt.savefig("vnn_3D_hplane_full_classify_cifar_universe.png", dpi=150)
 plt.show()
 
 print("END")
