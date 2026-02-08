@@ -41,7 +41,7 @@ layers = 9
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (13,13,13)
+kernel_size = (9,9,7)
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth = depth_full//( (kernel_size[-1]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 padding = 1*(length+depth_full) #+ max(kernel_size[0],kernel_size[1],kernel_size[2])+1
@@ -51,6 +51,21 @@ print("N:", N, "Epochs:", epochs, "layers:", depth_full, "depth:", depth)
 #network IO paths
 path = '/home/shakes/'
 # path = 'F:/'
+
+# square non-linearity
+# https://ieeexplore.ieee.org/document/8489043
+@jax.jit
+def sqnl(x):
+    # Clips the values to be between -2 and 2 for the activation range
+    # and calculates the square nonlinearity accordingly.
+
+    # Range [0, 2]
+    pos = jnp.where(jnp.logical_and(0.0 <= x, x <= 2.0), x - jnp.square(x)/4.0, x)
+    # Range [-2, 0)
+    neg = jnp.where(jnp.logical_and(-2.0 <= x, x < 0.0), x + jnp.square(x)/4.0, pos)
+
+    # Cap values outside (-2, 2) to -1 or 1
+    return jnp.clip(neg, -1.0, 1.0)
 
 #===========
 #transform preproc
@@ -93,7 +108,7 @@ input_size = (channels,length,length)
 input_offset = (input_top,input_left,input_inner)
 output_size = (1,1,num_classes)
 output_offset = (output_top,output_left,output_inner)
-activation = jax.nn.hard_tanh
+activation = jax.nn.soft_sign
 final_activation = jax.nn.gelu
 total_batches = len(train_loader)
 directions = 32 #how many filters, i.e. possible directions, to learn
@@ -114,7 +129,7 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 
 # Make the network and optimizer. Haiku standard
 total_steps = (total_batches*epochs)
-schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0001)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.adam(learning_rate=schedule)
 opt = optax.adamw(learning_rate=schedule)
 
@@ -150,6 +165,27 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     return optax.softmax_cross_entropy(logits=logits[:,0,0,:], labels=labels).mean(), state
 
 @jax.jit
+def l2_norm(tree):
+    """Compute the l2 norm of a pytree of arrays. Useful for weight decay."""
+    leaves, _ = jax.tree.flatten(tree)
+    return jnp.sqrt(sum(jnp.vdot(x, x) for x in leaves))
+
+@jax.jit
+def adaptive_grad_clip(params, grads, clip_factor=0.01, eps=1e-3):
+    '''
+    Adaptive gradient clipping (AGC) (as proposed in High-Performance
+    Large-Scale Image Recognition Without Normalization1): http://arxiv.org/abs/2102.06171
+
+    The paper attributes AGC as a crucial component in order to train
+    deep neural networks without batch normalization
+    '''
+    p_norm = l2_norm(params)
+    max_norm = jnp.maximum(p_norm, eps) * clip_factor
+    norm = l2_norm(grads)
+    normalize = lambda g: jnp.where(norm < max_norm, g, g * (max_norm / jnp.maximum(norm, 1e-6)))
+    return jax.tree.map(normalize, grads)
+
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,
@@ -159,6 +195,7 @@ def update(
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
     (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
+    # grads = adaptive_grad_clip(params, grads) #AGC for pseudo-batch normalization
     updates, opt_state = opt.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     return new_params, opt_state, loss_value, state
@@ -176,7 +213,7 @@ for step in range(epochs):
         # print("TRAIN SHAPE", x.shape)
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
-        total_loss += loss_value
+        total_loss += loss_value/batch_size
         # break
     total_loss /= total_batches
 
@@ -198,7 +235,7 @@ for step in range(epochs):
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
         accuracy = 100 * correct / total
-        print(f"[Step {step}, Loss {total_loss}, Train Accuracy {accuracy}]")
+        print(f"[Step {step}, Loss {total_loss}, Test Accuracy {accuracy}]")
     else:
         print(f"[Step {step}, Loss {total_loss}]")
 end = time.time()
