@@ -1533,7 +1533,7 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
     if norm:
         mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
         # print("mean axes", mean_axes)
-        #norm
+        #norm, note no B in result due to vectorization
         cells = jax.nn.standardize(cells, axis=mean_axes)
 
     #norm states to 0-1 range
@@ -1605,7 +1605,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     if norm:
         mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
         # print("mean axes", mean_axes)
-        #norm
+        #norm, note no B in result due to vectorization
         result_block = jax.nn.standardize(result_block, axis=mean_axes)
 
     #norm states to 0-1 range
@@ -1676,7 +1676,7 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     if norm:
         mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
         # print("mean axes", mean_axes)
-        #norm
+        #norm, note no B in result due to vectorization
         result_block = jax.nn.standardize(result_block, axis=mean_axes)
 
     #norm states to 0-1 range
@@ -1734,8 +1734,8 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
 
     if norm:
         mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
-        # print("mean axes", mean_axes)
-        #norm
+        # print("mean axes", mean_axes, "result", result)
+        #norm, note no B in result due to vectorization
         result = jax.nn.standardize(result, axis=mean_axes)
 
     #norm states to 0-1 range
