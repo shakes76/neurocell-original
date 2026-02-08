@@ -27,13 +27,13 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 18
+layers = 4
 batch_size = 100
 length = 32
 channels = 3
 depth = layers*2 #1 col of signal cells per layer
-padding = 1*layers #1*(length+depth-1)
-N = length + padding + depth
+padding = 1*depth #1*(length+depth-1)
+N = length + padding #+ depth
 print("N:", N, "Epochs:", epochs)
 
 #network IO paths
@@ -64,6 +64,7 @@ testset = torchvision.datasets.CIFAR10(
 test_loader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False) #num_workers=6
 
 num_classes = 10
+total_batches = len(train_loader)
 
 #locations
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween
@@ -81,10 +82,9 @@ input_size = (length,length,channels)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (9,9,7)
-activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
-total_batches = len(train_loader)
+kernel_size = (7,7,7)
+activation = jax.nn.relu
+final_activation = jax.nn.relu
 directions = 64 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "total batches:", total_batches)
 
@@ -94,7 +94,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = Universe3D(N)
+    mlp = Universe3D(N, sharpen=True)
     mlp.initialize_hyperplane(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
@@ -118,7 +118,8 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 #         final_div_factor=final_div_factor)
 # opt = optax.sgd(lr_schedule, momentum=0.9)
 total_steps = (total_batches*epochs)
-schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0001)
+clip_factor = 0.1 #AGC parameter
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.adam(learning_rate=schedule)
 opt = optax.adamw(learning_rate=schedule)
 
@@ -153,6 +154,27 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     return optax.softmax_cross_entropy(logits=logits[...,0], labels=labels).mean(), state
 
 @jax.jit
+def l2_norm(tree):
+    """Compute the l2 norm of a pytree of arrays. Useful for weight decay."""
+    leaves, _ = jax.tree.flatten(tree)
+    return jnp.sqrt(sum(jnp.vdot(x, x) for x in leaves))
+
+@jax.jit
+def adaptive_grad_clip(params, grads, clip_factor=0.01, eps=1e-3):
+    '''
+    Adaptive gradient clipping (AGC) (as proposed in High-Performance
+    Large-Scale Image Recognition Without Normalization1): http://arxiv.org/abs/2102.06171
+
+    The paper attributes AGC as a crucial component in order to train
+    deep neural networks without batch normalization
+    '''
+    p_norm = l2_norm(params)
+    max_norm = jnp.maximum(p_norm, eps) * clip_factor
+    norm = l2_norm(grads)
+    normalize = lambda g: jnp.where(norm < max_norm, g, g * (max_norm / jnp.maximum(norm, 1e-6)))
+    return jax.tree.map(normalize, grads)
+
+@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,
@@ -162,7 +184,8 @@ def update(
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
     (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
-    updates, opt_state = opt.update(grads, opt_state, params)
+    new_grads = adaptive_grad_clip(params, grads, clip_factor) #AGC for pseudo-batch normalization
+    updates, opt_state = opt.update(new_grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     return new_params, opt_state, loss_value, state
 
