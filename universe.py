@@ -1142,6 +1142,8 @@ class Universe3D(UniverseLP):
         self.img_shape = (1,N,N,N,1)
         self.window_stride= (1,1,1)
         self.sharpen_filter = filters.sharpen_3D(dtype=jnp.float32, norm=True)[jnp.newaxis,...,jnp.newaxis] # 8 connected kernel
+        self.scale_init = jnp.ones
+        self.offset_init = jnp.zeros
 
     def initialize_3D(self, in_sizes, out_sizes, in_offsets, out_offsets, depth, kernel_size=(3,3,3), directions=1):
         """
@@ -1194,6 +1196,11 @@ class Universe3D(UniverseLP):
         self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
+
+        # norms
+        self.layer_shape = None
+        self.scale = None
+        self.offset = None
 
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
                                 self.filters.shape,  # only ndim matters, not shape
@@ -1255,6 +1262,12 @@ class Universe3D(UniverseLP):
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
 
+        # norms
+        self.layer_shape = [self.N,] #maximum of N layers, each with (scale, shift)
+        # print("layer_shape", self.layer_shape)
+        self.scale = hk.get_parameter("scale", self.layer_shape, self.dtype, self.scale_init) #scale per layer
+        self.shift = hk.get_parameter("shift", self.layer_shape, self.dtype, self.offset_init) #shift per layer
+
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
@@ -1294,6 +1307,12 @@ class Universe3D(UniverseLP):
         states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
         if not self.output_weights is None:
             weights = jax.lax.dynamic_update_slice(weights, self.output_weights, self.out_offset)
+
+        if not self.scale == None and not self.shift == None:
+            # pass batch norm parameters
+            self.scale = hk.get_parameter("scale", self.layer_shape, self.dtype, self.scale_init)
+            self.shift = hk.get_parameter("shift", self.layer_shape, self.dtype, self.offset_init)
+            norm = [self.scale, self.shift]
 
         #forward
         # cells = _forward_propagate_fast(self.in_offset[1], self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
@@ -1405,7 +1424,7 @@ def _forward_propagate_fast_1D(index, depth, cells, weights, biases, states, fil
     result_block = _forward_fast_1D(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm)
     return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
-@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,13,14))
 def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
@@ -1552,7 +1571,7 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
 
     return cells
 
-@partial(jax.jit, static_argnums=(0,6,7,8,9))
+@partial(jax.jit, static_argnums=(0,6,8,9))
 def _forward_column(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
     """
     Compute the forward pass by computing each neuron depending on its state for a subregion.
@@ -1603,7 +1622,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
     # print("result_block padded",result_block.shape)
 
-    if norm:
+    if norm or isinstance(norm, list):
         mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
         # print("mean axes", mean_axes)
         #norm, note no B in result due to vectorization
@@ -1614,6 +1633,11 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
         # Calculate scaling factor for ReLU
         # gamma = utils.get_relu_gain_gamma([sub_weights.shape[-3]])
         # sub_weights = jax.nn.standardize(sub_weights, axis=-3)
+        if isinstance(norm, list):
+            scale = norm[0][index] #usually learnt per layer
+            shift = norm[1][index] #usually learnt per layer
+            # print("bnorm:", scale, shift)
+            result_block = result_block * scale + shift #scale and shift distribution
 
     #norm states to 0-1 range
     sub_states = jax.nn.sigmoid(sub_states)

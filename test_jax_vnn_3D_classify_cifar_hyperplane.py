@@ -118,23 +118,23 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 #         final_div_factor=final_div_factor)
 # opt = optax.sgd(lr_schedule, momentum=0.9)
 total_steps = (total_batches*epochs)
-clip_factor = 0.01 #AGC parameter
+# clip_factor = 0.01 #AGC parameter
 schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.adam(learning_rate=schedule)
-# opt = optax.adamw(learning_rate=schedule)
+opt = optax.adamw(learning_rate=schedule)
 
 # AGC should typically be applied BEFORE the optimizer (SGD/Adam) updates are calculated
 # or AFTER, depending on interpretation. In NFNets, it clips the raw gradients.
-opt = optax.chain(
-    optax.adamw(learning_rate=schedule),
-    utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
-)
+# opt = optax.chain(
+#     optax.adamw(learning_rate=schedule),
+#     utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
+# )
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
 x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
-print("INIT SHAPE", x[0:1].shape)
+# print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
@@ -176,7 +176,7 @@ def update(
 
 # Train/eval loop.
 start = time.time() #time generation
-for step in range(epochs+1):
+for step in range(epochs):
     total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
@@ -272,5 +272,7 @@ plt.imshow(state['universe3_d']['universe'][center,...])
 plt.title("Final Universe")
 plt.savefig("vnn_3D_hplane_full_classify_cifar_universe.png", dpi=150)
 plt.show()
+
+print("Batch Norm Parameters\n", params['universe3_d']['scale'], "\n", params['universe3_d']['shift'])
 
 print("END")
