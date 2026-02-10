@@ -1,7 +1,7 @@
 """
 Universe object for Von Neumann networks
 """
-from typing import Sequence, TypeAlias
+from typing import Sequence
 
 import jax
 import jax.numpy as jnp
@@ -1165,8 +1165,7 @@ class Universe3D(UniverseLP):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
-        # init_scale = 1./jnp.sqrt(self.depth*self.N*self.N)
-        init_scale = 1./jnp.sqrt(self.depth*self.N)
+        init_scale = 1./jnp.sqrt(self.depth*self.N*self.N)
         init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]*self.kernel_size[2]*self.directions) #shape is (rows,cols) before array creation
 
         #init states
@@ -1230,8 +1229,7 @@ class Universe3D(UniverseLP):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
-        # init_scale = 1./jnp.sqrt(self.depth*self.N*self.N)
-        init_scale = 1./jnp.sqrt(self.depth*self.N)
+        init_scale = 1./jnp.sqrt(self.depth*self.N*self.N)
         init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]*self.kernel_size[2]*self.directions) #shape is (rows,cols) before array creation
 
         #init states

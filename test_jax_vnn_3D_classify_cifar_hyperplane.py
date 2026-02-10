@@ -27,7 +27,7 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 4
+layers = 8
 batch_size = 100
 length = 32
 channels = 3
@@ -83,8 +83,8 @@ input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
 kernel_size = (13,13,7)
-activation = jax.nn.relu
-final_activation = jax.nn.relu
+activation = jax.nn.leaky_relu
+final_activation = jax.nn.leaky_relu
 directions = 64 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "total batches:", total_batches)
 
