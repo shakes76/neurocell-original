@@ -11,6 +11,7 @@ import haiku as hk
 import math
 
 import filters #local
+import utils
 
 #kernels for larger networks
 kernel_backward =  [[1, 0, 0],
@@ -1607,6 +1608,12 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
         # print("mean axes", mean_axes)
         #norm, note no B in result due to vectorization
         result_block = jax.nn.standardize(result_block, axis=mean_axes)
+        # result_block = utils.iqr_median_normalize(result_block, axis=mean_axes)
+        # mean_axes = tuple(i for i in range(len(dn.lhs_spec)-3)) #nD cells need norm'ing, ignore B and C
+        # gamma for scaled weights standardization equivalent to batch norm
+        # Calculate scaling factor for ReLU
+        # gamma = utils.get_relu_gain_gamma([sub_weights.shape[-3]])
+        # sub_weights = jax.nn.standardize(sub_weights, axis=-3)
 
     #norm states to 0-1 range
     sub_states = jax.nn.sigmoid(sub_states)
@@ -1817,6 +1824,15 @@ def _fast_conv(sub_cells, filters, dn, window_strides, padding_mode="SAME", lhs_
 
     Cells is assumed to be the relevant sub-region to process
     """
+    # gamma for scaled weights standardization equivalent to batch norm
+    # Calculate scaling factor for ReLU
+    # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+
+    # Apply the standardization function to the weights
+    # mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+    # print("mean axes", mean_axes, "filters", filters.shape)
+    # filters = jax.nn.standardize(filters, axis=-2)
+
     #Conv via 2D brute force
     #get weighted sum of neighbors using convolution
     sub_cells_conv = jax.lax.conv_general_dilated(sub_cells[jnp.newaxis,...], # lhs = NHWC image tensor

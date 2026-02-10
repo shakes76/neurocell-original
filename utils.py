@@ -7,6 +7,9 @@ import haiku as hk
 import imageio as iio
 from functools import partial
 from jax import vmap
+import optax
+from typing import Optional, NamedTuple
+import math
 
 def jax_status():
     print("Total Devices:",jax.devices())
@@ -32,7 +35,7 @@ def load_sprite(filename):
     # print("N:", N)
 
     inputs = []
-    neurons = []   
+    neurons = []
     outputs = []
     for i, row in enumerate(model_sprite):
         for j, col in enumerate(row):
@@ -45,24 +48,25 @@ def load_sprite(filename):
                 neurons.append(point)
             else: #col < 255
                 outputs.append(point)
-    
+
     return N, inputs, neurons, outputs
 
+@jax.jit
 def scatter(input, dim, index, src, reduce=None):
     # JAX-port of PyTorch's scatter. See https://pytorch.org/docs/stable/generated/torch.Tensor.scatter_.html
-    # Writes all values from the tensor src into input at the indices specified in the index tensor. 
+    # Writes all values from the tensor src into input at the indices specified in the index tensor.
     # For each value in src, its output index is specified by its index in src for dimension != dim and by the corresponding value in index for dimension = dim.
     # One can simplify this implementation with ndarray.at (ref: https://github.com/google/jax/issues/8487)
 
     dnums = jax.lax.ScatterDimensionNumbers(update_window_dims=(), inserted_window_dims=(0,), scatter_dims_to_operand_dims=(0,))
-    
+
     if reduce is None:
         _scatter = jax.lax.scatter
     elif reduce == "add":
         _scatter = jax.lax.scatter_add
     elif reduce == "multiply":
         _scatter = jax.lax.scatter_mul
-        
+
     _scatter = partial(_scatter, dimension_numbers=dnums)
     vmap_inner = partial(vmap, in_axes=(0, 0, 0), out_axes=0)
 
@@ -71,3 +75,134 @@ def scatter(input, dim, index, src, reduce=None):
     swap = lambda x: jnp.swapaxes(x, dim, -1)
     input, index, src = list(map(swap, (input, index, src)))
     return swap(_scatter(input, jnp.expand_dims(index, axis=-1), src))
+
+@partial(jax.jit, static_argnums=(1,2,3))
+def iqr_median_normalize(data, axis=None, keepdims=True, epsilon=1e-7):
+    """
+    Normalizes a JAX array using Interquartile Range (IQR) and Median.
+
+    Formula: X_norm = (X - Median) / IQR
+    Where IQR = Q3 (75th percentile) - Q1 (25th percentile)
+
+    Args:
+        data: Input JAX array or compatible array-like object.
+        axis: Axis or axes along which to compute the median and IQR.
+                Default is None (compute over flattened array).
+        keepdims: If this is set to True, the axes which are reduced are left
+                    in the result as dimensions with size one.
+        epsilon: Small constant to prevent division by zero.
+
+    Returns:
+        Normalized JAX array.
+
+    @author Gemini Pro 3
+    """
+    # Ensure input is a JAX array
+    data = jnp.array(data)
+
+    # Calculate the Median (50th percentile)
+    median = jnp.median(data, axis=axis, keepdims=keepdims)
+
+    # Calculate Q1 (25th) and Q3 (75th) percentiles
+    q1, q3 = jnp.percentile(data, jnp.array([25.0, 75.0]), axis=axis, keepdims=keepdims)
+
+    # Calculate Interquartile Range (IQR)
+    iqr = q3 - q1
+
+    # Normalize
+    # We add epsilon to the denominator to ensure numerical stability if IQR is 0
+    normalized_data = (data - median) / (iqr + epsilon)
+
+    return normalized_data
+
+@jax.jit
+def get_relu_gain_gamma(weight_shape: tuple) -> float:
+    """
+    Calculates the scaling factor (gamma) for ReLU activation.
+
+    For ReLU, we want to maintain the variance of the signal.
+    Standard He/Kaiming initialization suggests a variance of 2/fan_in.
+    Since Weight Standardization sets the weight variance to 1.0,
+    we must scale the standardized weights by sqrt(2/fan_in).
+
+    Args:
+        weight_shape: Tuple representing (out_channels, in_channels, k_h, k_w)
+
+    Returns:
+        The scalar gamma.
+    """
+    # Fan-in = in_channels * kernel_height * kernel_width
+    # fan_in = weight_shape[1] * weight_shape[2] * weight_shape[3] * weight_shape[3]
+    fan_in = result = math.prod(weight_shape)
+    # print("weight_shape", weight_shape, "fan_in", fan_in)
+
+    # Gamma = sqrt(2 / fan_in)
+    return jnp.sqrt(2.0 / fan_in)
+
+class AGCState(NamedTuple):
+    """Stateless transformation, but we need a placeholder."""
+    pass
+
+def adaptive_gradient_clipping(
+    clipping_threshold: float = 0.01,
+    eps: float = 1e-3
+) -> optax.GradientTransformation:
+    """
+    Creates an Optax transformation that applies Adaptive Gradient Clipping (AGC).
+
+    AGC clips gradients based on the ratio of the gradient norm to the parameter norm.
+    Unlike global gradient clipping (which looks at the norm of all gradients together),
+    AGC operates on each parameter tensor individually.
+
+    Formula:
+        G_clipped = G * min(1, (lambda * ||W||) / ||G||)
+
+    Args:
+        clipping_threshold: The lambda parameter. NFNets typically use 0.01.
+        eps: Small epsilon to prevent division by zero and handle zero-initialized params.
+
+    Returns:
+        An optax.GradientTransformation (init_fn, update_fn).
+    """
+
+    def init_fn(params):
+        return AGCState()
+
+    def update_fn(updates, state, params=None):
+        if params is None:
+            # AGC requires access to the current parameter values to compute ||W||.
+            # When using optax.chain, ensure this isn't the first transform if
+            # previous transforms alter the structure, though usually it's fine.
+            # In standard Optax usage, you must pass `params=params` to `tx.update`.
+            raise ValueError("Adaptive Gradient Clipping requires `params` to be passed to `update_fn`.")
+
+        def clip_leaf(g: jnp.ndarray, p: jnp.ndarray) -> jnp.ndarray:
+            # Skip clipping for scalars or empty arrays if necessary,
+            # though usually safe to compute norms.
+            if g is None or p is None:
+                return g
+
+            # Compute Frobenius norms (L2 norm of all elements)
+            # For strict NFNet compliance, this is sometimes done "unit-wise" (per filter),
+            # but tensor-wise (default jnp.linalg.norm) is the standard general implementation.
+            p_norm = jnp.linalg.norm(p)
+            g_norm = jnp.linalg.norm(g)
+
+            # Calculate the maximum allowed norm for the gradient
+            # We use max(p_norm, eps) to handle zero-initialized parameters safely
+            max_norm = clipping_threshold * jnp.maximum(p_norm, eps)
+
+            # Calculate clipping coefficient
+            # If g_norm > max_norm, we scale by (max_norm / g_norm)
+            # If g_norm <= max_norm, scaling factor is 1.0 (no change)
+            # We use max(g_norm, 1e-6) to avoid division by zero
+            clip_coef = jnp.minimum(1.0, max_norm / jnp.maximum(g_norm, 1e-6))
+
+            return g * clip_coef
+
+        # Apply the clipping function to every parameter/gradient pair in the PyTree
+        new_updates = jax.tree_util.tree_map(clip_leaf, updates, params)
+
+        return new_updates, state
+
+    return optax.GradientTransformation(init_fn, update_fn)
