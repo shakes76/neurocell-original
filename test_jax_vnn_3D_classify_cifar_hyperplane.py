@@ -21,19 +21,20 @@ import torchvision.transforms as transforms
 
 from universe import Universe3D #local
 import utils #local
+import visualize
 
 utils.jax_status()
 
 #parameters
 epochs = 35
 num_classes = 10
-layers = 15
+layers = 8
 batch_size = 100
 length = 32
 channels = 3
 depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
-kernel_size = (9,9,21)
-padding = 1*(layers) + (kernel_size[0]-1) #depth//2, kernel_size//2 either side of model
+kernel_size = (9,9,17)
+padding = 1*(depth) + (kernel_size[0]-1) #depth//2, kernel_size//2 either side of model
 N = length + padding #+ depth
 print("N:", N, "Epochs:", epochs, "Kernel:", kernel_size)
 
@@ -139,10 +140,12 @@ params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
 
-plt.imshow(params['universe3_d']['s'][center,...])
-plt.title("Initial States")
-plt.savefig("vnn_3D_hplane_classify_cifar_states_init.png", dpi=150)
-plt.show()
+center_point = (center, center, center)
+# plt.imshow(params['universe3_d']['s'][center,...])
+# plt.title("Initial States")
+# plt.savefig("vnn_3D_hplane_classify_cifar_states_init.png", dpi=150)
+# plt.show()
+visualize.plot_orthogonal_views(params['universe3_d']['s'], center=center_point)
 
 #loss function
 @jax.jit
@@ -249,10 +252,13 @@ plt.title("Final Biases")
 plt.savefig("vnn_3D_hplane_classify_cifar_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['f'][0,center,:,:,0])
-plt.title("Final Filter")
-plt.savefig("vnn_3D_hplane_classify_cifar_filter.png", dpi=150)
-plt.show()
+center_point = (kernel_size[0]//2, kernel_size[1]//2, kernel_size[2]//2)
+# plt.imshow(params['universe3_d']['f'][0,center,:,:,0])
+# plt.title("Final Filter")
+# plt.savefig("vnn_3D_hplane_classify_cifar_filter.png", dpi=150)
+# plt.show()
+visualize.plot_orthogonal_views(params['universe3_d']['f'][0,...,0], center=center_point)
+visualize.plot_orthogonal_views(params['universe3_d']['f'][1,...,0], center=center_point)
 
 plt.imshow(params['universe3_d']['s'][center,...])
 plt.title("Final States")

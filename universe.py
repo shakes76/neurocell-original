@@ -1224,6 +1224,7 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
+        self.blocks = 2
         # print("depth:", self.depth)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
@@ -1255,7 +1256,7 @@ class Universe3D(UniverseLP):
         self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
 
         #init filters
-        self.filters_shape = (1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions)
+        self.filters_shape = (self.blocks,kernel_size[0],kernel_size[1],kernel_size[2],self.directions)
         self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
         # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
@@ -1270,7 +1271,7 @@ class Universe3D(UniverseLP):
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -1317,7 +1318,7 @@ class Universe3D(UniverseLP):
         # cells = _forward_propagate_fast_mlp(inputs, self.in_offset, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
         # cells = _forward_propagate_fast_1D(self.in_offset[1], self.depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm)
         # forward_propagate_fast = jax.vmap(_forward_propagate_fast_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
-        cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, self.window_stride)
+        cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, self.blocks, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, self.window_stride)
         hk.set_state("universe", cells[0]) #remove vmap batch dim
 
         return outputs
@@ -1532,6 +1533,37 @@ def _forward_propagate_full_mlp_list(inputs, offsets, out_offset, out_size, dept
     cells = _forward_full(1, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides) #final prop and activate
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+
+@partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,14,15))
+def _forward_propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
+    """
+    Propagate input across cellular net based on weights etc. as a traditional MLP
+
+    Uses column/last hyperplane based computation for efficiency and propagates up to provided depth and
+    then one more for output layer.
+    Each block is done depth//blocks of the propagation assuming there are blocks filters for each block
+    """
+    zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
+    depth_block = depth//blocks
+    # print("blocks", blocks, "depth_block", depth_block)
+
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
+
+    for j in range(blocks):
+        #propagate per block
+        index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
+        # print("forward index",index, "j", j)
+        for i in range(depth_block+1): #0 to depth-1, depth in total
+            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j][jnp.newaxis,...], activate, norm, dn, window_strides)
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
+        # print("forward index final",index+depth)
+    #final propagation
+    result_block = _forward_column(index+depth, cells, weights, biases, states, filters[-1][jnp.newaxis,...], final_activate, norm, dn, window_strides)
+    if not final_activate == None:
+        result_block = final_activate(result_block) #force final activation, assume output layer
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
