@@ -27,15 +27,15 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 6
+layers = 15
 batch_size = 100
 length = 32
 channels = 3
 depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
-kernel_size = (9,9,13)
-padding = 1*(depth) + (kernel_size[0]-1) #depth//2, kernel_size//2 either side of model
+kernel_size = (9,9,21)
+padding = 1*(layers) + (kernel_size[0]-1) #depth//2, kernel_size//2 either side of model
 N = length + padding #+ depth
-print("N:", N, "Epochs:", epochs)
+print("N:", N, "Epochs:", epochs, "Kernel:", kernel_size)
 
 #network IO paths
 path = '/home/shakes/'
@@ -85,7 +85,7 @@ output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
 activation = jax.nn.leaky_relu
 final_activation = jax.nn.leaky_relu
-directions = 256 #how many filters, i.e. possible directions, to learn
+directions = 64 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========
