@@ -27,12 +27,13 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 8
+layers = 6
 batch_size = 100
 length = 32
 channels = 3
-depth = layers*2+1 #1 col of signal cells per layer
-padding = 1*depth #1*(length+depth-1)
+depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
+kernel_size = (9,9,13)
+padding = 1*(depth) + (kernel_size[0]-1) #depth//2, kernel_size//2 either side of model
 N = length + padding #+ depth
 print("N:", N, "Epochs:", epochs)
 
@@ -82,11 +83,10 @@ input_size = (length,length,channels)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-kernel_size = (13,13,7)
 activation = jax.nn.leaky_relu
 final_activation = jax.nn.leaky_relu
-directions = 64 #how many filters, i.e. possible directions, to learn
-print("depth:", depth, "total batches:", total_batches)
+directions = 256 #how many filters, i.e. possible directions, to learn
+print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========
 ##create model
@@ -94,7 +94,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = Universe3D(N, sharpen=True)
+    mlp = Universe3D(N, sharpen=False)
     mlp.initialize_hyperplane(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
@@ -273,6 +273,6 @@ plt.title("Final Universe")
 plt.savefig("vnn_3D_hplane_full_classify_cifar_universe.png", dpi=150)
 plt.show()
 
-print("Batch Norm Parameters\n", params['universe3_d']['scale'], "\n", params['universe3_d']['shift'])
+print("Layer Norm Parameters\n", params['universe3_d']['scale'], "\n", params['universe3_d']['shift'])
 
 print("END")

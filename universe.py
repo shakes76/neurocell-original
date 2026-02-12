@@ -1142,8 +1142,8 @@ class Universe3D(UniverseLP):
         self.img_shape = (1,N,N,N,1)
         self.window_stride= (1,1,1)
         self.sharpen_filter = filters.sharpen_3D(dtype=jnp.float32, norm=True)[jnp.newaxis,...,jnp.newaxis] # 8 connected kernel
-        self.scale_init = jnp.ones
-        self.offset_init = jnp.zeros
+        self.scale_init = jnp.ones #for layer norm
+        self.offset_init = jnp.zeros #for layer norm
 
     def initialize_3D(self, in_sizes, out_sizes, in_offsets, out_offsets, depth, kernel_size=(3,3,3), directions=1):
         """
@@ -1429,13 +1429,16 @@ def _forward_propagate_mlp(input, offset, out_offset, out_size, depth, cells, we
 
     Uses column/last hyperplane based computation for efficiency and propagates up to provided depth and
     then one more for output layer.
+    Last dim of filters is used as the initial starting step
     """
     zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
+    step = 1 #(filters.shape[-2]-1)//2 #-2 to take last dim butignore channel dim
+    # print("forward step:", step)
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
     #propagate
-    index = offset[-1]+1 #first col (or last hyper plane) next to input
+    index = offset[-1]+step #first col (or last hyper plane) next to input
     # print("forward index",index)
     for i in range(depth): #0 to depth-1, depth in total
         result_block = _forward_column(index+i, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
@@ -1614,7 +1617,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     #handles boundaries better?
     result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
     # print("result_block conv",result_block.shape)
-    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
+    # result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #Same mode approach
     # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")
     # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
@@ -1631,11 +1634,13 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
         # Calculate scaling factor for ReLU
         # gamma = utils.get_relu_gain_gamma([sub_weights.shape[-3]])
         # sub_weights = jax.nn.standardize(sub_weights, axis=-3)
-        if isinstance(norm, list):
+        if isinstance(norm, list): #assume layer norm wanted
             scale = norm[0][index] #usually learnt per layer
             shift = norm[1][index] #usually learnt per layer
-            # print("bnorm:", scale, shift)
+            # print("layer norm:", scale, shift)
             result_block = result_block * scale + shift #scale and shift distribution
+
+    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
 
     #norm states to 0-1 range
     sub_states = jax.nn.sigmoid(sub_states)
