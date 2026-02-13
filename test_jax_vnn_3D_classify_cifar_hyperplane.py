@@ -33,7 +33,7 @@ batch_size = 100
 length = 32
 channels = 3
 depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
-kernel_size = (7,7,17)
+kernel_size = (9,9,17)
 padding = 1*(depth) #+ (kernel_size[2]-1) #depth//2, kernel_size//2 either side of model
 N = length + padding #+ depth
 print("N:", N, "Epochs:", epochs, "Kernel:", kernel_size)
