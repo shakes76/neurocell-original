@@ -28,13 +28,13 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 8
+layers = 16
 batch_size = 100
 length = 32
 channels = 3
 depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
-kernel_size = (9,9,17)
-padding = 1*(depth) + (kernel_size[0]-1) #depth//2, kernel_size//2 either side of model
+kernel_size = (7,7,17)
+padding = 1*(depth) #+ (kernel_size[2]-1) #depth//2, kernel_size//2 either side of model
 N = length + padding #+ depth
 print("N:", N, "Epochs:", epochs, "Kernel:", kernel_size)
 
@@ -139,6 +139,9 @@ x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
+
+param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
+print(f"Total number of parameters: {param_count}")
 
 center_point = (center, center, center)
 # plt.imshow(params['universe3_d']['s'][center,...])
