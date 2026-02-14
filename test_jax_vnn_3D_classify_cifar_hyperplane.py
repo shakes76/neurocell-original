@@ -28,12 +28,12 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 16
+layers = 24
 batch_size = 100
 length = 32
 channels = 3
 depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
-kernel_size = (9,9,17)
+kernel_size = (9,9,25)
 padding = 1*(depth) #+ (kernel_size[2]-1) #depth//2, kernel_size//2 either side of model
 Nx = length + 2*(kernel_size[0]-1)
 Ny = length + 2*(kernel_size[1]-1)
@@ -41,7 +41,7 @@ Nz = length + max(depth, + (kernel_size[2]-1))
 print("N:", (Nx,Ny,Nz), "Epochs:", epochs, "Kernel:", kernel_size)
 
 #network IO paths
-path = '/home/uqscha22/'
+path = '/home/shakes/'
 # path = 'F:/'
 
 #===========
