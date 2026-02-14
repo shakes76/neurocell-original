@@ -1138,8 +1138,13 @@ class Universe3D(UniverseLP):
     """
     def __init__(self, N, sharpen=True, dtype=jnp.float32, name=None):
         super().__init__(N, sharpen=sharpen, dtype=dtype, name=name)
-        self.grid_size = (N,N,N)
-        self.img_shape = (1,N,N,N,1)
+        if isinstance(N, (list, tuple)): #size provided by user
+            self.N = max(N)
+            self.grid_size = N
+            self.img_shape = (1,)+N+(1,)
+        else:
+            self.grid_size = (N,N,N)
+            self.img_shape = (1,N,N,N,1)
         self.window_stride= (1,1,1)
         self.sharpen_filter = filters.sharpen_3D(dtype=jnp.float32, norm=True)[jnp.newaxis,...,jnp.newaxis] # 8 connected kernel
         self.scale_init = jnp.ones #for layer norm
@@ -1230,7 +1235,7 @@ class Universe3D(UniverseLP):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
-        init_scale = 1./jnp.sqrt(self.depth*self.N*self.N)
+        init_scale = 1./jnp.sqrt(self.depth*self.grid_size[0]*self.grid_size[1])
         init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]*self.kernel_size[2]*self.directions) #shape is (rows,cols) before array creation
 
         #init states

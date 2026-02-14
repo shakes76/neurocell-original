@@ -35,11 +35,13 @@ channels = 3
 depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
 kernel_size = (9,9,17)
 padding = 1*(depth) #+ (kernel_size[2]-1) #depth//2, kernel_size//2 either side of model
-N = length + padding #+ depth
-print("N:", N, "Epochs:", epochs, "Kernel:", kernel_size)
+Nx = length + 2*(kernel_size[0]-1)
+Ny = length + 2*(kernel_size[1]-1)
+Nz = length + max(depth, + (kernel_size[2]-1))
+print("N:", (Nx,Ny,Nz), "Epochs:", epochs, "Kernel:", kernel_size)
 
 #network IO paths
-path = '/home/shakes/'
+path = '/home/uqscha22/'
 # path = 'F:/'
 
 #===========
@@ -71,12 +73,14 @@ total_batches = len(train_loader)
 #locations
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween
 #setup network position
-center = N//2
-input_top = center-length//2
-input_left = center-length//2
-input_inner = center-(depth-1)//2
-output_top = center-num_classes//2
-output_left = center
+centerx = Nx//2
+centery = Ny//2
+centerz = Nz//2
+input_top = centerx-length//2
+input_left = centery-length//2
+input_inner = centerz-(depth-1)//2
+output_top = centerx-num_classes//2
+output_left = centery
 output_inner = input_inner+depth+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
@@ -95,7 +99,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = Universe3D(N, sharpen=False)
+    mlp = Universe3D((Nx,Ny,Nz), sharpen=False)
     mlp.initialize_hyperplane(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
@@ -143,7 +147,7 @@ opt_state = opt.init(params)
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
 
-center_point = (center, center, center)
+center_point = (centerx, centery, centerx)
 # plt.imshow(params['universe3_d']['s'][center,...])
 # plt.title("Initial States")
 # plt.savefig("vnn_3D_hplane_classify_cifar_states_init.png", dpi=150)
@@ -245,12 +249,12 @@ for x, y in tqdm(test_loader):
 accuracy = 100 * correct / total
 print(f"[Final Test Accuracy {accuracy}]")
 
-plt.imshow(params['universe3_d']['w'][center,...])
+plt.imshow(params['universe3_d']['w'][centerx,...])
 plt.title("Final Weights")
 plt.savefig("vnn_3D_hplane_classify_cifar_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['b'][center,...])
+plt.imshow(params['universe3_d']['b'][centerx,...])
 plt.title("Final Biases")
 plt.savefig("vnn_3D_hplane_classify_cifar_biases.png", dpi=150)
 plt.show()
@@ -263,7 +267,7 @@ center_point = (kernel_size[0]//2, kernel_size[1]//2, kernel_size[2]//2)
 visualize.plot_orthogonal_views(params['universe3_d']['f'][0,...,0], center=center_point)
 visualize.plot_orthogonal_views(params['universe3_d']['f'][1,...,0], center=center_point)
 
-plt.imshow(params['universe3_d']['s'][center,...])
+plt.imshow(params['universe3_d']['s'][centerx,...])
 plt.title("Final States")
 plt.savefig("vnn_3D_hplane_full_classify_cifar_states.png", dpi=150)
 plt.show()
@@ -277,7 +281,7 @@ plt.title("Final States (Thresholded)")
 plt.savefig("vnn_3D_hplane_full_classify_cifar_states_thres.png", dpi=150)
 plt.show()
 
-plt.imshow(state['universe3_d']['universe'][center,...])
+plt.imshow(state['universe3_d']['universe'][centerx,...])
 plt.title("Final Universe")
 plt.savefig("vnn_3D_hplane_full_classify_cifar_universe.png", dpi=150)
 plt.show()
