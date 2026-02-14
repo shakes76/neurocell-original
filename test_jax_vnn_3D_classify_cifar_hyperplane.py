@@ -33,11 +33,10 @@ batch_size = 100
 length = 32
 channels = 3
 depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
-kernel_size = (9,9,25)
-padding = 1*(depth) #+ (kernel_size[2]-1) #depth//2, kernel_size//2 either side of model
+kernel_size = (9,9,33)
 Nx = length + 2*(kernel_size[0]-1)
 Ny = length + 2*(kernel_size[1]-1)
-Nz = length + max(depth, + (kernel_size[2]-1))
+Nz = depth + 2*(kernel_size[2]-1)
 print("N:", (Nx,Ny,Nz), "Epochs:", epochs, "Kernel:", kernel_size)
 
 #network IO paths
@@ -147,7 +146,7 @@ opt_state = opt.init(params)
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
 
-center_point = (centerx, centery, centerx)
+center_point = (centerx, centery, input_inner)
 # plt.imshow(params['universe3_d']['s'][center,...])
 # plt.title("Initial States")
 # plt.savefig("vnn_3D_hplane_classify_cifar_states_init.png", dpi=150)
