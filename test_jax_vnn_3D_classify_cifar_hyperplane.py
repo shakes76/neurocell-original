@@ -227,7 +227,7 @@ jnp.savez("3D_hplane_classify_cifar_cells.npz",
             biases=params['universe3_d']['b'],
             filters=params['universe3_d']['f'],
             states=params['universe3_d']['s'],
-            N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
+            N=(Nx,Ny,Nz), length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,
             allow_pickle=False)
@@ -276,7 +276,7 @@ states = params['universe3_d']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
-plt.imshow(states[center,...])
+plt.imshow(states[centerx,...])
 plt.title("Final States (Thresholded)")
 plt.savefig("vnn_3D_hplane_full_classify_cifar_states_thres.png", dpi=150)
 plt.show()
