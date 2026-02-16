@@ -38,11 +38,11 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 9
+layers = 12
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (7,9,9) #channel first
+kernel_size = (13,9,9) #channel first
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth = depth_full//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 Nx = depth_full + 2*(kernel_size[0]-1) #channel first
@@ -137,6 +137,9 @@ print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
+
+param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
+print(f"Total number of parameters: {param_count}")
 
 center_point = (input_top, centery, centerz)
 # plt.imshow(params['universe3_d']['s'][:,center,:])
