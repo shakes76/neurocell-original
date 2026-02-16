@@ -21,7 +21,7 @@ import torchvision.transforms as transforms
 
 from universe import Universe3D #local
 import utils #local
-import visualize
+import visualize #local
 
 utils.jax_status()
 
@@ -33,7 +33,7 @@ batch_size = 100
 length = 32
 channels = 3
 depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
-kernel_size = (9,9,33)
+kernel_size = (9,9,25)
 Nx = length + 2*(kernel_size[0]-1)
 Ny = length + 2*(kernel_size[1]-1)
 Nz = depth + 2*(kernel_size[2]-1)
@@ -77,7 +77,7 @@ centery = Ny//2
 centerz = Nz//2
 input_top = centerx-length//2
 input_left = centery-length//2
-input_inner = centerz-(depth-1)//2
+input_inner = centerz-depth//2
 output_top = centerx-num_classes//2
 output_left = centery
 output_inner = input_inner+depth+1 #include out layer
