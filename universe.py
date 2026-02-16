@@ -1165,6 +1165,7 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
+        self.blocks = 0
         # print("depth:", self.depth)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
@@ -1210,7 +1211,7 @@ class Universe3D(UniverseLP):
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_full_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -1508,8 +1509,8 @@ def _forward_propagate_tape(input, offset, out_offset, out_size, depth, cells, w
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
-@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
-def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
+@partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,13,14,15))
+def _forward_propagate_full_mlp(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
     """

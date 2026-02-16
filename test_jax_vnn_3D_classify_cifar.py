@@ -31,6 +31,7 @@ import torchvision.transforms as transforms
 
 from universe import Universe3D #local
 import utils #local
+import visualize #local
 
 utils.jax_status()
 
@@ -41,35 +42,21 @@ layers = 9
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (9,9,7)
+kernel_size = (7,9,9) #channel first
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
-depth = depth_full//( (kernel_size[-1]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
-padding = 1*(length+depth_full) #+ max(kernel_size[0],kernel_size[1],kernel_size[2])+1
-N = 0*length + padding
-print("N:", N, "Epochs:", epochs, "layers:", depth_full, "depth:", depth)
+depth = depth_full//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
+Nx = depth_full + 2*(kernel_size[0]-1) #channel first
+Ny = length + 2*(kernel_size[1]-1)
+Nz = length + 2*(kernel_size[2]-1)
+print("N:", (Nx,Ny,Nz), "depth:", depth, "Epochs:", epochs, "Kernel:", kernel_size)
 
 #network IO paths
 path = '/home/shakes/'
 # path = 'F:/'
 
-# square non-linearity
-# https://ieeexplore.ieee.org/document/8489043
-@jax.jit
-def sqnl(x):
-    # Clips the values to be between -2 and 2 for the activation range
-    # and calculates the square nonlinearity accordingly.
-
-    # Range [0, 2]
-    pos = jnp.where(jnp.logical_and(0.0 <= x, x <= 2.0), x - jnp.square(x)/4.0, x)
-    # Range [-2, 0)
-    neg = jnp.where(jnp.logical_and(-2.0 <= x, x < 0.0), x + jnp.square(x)/4.0, pos)
-
-    # Cap values outside (-2, 2) to -1 or 1
-    return jnp.clip(neg, -1.0, 1.0)
-
 #===========
 #transform preproc
-#lambda for channel last
+#use x dim for depth since pytorch is channel first by default
 transform_train = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -95,24 +82,25 @@ num_classes = 10
 #locations
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween
 #setup network position
-center = N//2
-input_top = center-(depth_full-1)//2 #center-length//2
-input_left = center-length//2
-input_inner = center-length//2 #center-(depth_full-1)//2
-output_top = input_inner+depth_full+1 #include out layer #center-num_classes//2
-output_left = center
-output_inner = center-num_classes//2 # input_inner+depth_full+1 #include out layer
+centerx = Nx//2
+centery = Ny//2
+centerz = Nz//2
+input_top = centerx-depth_full//2 #center-length//2
+input_left = centery-length//2
+input_inner = centerz-length//2 #center-(depth_full-1)//2
+output_top = input_top+depth_full+1 #include out layer #center-num_classes//2
+output_left = centery
+output_inner = centerz-num_classes//2 # input_inner+depth_full+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (channels,length,length)
 input_offset = (input_top,input_left,input_inner)
 output_size = (1,1,num_classes)
 output_offset = (output_top,output_left,output_inner)
-activation = jax.nn.soft_sign
-final_activation = jax.nn.gelu
+activation = jax.nn.leaky_relu
+final_activation = jax.nn.leaky_relu
 total_batches = len(train_loader)
 directions = 32 #how many filters, i.e. possible directions, to learn
-# print("depth:", depth, "total batches:", total_batches)
 
 #===========
 ##create model
@@ -120,7 +108,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = Universe3D(N)
+    mlp = Universe3D((Nx,Ny,Nz), sharpen=False)
     mlp.initialize_3D(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
@@ -131,7 +119,15 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 total_steps = (total_batches*epochs)
 schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.adam(learning_rate=schedule)
-opt = optax.adamw(learning_rate=schedule)
+# opt = optax.adamw(learning_rate=schedule)
+
+# AGC should typically be applied BEFORE the optimizer (SGD/Adam) updates are calculated
+# or AFTER, depending on interpretation. In NFNets, it clips the raw gradients.
+clip_factor = 0.01 #AGC parameter
+opt = optax.chain(
+    optax.adamw(learning_rate=schedule),
+    utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
+)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 x, y = next(iter(train_loader))
@@ -142,10 +138,12 @@ params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
 
-plt.imshow(params['universe3_d']['s'][:,center,:])
-plt.title("Initial States")
-plt.savefig("vnn_3D_classify_cifar_states_init.png", dpi=150)
-plt.show()
+center_point = (input_top, centery, centerz)
+# plt.imshow(params['universe3_d']['s'][:,center,:])
+# plt.title("Initial States")
+# plt.savefig("vnn_3D_classify_cifar_states_init.png", dpi=150)
+# plt.show()
+visualize.plot_orthogonal_views(params['universe3_d']['s'], center=center_point)
 
 #loss function
 @jax.jit
@@ -165,27 +163,6 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     return optax.softmax_cross_entropy(logits=logits[:,0,0,:], labels=labels).mean(), state
 
 @jax.jit
-def l2_norm(tree):
-    """Compute the l2 norm of a pytree of arrays. Useful for weight decay."""
-    leaves, _ = jax.tree.flatten(tree)
-    return jnp.sqrt(sum(jnp.vdot(x, x) for x in leaves))
-
-@jax.jit
-def adaptive_grad_clip(params, grads, clip_factor=0.01, eps=1e-3):
-    '''
-    Adaptive gradient clipping (AGC) (as proposed in High-Performance
-    Large-Scale Image Recognition Without Normalization1): http://arxiv.org/abs/2102.06171
-
-    The paper attributes AGC as a crucial component in order to train
-    deep neural networks without batch normalization
-    '''
-    p_norm = l2_norm(params)
-    max_norm = jnp.maximum(p_norm, eps) * clip_factor
-    norm = l2_norm(grads)
-    normalize = lambda g: jnp.where(norm < max_norm, g, g * (max_norm / jnp.maximum(norm, 1e-6)))
-    return jax.tree.map(normalize, grads)
-
-@jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,
@@ -195,7 +172,6 @@ def update(
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
     (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
-    # grads = adaptive_grad_clip(params, grads) #AGC for pseudo-batch normalization
     updates, opt_state = opt.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     return new_params, opt_state, loss_value, state
@@ -247,7 +223,7 @@ jnp.savez("3D_classify_cifar_cells.npz",
             biases=params['universe3_d']['b'],
             filters=params['universe3_d']['f'],
             states=params['universe3_d']['s'],
-            N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
+            N=(Nx,Ny,Nz), length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,
             allow_pickle=False)
@@ -281,10 +257,13 @@ plt.title("Final Biases")
 plt.savefig("vnn_3D_classify_cifar_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['f'][0,:,center,:,0])
-plt.title("Final Filter")
-plt.savefig("vnn_3D_classify_cifar_filter.png", dpi=150)
-plt.show()
+center_point = (kernel_size[0]//2, kernel_size[1]//2, kernel_size[2]//2)
+# plt.imshow(params['universe3_d']['f'][0,:,center,:,0])
+# plt.title("Final Filter")
+# plt.savefig("vnn_3D_classify_cifar_filter.png", dpi=150)
+# plt.show()
+visualize.plot_orthogonal_views(params['universe3_d']['f'][0,...,0], center=center_point)
+visualize.plot_orthogonal_views(params['universe3_d']['f'][1,...,0], center=center_point)
 
 plt.imshow(params['universe3_d']['s'][:,center,:])
 plt.title("Final States")

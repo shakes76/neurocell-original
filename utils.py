@@ -115,6 +115,21 @@ def iqr_median_normalize(data, axis=None, keepdims=True, epsilon=1e-7):
 
     return normalized_data
 
+# square non-linearity
+# https://ieeexplore.ieee.org/document/8489043
+@jax.jit
+def sqnl(x):
+    # Clips the values to be between -2 and 2 for the activation range
+    # and calculates the square nonlinearity accordingly.
+
+    # Range [0, 2]
+    pos = jnp.where(jnp.logical_and(0.0 <= x, x <= 2.0), x - jnp.square(x)/4.0, x)
+    # Range [-2, 0)
+    neg = jnp.where(jnp.logical_and(-2.0 <= x, x < 0.0), x + jnp.square(x)/4.0, pos)
+
+    # Cap values outside (-2, 2) to -1 or 1
+    return jnp.clip(neg, -1.0, 1.0)
+
 @jax.jit
 def get_relu_gain_gamma(weight_shape: tuple) -> float:
     """
