@@ -48,7 +48,7 @@ depth = depth_full//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_siz
 Nx = depth_full + 2*(kernel_size[0]-1) #channel first
 Ny = length + 2*(kernel_size[1]-1)
 Nz = length + 2*(kernel_size[2]-1)
-print("N:", (Nx,Ny,Nz), "depth:", depth, "Epochs:", epochs, "Kernel:", kernel_size)
+print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 
 #network IO paths
 path = '/home/shakes/'
@@ -100,7 +100,8 @@ output_offset = (output_top,output_left,output_inner)
 activation = jax.nn.leaky_relu
 final_activation = jax.nn.leaky_relu
 total_batches = len(train_loader)
-directions = 32 #how many filters, i.e. possible directions, to learn
+directions = 8 #how many filters, i.e. possible directions, to learn
+print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========
 ##create model
@@ -250,12 +251,12 @@ for x, y in tqdm(test_loader):
 accuracy = 100 * correct / total
 print(f"[Final Test Accuracy {accuracy}]")
 
-plt.imshow(params['universe3_d']['w'][:,center,:])
+plt.imshow(params['universe3_d']['w'][:,centery,:])
 plt.title("Final Weights")
 plt.savefig("vnn_3D_classify_cifar_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe3_d']['b'][:,center,:])
+plt.imshow(params['universe3_d']['b'][:,centery,:])
 plt.title("Final Biases")
 plt.savefig("vnn_3D_classify_cifar_biases.png", dpi=150)
 plt.show()
@@ -268,7 +269,7 @@ center_point = (kernel_size[0]//2, kernel_size[1]//2, kernel_size[2]//2)
 visualize.plot_orthogonal_views(params['universe3_d']['f'][0,...,0], center=center_point)
 visualize.plot_orthogonal_views(params['universe3_d']['f'][1,...,0], center=center_point)
 
-plt.imshow(params['universe3_d']['s'][:,center,:])
+plt.imshow(params['universe3_d']['s'][:,centery,:])
 plt.title("Final States")
 plt.savefig("vnn_3D_classify_cifar_states.png", dpi=150)
 plt.show()
@@ -277,12 +278,12 @@ states = params['universe3_d']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
-plt.imshow(states[:,center,:])
+plt.imshow(states[:,centery,:])
 plt.title("Final States (Thresholded)")
 plt.savefig("vnn_3D_classify_cifar_states_thres.png", dpi=150)
 plt.show()
 
-plt.imshow(state['universe3_d']['universe'][:,center,:])
+plt.imshow(state['universe3_d']['universe'][:,centery,:])
 plt.title("Final Universe")
 plt.savefig("vnn_3D_classify_cifar_universe.png", dpi=150)
 plt.show()
