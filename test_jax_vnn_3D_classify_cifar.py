@@ -38,11 +38,11 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 12
+layers = 16
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (13,9,9) #channel first
+kernel_size = (17,9,9) #channel first
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth = depth_full//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 Nx = depth_full + 2*(kernel_size[0]-1) #channel first
@@ -100,7 +100,7 @@ output_offset = (output_top,output_left,output_inner)
 activation = jax.nn.leaky_relu
 final_activation = jax.nn.leaky_relu
 total_batches = len(train_loader)
-directions = 8 #how many filters, i.e. possible directions, to learn
+directions = 16 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========

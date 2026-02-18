@@ -1165,8 +1165,8 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
-        self.blocks = 2
-        # print("depth:", self.depth)
+        self.blocks = 4
+        # print("blocks:", self.blocks)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -1231,7 +1231,7 @@ class Universe3D(UniverseLP):
         self.depth = depth
         self.directions = directions
         self.blocks = 6
-        # print("depth:", self.depth)
+        # print("blocks:", self.blocks)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -1670,6 +1670,16 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
 
+    # if norm:
+    #     # gamma for scaled weights standardization equivalent to batch norm
+    #     # Calculate scaling factor for ReLU
+    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+
+    #     # Apply the standardization function to the weights
+    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+    #     # print("mean axes", mean_axes, "filters", filters.shape)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes)
+
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach in all dims, reduced complexity by deliberately squishing last hyperplane as well to current index
     #handles boundaries better?
@@ -1699,6 +1709,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
             result_block = result_block * scale + shift #scale and shift distribution
 
     result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
+    #we do this after norm to ensure padding does not skew the norm after valid approach
 
     #norm states to 0-1 range
     sub_states = jax.nn.sigmoid(sub_states)
@@ -1756,10 +1767,20 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     sub_biases = sub_biases[...,jnp.newaxis,:,jnp.newaxis] #promotes to row vec (2D) or back to nD and support filter channel
     sub_states = sub_states[...,jnp.newaxis,:,jnp.newaxis] #promotes to row vec (2D) or back to nD and support filter channel
 
+    # if norm:
+    #     # gamma for scaled weights standardization equivalent to batch norm
+    #     # Calculate scaling factor for ReLU
+    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+
+    #     # Apply the standardization function to the weights
+    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+    #     # print("mean axes", mean_axes, "filters", filters.shape)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes)
+
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach, reduced complexity, handles boundaries better?
     result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
-    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
+    # result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #Same mode approach
     # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")
     # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
@@ -1770,6 +1791,9 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
         # print("mean axes", mean_axes)
         #norm, note no B in result due to vectorization
         result_block = jax.nn.standardize(result_block, axis=mean_axes)
+
+    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
+    #we do this after norm to ensure padding does not skew the norm after valid approach
 
     #norm states to 0-1 range
     sub_states = jax.nn.sigmoid(sub_states)
@@ -1815,20 +1839,33 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]
 
+    if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
+        # gamma for scaled weights standardization equivalent to batch norm
+        # Calculate scaling factor for ReLU
+        # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+
+        # Apply the standardization function to the weights
+        mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+        # print("mean axes", mean_axes, "filters", filters.shape)
+        filters = jax.nn.standardize(filters, axis=mean_axes)
+
     #conv to eval neighbourhood
     # padding VALID mode approach, reduced complexity, handles boundaries better?
     result = _fast_conv(cells, filters, dn, window_strides, padding_mode="VALID")
-    result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows
+    # result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
     # result = _fast_conv(cells[:,centre-width//2-padding:centre+width//2+padding], filters, dn)
     # padding SAME mode approach
     # result = _fast_conv(cells, filters, dn, window_strides) #produces result channel dims matching filters channel dims
-    # print(result.shape)
+    # print("Conv Result Shape:",result.shape)
 
     if norm:
         mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
         # print("mean axes", mean_axes, "result", result)
         #norm, note no B in result due to vectorization
         result = jax.nn.standardize(result, axis=mean_axes)
+
+    result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
+    #we do this after norm to ensure padding does not skew the norm after valid approach
 
     #norm states to 0-1 range
     states = jax.nn.sigmoid(states)
@@ -1909,15 +1946,6 @@ def _fast_conv(sub_cells, filters, dn, window_strides, padding_mode="SAME", lhs_
 
     Cells is assumed to be the relevant sub-region to process
     """
-    # gamma for scaled weights standardization equivalent to batch norm
-    # Calculate scaling factor for ReLU
-    # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
-
-    # Apply the standardization function to the weights
-    # mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
-    # print("mean axes", mean_axes, "filters", filters.shape)
-    # filters = jax.nn.standardize(filters, axis=-2)
-
     #Conv via 2D brute force
     #get weighted sum of neighbors using convolution
     sub_cells_conv = jax.lax.conv_general_dilated(sub_cells[jnp.newaxis,...], # lhs = NHWC image tensor
