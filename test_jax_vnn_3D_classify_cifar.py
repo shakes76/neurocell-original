@@ -43,9 +43,9 @@ batch_size = 100
 length = 32
 channels = 3
 kernel_size = (17,9,9) #channel first
-depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
-depth = depth_full//(kernel_size[0]-1) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
-Nx = depth_full + 2*(kernel_size[0]-1) #channel first
+depth_full = 2*layers #counting from first channel
+depth = depth_full//((kernel_size[0]-1)//2) # propagation speed is (k-1)//2 per step, include first channel, upto output
+Nx = depth_full + 4 #+ 2*(kernel_size[0]-1) #channel first
 Ny = length + 2*(kernel_size[1]-1)
 Nz = length + 2*(kernel_size[2]-1)
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
@@ -85,12 +85,14 @@ num_classes = 10
 centerx = Nx//2
 centery = Ny//2
 centerz = Nz//2
-input_top = centerx-depth_full//2 #center-length//2
+#input
+input_top = centerx-depth_full//2
 input_left = centery-length//2
-input_inner = centerz-length//2 #center-(depth_full-1)//2
-output_top = input_top+depth_full+1 #include out layer #center-num_classes//2
+input_inner = centerz-length//2
+#output, doesn't have to be at end of layers, propagator will learn directions to output
+output_top = input_top+depth_full-(kernel_size[0]-1) #include out layer, fit kernel in dim at output
 output_left = centery
-output_inner = centerz-num_classes//2 # input_inner+depth_full+1 #include out layer
+output_inner = centerz-num_classes//2 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (channels,length,length)
