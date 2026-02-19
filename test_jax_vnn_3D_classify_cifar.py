@@ -90,7 +90,7 @@ input_top = centerx-depth_full//2
 input_left = centery-length//2
 input_inner = centerz-length//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
-output_top = input_top+depth_full+1 #include out layer #center-num_classes//2
+output_top = input_top+depth_full #include out layer #center-num_classes//2
 output_left = centery
 output_inner = centerz-num_classes//2 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
