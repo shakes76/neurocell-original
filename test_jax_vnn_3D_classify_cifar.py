@@ -90,7 +90,7 @@ input_top = centerx-depth_full//2
 input_left = centery-length//2
 input_inner = centerz-length//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
-output_top = input_top+depth_full #include out layer #center-num_classes//2
+output_top = input_top+depth_full+1 #include out layer #center-num_classes//2
 output_left = centery
 output_inner = centerz-num_classes//2 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
@@ -129,7 +129,7 @@ schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,w
 clip_factor = 0.01 #AGC parameter
 opt = optax.chain(
     optax.adamw(learning_rate=schedule),
-    utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
+    # utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
 )
 
 # Initialize network and optimiser; note we draw an input to get shapes.
@@ -275,6 +275,13 @@ plt.imshow(params['universe3_d']['s'][:,centery,:])
 plt.title("Final States")
 plt.savefig("vnn_3D_classify_cifar_states.png", dpi=150)
 plt.show()
+
+center_point = (input_top, centery, centerz)
+# plt.imshow(params['universe3_d']['s'][:,centery,:])
+# plt.title("Final States")
+# plt.savefig("vnn_3D_classify_cifar_states.png", dpi=150)
+# plt.show()
+visualize.plot_orthogonal_views(params['universe3_d']['s'], center=center_point)
 
 states = params['universe3_d']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
