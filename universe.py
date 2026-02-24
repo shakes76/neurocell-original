@@ -47,6 +47,9 @@ class VectorCells(hk.initializers.Initializer):
         self.col = col
         # self.initializer = jax.nn.initializers.uniform(self.random_init)
         self.initializer = jax.nn.initializers.variance_scaling(self.random_init, mode="fan_in", distribution="truncated_normal")
+        # self.initializer = jax.nn.initializers.truncated_normal(stddev=self.random_init)
+        # self.initializer = jax.nn.initializers.xavier_uniform()
+        # self.initializer = jax.nn.initializers.orthogonal()
 
     def clear_cells_vertical(self, cells, offset, after=False):
         """
@@ -1171,8 +1174,8 @@ class Universe3D(UniverseLP):
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
-        init_scale = 1./jnp.sqrt(self.depth*self.N*self.N)
-        init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]*self.kernel_size[2]*self.directions) #shape is (rows,cols) before array creation
+        init_scale = 1./jnp.sqrt(jnp.prod(jnp.asarray(self.grid_size))) #shape is (rows,cols) before array creation
+        init_filter_scale = 1./jnp.sqrt(jnp.prod(jnp.asarray(self.kernel_size)))
 
         #init states
         self.s_init = VectorCells(in_sizes, out_sizes, in_offsets, out_offsets, is_states=True, clear=False, random_init=init_scale)
@@ -1309,7 +1312,8 @@ class Universe3D(UniverseLP):
                     states = jax.lax.dynamic_update_slice(states, input_state, in_offset)
             else:
                 states = jax.lax.dynamic_update_slice(states, self.input_states, self.in_offset)
-        states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
+        if not self.output_states is None:
+            states = jax.lax.dynamic_update_slice(states, self.output_states, self.out_offset)
         if not self.output_weights is None:
             weights = jax.lax.dynamic_update_slice(weights, self.output_weights, self.out_offset)
 
