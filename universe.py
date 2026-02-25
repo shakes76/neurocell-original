@@ -1168,7 +1168,7 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
-        self.blocks = 4
+        self.blocks = 1
         # print("blocks:", self.blocks)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
@@ -1187,9 +1187,12 @@ class Universe3D(UniverseLP):
         # hk.set_state("states", self.states)
         # we need input and out shaped array to force input/output states to be active, used later
         # assumes all ins and outs are same size by taking first element, TODO: remove this restriction
-        self.input_states = jnp.full(in_sizes, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
-        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
-        self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
+        self.input_states = None
+        self.output_states = None
+        self.output_weights = None
+        # self.input_states = jnp.full(in_sizes, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        # self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        # self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
 
         #init weights (random)
         self.w_init = VectorCells(in_sizes, out_sizes, in_offsets, out_offsets, is_states=False, clear=False, random_init=init_scale)
