@@ -42,7 +42,7 @@ layers = 8
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (9,9,9) #channel first
+kernel_size = (13,9,9) #channel first
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 
@@ -133,7 +133,7 @@ centerx = Nx//2
 centery = Ny//2
 centerz = Nz//2
 #input
-input_top = centerx-(depth_input-1)//2
+input_top = centerx-(depth_input+1)//2
 input_left = centery-length//2
 input_inner = centerz-(depth_full+length)//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
@@ -146,8 +146,8 @@ input_size = (depth_input,length,length)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
+activation = jax.nn.leaky_relu
+final_activation = jax.nn.leaky_relu
 total_batches = len(train_loader)
 directions = 8 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
@@ -195,12 +195,11 @@ visualize.plot_orthogonal_views(x[0], center=center_point)
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
 
-center_point = (input_top, input_left, input_inner)
 # plt.imshow(params['universe3_d']['s'][:,center,:])
 # plt.title("Initial States")
 # plt.savefig("vnn_3D_classify_cifar_states_init.png", dpi=150)
 # plt.show()
-visualize.plot_orthogonal_views(params['universe3_d']['s'], center=center_point)
+visualize.plot_orthogonal_views(params['universe3_d']['s'], center=output_offset)
 
 #loss function
 @jax.jit
@@ -210,14 +209,14 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
-    # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
-    # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
+    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
+    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape, logits[...,0,0].shape)
 
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
-    return optax.softmax_cross_entropy(logits=logits[...,0,0], labels=labels).mean(), state
+    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
 
 @jax.jit
 def update(
@@ -265,9 +264,9 @@ for step in range(epochs):
             # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
-            # predicted = jnp.squeeze(logits, axis=-1)
-            # predicted = jnp.squeeze(predicted, axis=-1)
-            predicted = jnp.argmax(logits[...,0,0], axis=-1)
+            predicted = jnp.squeeze(logits, axis=-1)
+            predicted = jnp.squeeze(predicted, axis=-1)
+            predicted = jnp.argmax(predicted, axis=-1)
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
         accuracy = 100 * correct / total
@@ -300,9 +299,9 @@ for x, y in tqdm(test_loader):
     # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, x)
-    # predicted = jnp.squeeze(logits, axis=-1)
-    # predicted = jnp.squeeze(predicted, axis=-1)
-    predicted = jnp.argmax(logits[...,0,0], axis=-1)
+    predicted = jnp.squeeze(logits, axis=-1)
+    predicted = jnp.squeeze(predicted, axis=-1)
+    predicted = jnp.argmax(predicted, axis=-1)
     correct += jnp.sum(predicted == y)
     total += y.shape[0]
 

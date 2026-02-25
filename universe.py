@@ -1168,7 +1168,7 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
-        self.blocks = 1
+        self.blocks = 4
         # print("blocks:", self.blocks)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
