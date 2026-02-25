@@ -42,11 +42,11 @@ layers = 8
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (13,9,9) #channel first
+kernel_size = (11,11,11) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 
-color_layers = 3
+color_layers = 2
 padding = color_layers*2
 depth_input = 2*padding+channels
 

@@ -1168,7 +1168,7 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
-        self.blocks = 4
+        self.blocks = 2
         # print("blocks:", self.blocks)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
@@ -1592,7 +1592,7 @@ def _forward_propagate_full_mlp_blocks(input, offset, out_offset, out_size, dept
 
     for j in range(blocks):
         #propagate per block
-        for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
+        for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
             cells = _forward_full(1, cells, weights, biases, states, filters[j][jnp.newaxis,...], activate, norm, dn, window_strides) #not inplace
     cells = _forward_full(1, cells, weights, biases, states, filters[-1][jnp.newaxis,...], final_activate, norm, dn, window_strides) #final prop and activate
     if not final_activate == None:
