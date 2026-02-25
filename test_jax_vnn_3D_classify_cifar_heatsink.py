@@ -146,8 +146,8 @@ input_size = (depth_input,length,length)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-activation = jax.nn.leaky_relu
-final_activation = jax.nn.leaky_relu
+activation = jax.nn.tanh
+final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
 directions = 8 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
@@ -195,7 +195,7 @@ visualize.plot_orthogonal_views(x[0], center=center_point)
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
 
-center_point = (input_top, centery, centerz)
+center_point = (input_top, input_left, input_inner)
 # plt.imshow(params['universe3_d']['s'][:,center,:])
 # plt.title("Initial States")
 # plt.savefig("vnn_3D_classify_cifar_states_init.png", dpi=150)
@@ -212,12 +212,12 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     logits, state = network.apply(params, state, batch)
     # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
     # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
-    # print("LOSS SHAPE SQUEEZE", labels.shape, logits[:,0,0,:].shape)
+    # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape, logits[...,0,0].shape)
 
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
-    return optax.softmax_cross_entropy(logits=logits[:,0,0,:], labels=labels).mean(), state
+    return optax.softmax_cross_entropy(logits=logits[...,0,0], labels=labels).mean(), state
 
 @jax.jit
 def update(
@@ -250,6 +250,9 @@ for step in range(epochs):
         # break
     total_loss /= total_batches
 
+    # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
+    # break
+
     if step % 1 == 0:
         # Periodically evaluate on train & test sets.
         correct = 0
@@ -264,7 +267,7 @@ for step in range(epochs):
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
             # predicted = jnp.squeeze(logits, axis=-1)
             # predicted = jnp.squeeze(predicted, axis=-1)
-            predicted = jnp.argmax(logits[:,0,0,:], axis=-1)
+            predicted = jnp.argmax(logits[...,0,0], axis=-1)
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
         accuracy = 100 * correct / total
@@ -275,12 +278,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-center_point = (input_top, centery, centerz)
-# plt.imshow(state['universe3_d']['universe'][:,centery,:])
-# plt.title("Final Universe")
-# plt.savefig("vnn_3D_classify_cifar_universe.png", dpi=150)
-# plt.show()
-visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=center_point)
+visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
 
 jnp.savez("3D_classify_cifar_cells.npz",
             weights=params['universe3_d']['w'],
@@ -304,7 +302,7 @@ for x, y in tqdm(test_loader):
     logits, state_test = network.apply(params, state, x)
     # predicted = jnp.squeeze(logits, axis=-1)
     # predicted = jnp.squeeze(predicted, axis=-1)
-    predicted = jnp.argmax(logits[:,0,0,:], axis=-1)
+    predicted = jnp.argmax(logits[...,0,0], axis=-1)
     correct += jnp.sum(predicted == y)
     total += y.shape[0]
 
