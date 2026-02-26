@@ -1168,7 +1168,7 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
-        self.blocks = 2
+        self.blocks = 4
         # print("blocks:", self.blocks)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
@@ -1685,7 +1685,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     #     # Apply the standardization function to the weights
     #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
     #     # print("mean axes", mean_axes, "filters", filters.shape)
-    #     filters = jax.nn.standardize(filters, axis=mean_axes)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach in all dims, reduced complexity by deliberately squishing last hyperplane as well to current index
@@ -1782,7 +1782,7 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     #     # Apply the standardization function to the weights
     #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
     #     # print("mean axes", mean_axes, "filters", filters.shape)
-    #     filters = jax.nn.standardize(filters, axis=mean_axes)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach, reduced complexity, handles boundaries better?
@@ -1846,15 +1846,15 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]
 
-    # if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
-    #     # gamma for scaled weights standardization equivalent to batch norm
-    #     # Calculate scaling factor for ReLU
-    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+    if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
+        # gamma for scaled weights standardization equivalent to batch norm
+        # Calculate scaling factor for ReLU
+        # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
 
-    #     # Apply the standardization function to the weights
-    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
-    #     # print("mean axes", mean_axes, "filters", filters.shape)
-    #     filters = jax.nn.standardize(filters, axis=mean_axes)
+        # Apply the standardization function to the weights
+        mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+        # print("mean axes", mean_axes, "filters", filters.shape)
+        filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
 
     #conv to eval neighbourhood
     # padding VALID mode approach, reduced complexity, handles boundaries better?

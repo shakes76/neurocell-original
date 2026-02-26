@@ -38,11 +38,11 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 4
+layers = 8
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (13,13,13) #channel first, depth last
+kernel_size = (11,11,25) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 # depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 depth = 5
@@ -192,7 +192,7 @@ opt_state = opt.init(params)
 
 # plot first batch
 center_point = ((depth_input-1)//2, length//2, length//2)
-visualize.plot_orthogonal_views(x[0], center=center_point)
+visualize.plot_orthogonal_views(x[0], center=center_point, cmap="gray")
 
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")

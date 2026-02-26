@@ -4,13 +4,14 @@ Visualize various aspects of cells of arrays
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_orthogonal_views(data_3d, center=None, title="Orthogonal Views"):
+def plot_orthogonal_views(data_3d, center=None, title="Orthogonal Views", cmap='viridis'):
     """
     Plots the three orthogonal views (Axial, Coronal, Sagittal) of a 3D Numpy array.
 
     Parameters:
     - data_3d: 3D numpy array (shape: Z, Y, X).
     - center: Tuple of (z, y, x) coordinates to slice through.
+    - cmap: The colormap to use for the plots (default is 'viridis').
     """
     if data_3d.ndim != 3:
         raise ValueError("Input data must be a 3D array.")
@@ -30,7 +31,7 @@ def plot_orthogonal_views(data_3d, center=None, title="Orthogonal Views"):
     # --- View 1: Axial (XY plane, slice at fixed Z) ---
     ax1 = axes[0]
     # Slicing: [z, y, x] -> we lock z
-    ax1.imshow(data_3d[cz, :, :], cmap='viridis', origin='lower', aspect='auto')
+    ax1.imshow(data_3d[cz, :, :], cmap=cmap, origin='lower', aspect='auto')
     ax1.axvline(x=cx, color='r', linestyle='--', alpha=0.7)
     ax1.axhline(y=cy, color='r', linestyle='--', alpha=0.7)
     ax1.set_title(f"Axial (Z={cz})")
@@ -40,7 +41,7 @@ def plot_orthogonal_views(data_3d, center=None, title="Orthogonal Views"):
     # --- View 2: Coronal (XZ plane, slice at fixed Y) ---
     ax2 = axes[1]
     # Slicing: [z, y, x] -> we lock y
-    ax2.imshow(data_3d[:, cy, :], cmap='viridis', origin='lower', aspect='auto')
+    ax2.imshow(data_3d[:, cy, :], cmap=cmap, origin='lower', aspect='auto')
     ax2.axvline(x=cx, color='r', linestyle='--', alpha=0.7)
     ax2.axhline(y=cz, color='r', linestyle='--', alpha=0.7)
     ax2.set_title(f"Coronal (Y={cy})")
@@ -50,7 +51,7 @@ def plot_orthogonal_views(data_3d, center=None, title="Orthogonal Views"):
     # --- View 3: Sagittal (YZ plane, slice at fixed X) ---
     ax3 = axes[2]
     # Slicing: [z, y, x] -> we lock x
-    ax3.imshow(data_3d[:, :, cx], cmap='viridis', origin='lower', aspect='auto')
+    ax3.imshow(data_3d[:, :, cx], cmap=cmap, origin='lower', aspect='auto')
     ax3.axvline(x=cy, color='r', linestyle='--', alpha=0.7)
     ax3.axhline(y=cz, color='r', linestyle='--', alpha=0.7)
     ax3.set_title(f"Sagittal (X={cx})")
