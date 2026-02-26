@@ -38,23 +38,25 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 8
+layers = 4
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (11,11,11) #channel first, depth last
+kernel_size = (13,13,13) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
-depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
+# depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
+depth = 5
 
 color_layers = 2
 padding = color_layers*2
 depth_input = 2*padding+channels
 
+max_depth = depth_full + length
 Nx = depth_input + 1 + 2*(kernel_size[0]-1) #channel first
 Ny = length + 2*(kernel_size[1]-1)
-Nz = depth_full + length + 2*(kernel_size[2]-1)
+Nz = max_depth + 2*(kernel_size[2]-1)
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
-print("padding:", padding, "depth_input:", depth_input)
+print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth)
 
 #network IO paths
 path = '/home/shakes/'
@@ -135,19 +137,19 @@ centerz = Nz//2
 #input
 input_top = centerx-(depth_input+1)//2
 input_left = centery-length//2
-input_inner = centerz-(depth_full+length)//2
+input_inner = centerz-max_depth//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
 output_top = centerx-num_classes//2 #include out layer
 output_left = centery
-output_inner = input_inner+(depth_full+length)+1 #include out layer #center-num_classes//2
+output_inner = input_inner+max_depth+1 #include out layer #center-num_classes//2
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (depth_input,length,length)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-activation = jax.nn.leaky_relu
-final_activation = jax.nn.leaky_relu
+activation = jax.nn.gelu
+final_activation = jax.nn.gelu
 total_batches = len(train_loader)
 directions = 8 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)

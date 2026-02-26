@@ -1846,15 +1846,15 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]
 
-    if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
-        # gamma for scaled weights standardization equivalent to batch norm
-        # Calculate scaling factor for ReLU
-        # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+    # if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
+    #     # gamma for scaled weights standardization equivalent to batch norm
+    #     # Calculate scaling factor for ReLU
+    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
 
-        # Apply the standardization function to the weights
-        mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
-        # print("mean axes", mean_axes, "filters", filters.shape)
-        filters = jax.nn.standardize(filters, axis=mean_axes)
+    #     # Apply the standardization function to the weights
+    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+    #     # print("mean axes", mean_axes, "filters", filters.shape)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
     #conv to eval neighbourhood
     # padding VALID mode approach, reduced complexity, handles boundaries better?
