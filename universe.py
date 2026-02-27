@@ -1562,6 +1562,16 @@ def _forward_propagate_mlp_blocks(input, offset, out_offset, out_size, depth, bl
     depth_block = depth//blocks
     # print("blocks", blocks, "depth_block", depth_block)
 
+    # if norm or isinstance(norm, list):
+    #     # gamma for scaled weights standardization equivalent to batch norm
+    #     # Calculate scaling factor for ReLU
+    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+
+    #     # Apply the standardization function to the weights
+    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+    #     # print("mean axes", mean_axes, "filters", filters.shape)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
+
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
     for j in range(blocks):
@@ -1587,6 +1597,21 @@ def _forward_propagate_full_mlp_blocks(input, offset, out_offset, out_size, dept
     """
     depth_block = depth//blocks
     # print("blocks", blocks, "depth_block", depth_block)
+
+    if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
+        # gamma for scaled weights standardization equivalent to batch norm
+        # Calculate scaling factor for ReLU
+        # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+
+        # Apply the standardization function to the weights
+        mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+        # print("mean axes", mean_axes, "filters", filters.shape)
+        filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
+
+        # # Apply the standardization function to the weights
+        # mean_axes = tuple(i for i in range(len(weights.shape))) #nD cells need norm'ing, ignore B and C
+        # # print("mean axes", mean_axes, "filters", filters.shape)
+        # weights = jax.nn.standardize(weights, axis=mean_axes, variance=1.)
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
@@ -1676,16 +1701,6 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
-
-    # if norm:
-    #     # gamma for scaled weights standardization equivalent to batch norm
-    #     # Calculate scaling factor for ReLU
-    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
-
-    #     # Apply the standardization function to the weights
-    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
-    #     # print("mean axes", mean_axes, "filters", filters.shape)
-    #     filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach in all dims, reduced complexity by deliberately squishing last hyperplane as well to current index
@@ -1845,16 +1860,6 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     weights = weights[...,jnp.newaxis]
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]
-
-    if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
-        # gamma for scaled weights standardization equivalent to batch norm
-        # Calculate scaling factor for ReLU
-        # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
-
-        # Apply the standardization function to the weights
-        mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
-        # print("mean axes", mean_axes, "filters", filters.shape)
-        filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
 
     #conv to eval neighbourhood
     # padding VALID mode approach, reduced complexity, handles boundaries better?
