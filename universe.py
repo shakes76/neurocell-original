@@ -1570,7 +1570,7 @@ def _forward_propagate_mlp_blocks(input, offset, out_offset, out_size, depth, bl
     #     # Apply the standardization function to the weights
     #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
     #     # print("mean axes", mean_axes, "filters", filters.shape)
-    #     filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
@@ -1606,12 +1606,13 @@ def _forward_propagate_full_mlp_blocks(input, offset, out_offset, out_size, dept
         # Apply the standardization function to the weights
         mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
         # print("mean axes", mean_axes, "filters", filters.shape)
-        filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
+        filters = jax.nn.standardize(filters, axis=mean_axes)
+        # filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
 
         # # Apply the standardization function to the weights
         # mean_axes = tuple(i for i in range(len(weights.shape))) #nD cells need norm'ing, ignore B and C
         # # print("mean axes", mean_axes, "filters", filters.shape)
-        # weights = jax.nn.standardize(weights, axis=mean_axes, variance=1.)
+        # weights = jax.nn.standardize(weights, axis=mean_axes)
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
@@ -1797,7 +1798,7 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     #     # Apply the standardization function to the weights
     #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
     #     # print("mean axes", mean_axes, "filters", filters.shape)
-    #     filters = jax.nn.standardize(filters, axis=mean_axes, variance=1.)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach, reduced complexity, handles boundaries better?
@@ -1875,6 +1876,7 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
         # print("mean axes", mean_axes, "result", result)
         #norm, note no B in result due to vectorization
         result = jax.nn.standardize(result, axis=mean_axes)
+        # filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
 
     result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
     #we do this after norm to ensure padding does not skew the norm after valid approach

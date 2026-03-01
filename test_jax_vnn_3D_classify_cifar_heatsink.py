@@ -42,19 +42,19 @@ layers = 8
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (11,11,25) #channel first, depth last
+kernel_size = (25,9,9) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 # depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
 depth = 5
 
-color_layers = 2
-padding = color_layers*2
+color_layers = 1
+padding = color_layers*2+1
 depth_input = 2*padding+channels
 
 max_depth = depth_full + length
-Nx = depth_input + 1 + 2*(kernel_size[0]-1) #channel first
-Ny = length + 2*(kernel_size[1]-1)
-Nz = max_depth + 2*(kernel_size[2]-1)
+Nx = depth_input + 1 + max_depth + 1*(kernel_size[0]-1) + 2 #channel first
+Ny = length + 1*(kernel_size[1]-1) + 2
+Nz = length + 1*(kernel_size[2]-1) + 2
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth)
 
@@ -135,18 +135,18 @@ centerx = Nx//2
 centery = Ny//2
 centerz = Nz//2
 #input
-input_top = centerx-(depth_input+1)//2
+input_top = centerx-depth_input//2-max_depth//2
 input_left = centery-length//2
-input_inner = centerz-max_depth//2
+input_inner = centerz-length//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
-output_top = centerx-num_classes//2 #include out layer
+output_top = input_inner+depth_input+max_depth
 output_left = centery
-output_inner = input_inner+max_depth+1 #include out layer #center-num_classes//2
+output_inner = centerz-num_classes//2 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (depth_input,length,length)
 input_offset = (input_top,input_left,input_inner)
-output_size = (num_classes,1,1)
+output_size = (1,1,num_classes)
 output_offset = (output_top,output_left,output_inner)
 activation = jax.nn.gelu
 final_activation = jax.nn.gelu
@@ -197,11 +197,12 @@ visualize.plot_orthogonal_views(x[0], center=center_point, cmap="gray")
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
 
+center_point = (output_top, centery, centerz)
 # plt.imshow(params['universe3_d']['s'][:,center,:])
 # plt.title("Initial States")
 # plt.savefig("vnn_3D_classify_cifar_states_init.png", dpi=150)
 # plt.show()
-visualize.plot_orthogonal_views(params['universe3_d']['s'], center=output_offset)
+visualize.plot_orthogonal_views(params['universe3_d']['s'], center=center_point)
 
 #loss function
 @jax.jit
@@ -211,9 +212,8 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
-    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
-    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
-    # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape, logits[...,0,0].shape)
+    logits = logits.reshape(logits.shape[0],num_classes)
+    # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape)
 
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
@@ -266,8 +266,7 @@ for step in range(epochs):
             # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
-            predicted = jnp.squeeze(logits, axis=-1)
-            predicted = jnp.squeeze(predicted, axis=-1)
+            predicted = logits.reshape(logits.shape[0],num_classes)
             predicted = jnp.argmax(predicted, axis=-1)
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
@@ -301,8 +300,7 @@ for x, y in tqdm(test_loader):
     # x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, x)
-    predicted = jnp.squeeze(logits, axis=-1)
-    predicted = jnp.squeeze(predicted, axis=-1)
+    predicted = logits.reshape(logits.shape[0],num_classes)
     predicted = jnp.argmax(predicted, axis=-1)
     correct += jnp.sum(predicted == y)
     total += y.shape[0]

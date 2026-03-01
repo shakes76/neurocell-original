@@ -130,6 +130,40 @@ def sqnl(x):
     # Cap values outside (-2, 2) to -1 or 1
     return jnp.clip(neg, -1.0, 1.0)
 
+# We use functools.partial to pass static_argnames to the JIT compiler.
+# 'axis' must be static because it changes the shape of the intermediate
+# 'norm' tensor, which JAX needs to know at compile time.
+@partial(jax.jit, static_argnames=['axis'])
+def normalize_l2(x: jax.Array, axis: int | tuple[int, ...] | None = -1, eps: float = 1e-12) -> jax.Array:
+    """
+    Normalizes a JAX array along the specified axis so it has a unit L2 norm.
+
+    Args:
+        x: The input jax.numpy array.
+        axis: The axis or axes along which to compute the norm.
+              If None, computes the norm of the flattened array.
+              Defaults to -1 (the last axis).
+        eps: A small epsilon value to prevent division by zero
+             (improves numerical stability during backpropagation).
+
+    Returns:
+        The normalized array where the L2 norm along 'axis' is 1.0.
+    """
+    # 1. Compute the L2 norm along the specified axes.
+    # We use jnp.sqrt and jnp.sum of squares manually here because jnp.linalg.norm
+    # has limitations when 'axis' is a tuple with more than 2 dimensions.
+    # keepdims=True is crucial here so the resulting norm tensor has the
+    # same number of dimensions as 'x', allowing it to broadcast correctly.
+    norm = jnp.sqrt(jnp.sum(jnp.square(x), axis=axis, keepdims=True))
+
+    # 2. Prevent division by zero.
+    # We use jnp.maximum instead of a conditional statement because it's
+    # highly optimized for XLA and provides stable gradients.
+    safe_norm = jnp.maximum(norm, eps)
+
+    # 3. Scale the original tensor
+    return x / safe_norm
+
 @jax.jit
 def get_relu_gain_gamma(weight_shape: tuple) -> float:
     """
