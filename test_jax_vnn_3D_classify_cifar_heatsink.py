@@ -51,10 +51,10 @@ color_layers = 1
 padding = color_layers*2+1
 depth_input = 2*padding+channels
 
-max_depth = depth_full + length
-Nx = depth_input + 1 + max_depth + 1*(kernel_size[0]-1) + 2 #channel first
-Ny = length + 1*(kernel_size[1]-1) + 2
-Nz = length + 1*(kernel_size[2]-1) + 2
+max_depth = depth_full + 1 + depth_input
+Nx = max_depth + 2*(kernel_size[0]-1) #channel first
+Ny = length + 1*(kernel_size[1]-1) + 4
+Nz = length + 1*(kernel_size[2]-1) + 4
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth)
 
@@ -135,11 +135,11 @@ centerx = Nx//2
 centery = Ny//2
 centerz = Nz//2
 #input
-input_top = centerx-depth_input//2-max_depth//2
+input_top = centerx-max_depth//2
 input_left = centery-length//2
 input_inner = centerz-length//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
-output_top = input_inner+depth_input+max_depth
+output_top = input_top+max_depth
 output_left = centery
 output_inner = centerz-num_classes//2 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
@@ -251,6 +251,7 @@ for step in range(epochs):
         # break
     total_loss /= total_batches
 
+    # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=input_offset)
     # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
     # break
 
