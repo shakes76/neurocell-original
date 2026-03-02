@@ -10,7 +10,11 @@ import jax.scipy.signal as jsignal
 import haiku as hk
 import math
 
+#JIT compiled members for performance
+from functools import partial
+
 import filters #local
+from convs import _fast_conv, _fast_conv_3D, _filter
 import utils
 
 #kernels for larger networks
@@ -1334,9 +1338,6 @@ class Universe3D(UniverseLP):
 
         return outputs
 
-#JIT compiled members for performance
-from functools import partial
-
 @partial(jax.jit, static_argnums=(0,1,7,8,9,10))
 def _forward_propagate(index, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
     """
@@ -1706,6 +1707,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     #valid mode approach in all dims, reduced complexity by deliberately squishing last hyperplane as well to current index
     #handles boundaries better?
     result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
+    # result_block = _fast_conv_3D(result_block, filters)
     # print("result_block conv",result_block.shape)
     # result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #Same mode approach
@@ -1935,72 +1937,3 @@ def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activat
     # result_block = jnp.where(sub_states==2, activate(result_block+biases), result_block) #activate if passive, faster
 
     return result_block
-
-@partial(jax.jit, static_argnums=(0,1))
-def _fft_1D(N, length, filters):
-    """
-    2D conv done in 1D convs via the CCP and Fourier space.
-
-    Cells is assumed to be the relevant sub-region to process
-    """
-    #pad to length of layers
-    filters = jnp.pad(filters, ((0,(N-length)), (0,0)), mode='constant')
-    filters = jnp.roll(filters, -1, axis=0) #make sure centre pixel is first in filter by periodic shift
-    # print("filters:", filters.shape, filters)
-    # FFTs of filter
-    return jnp.fft.fft(filters, axis=0) #ffts of rows
-
-# conv operators
-@partial(jax.jit, static_argnums=(2,3,4,5,6))
-def _fast_conv(sub_cells, filters, dn, window_strides, padding_mode="SAME", lhs_dilation=None, rhs_dilation=None):
-    """
-    2D conv done with filters. Supports multiple filters in channel dim.
-    Assumes sub_cells has matching channel dim to filters
-
-    Cells is assumed to be the relevant sub-region to process
-    """
-    #Conv via 2D brute force
-    #get weighted sum of neighbors using convolution
-    sub_cells_conv = jax.lax.conv_general_dilated(sub_cells[jnp.newaxis,...], # lhs = NHWC image tensor
-                                        filters,  # rhs = OHWI conv kernel tensor
-                                        window_strides,  # window strides
-                                        padding_mode, # padding mode
-                                        lhs_dilation,  # lhs/image dilation
-                                        rhs_dilation,  # rhs/kernel dilation
-                                        dn)     # dimension_numbers = lhs, rhs, out dimension permutation
-    return sub_cells_conv[0] # NHWC, remove extra batch dim, return multi-filters result
-
-@partial(jax.jit, static_argnums=())
-def _fast_conv_1D(sub_cells, filter_ffts):
-    """
-    2D conv done in 1D convs via the CCP and Fourier space.
-
-    Cells is assumed to be the relevant sub-region to process
-    """
-    #Conv via CCP
-    # FFTs of universe
-    cells_conv1D = jnp.fft.fft(sub_cells, axis=0) #ffts of rows
-    #convolve in Fourier space
-    result_conv1D = filter_ffts * cells_conv1D
-    # print("i:", i, sub_universe.shape, sub_universe)
-    result_conv1D = jnp.sum(result_conv1D, axis=-1).reshape(-1,1) #reshape promotes to column vec
-    # print(result_conv1D.shape, result_conv1D)
-    #inverse FFT
-    result_block = jnp.fft.ifft(result_conv1D, axis=0) #ffts of rows
-
-    return jnp.real(result_block)
-
-@partial(jax.jit, static_argnums=(2,3,4,5))
-def _filter(cells, nethood, dn, window_strides, lhs_dilation=None, rhs_dilation=None):
-    """
-    Filter the array provided by filter provided.
-    """
-    #get weighted sum of neighbors using convolution
-    cells = jax.lax.conv_general_dilated(cells[jnp.newaxis,...,jnp.newaxis], # lhs = NHWC image tensor
-                                        nethood,  # rhs = OHWI conv kernel tensor
-                                        window_strides,  # window strides
-                                        'SAME', # padding mode
-                                        lhs_dilation,  # lhs/image dilation
-                                        rhs_dilation,  # rhs/kernel dilation
-                                        dn)     # dimension_numbers = lhs, rhs, out dimension permutation
-    return cells[0,...,0] # NHWC
