@@ -21,6 +21,7 @@ import torchvision.transforms as transforms
 
 from universe import Universe3D #local
 import utils #local
+from transforms import SpreadChannelsTransform #local
 import visualize #local
 
 utils.jax_status()
@@ -28,16 +29,26 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 24
+layers = 12
 batch_size = 100
 length = 32
 channels = 3
-depth = layers*2 #1 col of signal cells per layer, channels stacked in last dim so account for it
-kernel_size = (9,9,25)
-Nx = length + 2*(kernel_size[0]-1)
-Ny = length + 2*(kernel_size[1]-1)
-Nz = depth + 2*(kernel_size[2]-1)
-print("N:", (Nx,Ny,Nz), "Epochs:", epochs, "Kernel:", kernel_size)
+kernel_size = (9,9,25) #channel first, depth last
+depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
+
+color_layers = 1
+padding = color_layers*2+1
+depth_input = 2*padding+channels
+
+max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't count
+depth = max_depth
+blocks = 8
+blocks_depth = depth//blocks #depth per block
+Nx = length + 1*(kernel_size[0]-1) + 4
+Ny = length + 1*(kernel_size[1]-1) + 4
+Nz = max_depth + 1*(kernel_size[2]-1) + 4 #channel last
+print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
+print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
 
 #network IO paths
 path = '/home/shakes/'
@@ -51,11 +62,13 @@ transform_train = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     transforms.RandomHorizontalFlip(),
     transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+    SpreadChannelsTransform(padding_size=padding),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    SpreadChannelsTransform(padding_size=padding),
 ])
 
 trainset = torchvision.datasets.CIFAR10(
@@ -75,21 +88,25 @@ total_batches = len(train_loader)
 centerx = Nx//2
 centery = Ny//2
 centerz = Nz//2
+#input
 input_top = centerx-length//2
 input_left = centery-length//2
 input_inner = centerz-depth//2
+#output, doesn't have to be at end of layers, propagator will learn directions to output
 output_top = centerx-num_classes//2
 output_left = centery
 output_inner = input_inner+depth+1 #include out layer
-# print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
+print("input_top", input_top, "input_left", input_left, "input_inner", input_inner)
+print("output_top", output_top, "output_left", output_left, "output_inner", output_inner)
 #setup parameters and lengths
-input_size = (length,length,channels)
+input_size = (length,length,depth_input)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
 activation = jax.nn.leaky_relu
 final_activation = jax.nn.leaky_relu
-directions = 64 #how many filters, i.e. possible directions, to learn
+total_batches = len(train_loader)
+directions = 32 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========
@@ -98,7 +115,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = Universe3D((Nx,Ny,Nz), sharpen=False)
+    mlp = Universe3D((Nx,Ny,Nz), blocks=blocks, sharpen=False)
     mlp.initialize_hyperplane(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 
@@ -137,21 +154,25 @@ opt = optax.adamw(learning_rate=schedule)
 # Initialize network and optimiser; note we draw an input to get shapes.
 dataset_iter = iter(train_loader)
 x, y = next(dataset_iter)
+# x = jnp.asarray(x.numpy())
 x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 # print("INIT SHAPE", x[0:1].shape)
 params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
 
+# plot first batch
+center_point = (length//2, length//2, (depth_input-1)//2)
+visualize.plot_orthogonal_views(x[0], center=center_point, cmap="gray")
+
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
 
-center_point = (centerx, centery, input_inner)
 # plt.imshow(params['universe3_d']['s'][center,...])
 # plt.title("Initial States")
 # plt.savefig("vnn_3D_hplane_classify_cifar_states_init.png", dpi=150)
 # plt.show()
-visualize.plot_orthogonal_views(params['universe3_d']['s'], center=center_point)
+visualize.plot_orthogonal_views(params['universe3_d']['s'], center=output_offset)
 
 #loss function
 @jax.jit
@@ -161,13 +182,13 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
-    logits = jnp.squeeze(logits, axis=-1) #remove extra dim
+    logits = logits.reshape(logits.shape[0],num_classes)
     # print("LOSS SHAPE", labels.shape, logits.shape)
 
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
-    return optax.softmax_cross_entropy(logits=logits[...,0], labels=labels).mean(), state
+    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
 
 @jax.jit
 def update(
@@ -189,13 +210,19 @@ for step in range(epochs):
     total_loss = 0
     # Do SGD on a batch of training examples.
     for x, y in tqdm(train_loader):
+        # x = jnp.asarray(x.numpy())
         y = jnp.asarray(y.numpy())
 
         x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
         total_loss += loss_value/batch_size
+        # break
     total_loss /= total_batches
+
+    # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=input_offset)
+    # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
+    # break
 
     if step % 1 == 0:
         # Periodically evaluate on train & test sets.
@@ -209,8 +236,8 @@ for step in range(epochs):
             x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
             logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
-            predicted = jnp.squeeze(logits, axis=-1)
-            predicted = jnp.argmax(predicted[...,0], axis=-1)
+            predicted = logits.reshape(logits.shape[0],num_classes)
+            predicted = jnp.argmax(predicted, axis=-1)
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
         accuracy = 100 * correct / total
@@ -235,13 +262,14 @@ jnp.savez("3D_hplane_classify_cifar_cells.npz",
 correct = 0
 total = 0
 for x, y in tqdm(test_loader):
+    # x = jnp.asarray(x.numpy())
     y = jnp.asarray(y.numpy())
 
     x = jnp.transpose(x.numpy(), (0, 2, 3, 1)) #channel last
 
     logits, state_test = network.apply(params, state, x)
-    predicted = jnp.squeeze(logits, axis=-1)
-    predicted = jnp.argmax(predicted[...,0], axis=-1)
+    predicted = logits.reshape(logits.shape[0],num_classes)
+    predicted = jnp.argmax(predicted, axis=-1)
     correct += jnp.sum(predicted == y)
     total += y.shape[0]
 

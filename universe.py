@@ -1139,7 +1139,7 @@ class Universe3D(UniverseLP):
     """
     For 3D MLP-like networks to support imaging etc.
     """
-    def __init__(self, N, sharpen=True, dtype=jnp.float32, name=None):
+    def __init__(self, N, blocks=1, sharpen=True, dtype=jnp.float32, name=None):
         super().__init__(N, sharpen=sharpen, dtype=dtype, name=name)
         if isinstance(N, (list, tuple)): #size provided by user
             self.N = max(N)
@@ -1148,6 +1148,8 @@ class Universe3D(UniverseLP):
         else:
             self.grid_size = (N,N,N)
             self.img_shape = (1,N,N,N,1)
+        self.blocks = blocks
+        # print("blocks:", self.blocks)
         self.window_stride= (1,1,1)
         self.sharpen_filter = filters.sharpen_3D(dtype=jnp.float32, norm=True)[jnp.newaxis,...,jnp.newaxis] # 8 connected kernel
         self.scale_init = jnp.ones #for layer norm
@@ -1168,8 +1170,6 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
-        self.blocks = 4
-        # print("blocks:", self.blocks)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -1236,8 +1236,6 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
-        self.blocks = 6
-        # print("blocks:", self.blocks)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
@@ -1559,8 +1557,8 @@ def _forward_propagate_mlp_blocks(input, offset, out_offset, out_size, depth, bl
     Each block is done depth//blocks of the propagation assuming there are blocks filters for each block
     """
     zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
-    depth_block = depth//blocks
-    # print("blocks", blocks, "depth_block", depth_block)
+    depth_block = depth//blocks #first plane is untouched
+    # print("depth", depth, "blocks", blocks, "depth_block", depth_block)
 
     # if norm or isinstance(norm, list):
     #     # gamma for scaled weights standardization equivalent to batch norm
@@ -1579,11 +1577,12 @@ def _forward_propagate_mlp_blocks(input, offset, out_offset, out_size, depth, bl
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
         # print("forward index",index, "j", j)
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
+            # print("j", j, "i", i, "full index", index+i)
             result_block = _forward_column(index+i, cells, weights, biases, states, filters[j][jnp.newaxis,...], activate, norm, dn, window_strides)
             cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
-        # print("forward index final",index+depth)
+    # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation
-    result_block = _forward_column(index+depth, cells, weights, biases, states, filters[-1][jnp.newaxis,...], final_activate, norm, dn, window_strides)
+    result_block = _forward_column(index+depth_block, cells, weights, biases, states, filters[-1][jnp.newaxis,...], final_activate, norm, dn, window_strides)
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
@@ -1598,21 +1597,21 @@ def _forward_propagate_full_mlp_blocks(input, offset, out_offset, out_size, dept
     depth_block = depth//blocks
     # print("blocks", blocks, "depth_block", depth_block)
 
-    if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
-        # gamma for scaled weights standardization equivalent to batch norm
-        # Calculate scaling factor for ReLU
-        # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+    # if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
+    #     # gamma for scaled weights standardization equivalent to batch norm
+    #     # Calculate scaling factor for ReLU
+    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
 
-        # Apply the standardization function to the weights
-        mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
-        # print("mean axes", mean_axes, "filters", filters.shape)
-        filters = jax.nn.standardize(filters, axis=mean_axes)
-        # filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
+    #     # Apply the standardization function to the weights
+    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+    #     # print("mean axes", mean_axes, "filters", filters.shape)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes)
+    #     # filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
 
-        # # Apply the standardization function to the weights
-        # mean_axes = tuple(i for i in range(len(weights.shape))) #nD cells need norm'ing, ignore B and C
-        # # print("mean axes", mean_axes, "filters", filters.shape)
-        # weights = jax.nn.standardize(weights, axis=mean_axes)
+    #     # # Apply the standardization function to the weights
+    #     # mean_axes = tuple(i for i in range(len(weights.shape))) #nD cells need norm'ing, ignore B and C
+    #     # # print("mean axes", mean_axes, "filters", filters.shape)
+    #     # weights = jax.nn.standardize(weights, axis=mean_axes)
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 

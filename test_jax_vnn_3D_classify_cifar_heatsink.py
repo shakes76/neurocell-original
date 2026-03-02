@@ -31,6 +31,7 @@ import torchvision.transforms as transforms
 
 from universe import Universe3D #local
 import utils #local
+from transforms import SpreadChannelsTransform #local
 import visualize #local
 
 utils.jax_status()
@@ -45,14 +46,14 @@ channels = 3
 kernel_size = (25,9,9) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 # depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
-depth = 5
+depth = 4
 
 color_layers = 1
 padding = color_layers*2+1
 depth_input = 2*padding+channels
 
 max_depth = depth_full + 1 + depth_input
-Nx = max_depth + 2*(kernel_size[0]-1) #channel first
+Nx = max_depth + 2*(kernel_size[0]-1) + 4 #channel first
 Ny = length + 1*(kernel_size[1]-1) + 4
 Nz = length + 1*(kernel_size[2]-1) + 4
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
@@ -64,45 +65,6 @@ path = '/home/shakes/'
 
 #===========
 #transform preproc
-# placing of the image channels transform
-class SpreadChannelsTransform:
-    """
-    A PyTorch torchvision-compatible transform that spreads 3 color channels
-    into a 3D volume with equal padding. Can be used in transforms.Compose().
-    """
-    def __init__(self, padding_size=2):
-        self.padding_size = padding_size
-
-    def __call__(self, tensor):
-        """
-        Args:
-            tensor (torch.Tensor): Tensor image of size (C, H, W) to be spread.
-                                   Typically outputted by transforms.ToTensor().
-        Returns:
-            torch.Tensor: Spaced Tensor of size (Depth, H, W)
-        """
-        if not isinstance(tensor, torch.Tensor):
-            raise TypeError(f"Input must be a torch.Tensor, got {type(tensor)}")
-
-        c, h, w = tensor.shape
-        if c != 3:
-            raise ValueError(f"Input tensor must have exactly 3 channels (C, H, W). Got {c}.")
-
-        if self.padding_size == 0:
-            return tensor
-
-        # 1. Create a block of zeros to insert between channels.
-        # We ensure it matches the input tensor's dtype and device (e.g., GPU/CPU)
-        zeros = torch.zeros((self.padding_size, h, w), dtype=tensor.dtype, device=tensor.device)
-
-        # 2. Split the input tensor into its 3 individual channels, each of shape (1, H, W)
-        c0, c1, c2 = torch.split(tensor, 1, dim=0)
-
-        # 3. Concatenate the channels with the zero blocks interleaved in between
-        volume = torch.cat((c0, zeros, c1, zeros, c2), dim=0)
-
-        return volume
-
 #use x dim for depth since pytorch is channel first by default
 transform_train = transforms.Compose([
     transforms.ToTensor(),
@@ -148,8 +110,8 @@ input_size = (depth_input,length,length)
 input_offset = (input_top,input_left,input_inner)
 output_size = (1,1,num_classes)
 output_offset = (output_top,output_left,output_inner)
-activation = jax.nn.gelu
-final_activation = jax.nn.gelu
+activation = jax.nn.leaky_relu
+final_activation = jax.nn.leaky_relu
 total_batches = len(train_loader)
 directions = 8 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
