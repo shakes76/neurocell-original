@@ -180,48 +180,21 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, apply_a
         or (Z, Y, X, C) if kernel is 4D.
     """
     # Track original dimensions for backward compatibility
-    was_3d = kernel.ndim == 3
-    if was_3d:
-        kernel = kernel[..., None] # Convert to (Z, Y, X, 1)
+    # was_3d = kernel.ndim == 3
+    # if was_3d:
+    #     kernel = kernel[..., None] # Convert to (Z, Y, X, 1)
+    fft_shape = volume.shape
 
-    vol_shape = volume.shape
-    ker_shape = kernel.shape[:3]
-    num_channels = kernel.shape[3]
-    fft_shape = vol_shape
-
-    # 2. Pad the 3D kernel to match the fft_shape, placing it dead center.
-    pad_z_before = (fft_shape[0] - ker_shape[0]) // 2
-    pad_z_after = fft_shape[0] - ker_shape[0] - pad_z_before
-
-    pad_y_before = (fft_shape[1] - ker_shape[1]) // 2
-    pad_y_after = fft_shape[1] - ker_shape[1] - pad_y_before
-
-    pad_x_before = (fft_shape[2] - ker_shape[2]) // 2
-    pad_x_after = fft_shape[2] - ker_shape[2] - pad_x_before
-
-    padded_kernel = jnp.pad(
-        kernel,
-        ((pad_z_before, pad_z_after),
-         (pad_y_before, pad_y_after),
-         (pad_x_before, pad_x_after),
-         (0, 0)), # Do not pad the channel dimension
-        mode='constant'
-    )
-
-    # 3. Apply ifftshift to the padded spatial kernel to zero the phase.
-    # We restrict the shift strictly to spatial axes (0, 1, 2)
-    shifted_kernel = jnp.fft.ifftshift(padded_kernel, axes=(0, 1, 2))
-
-    # 4. Transform to frequency domain using N-Dimensional Real FFT
+    # Transform to frequency domain using N-Dimensional Real FFT
     vol_freq = jnp.fft.rfftn(volume)
-    ker_freq = jnp.fft.rfftn(shifted_kernel, axes=(0, 1, 2))
+    ker_freq = jnp.fft.rfftn(kernel, s=fft_shape, axes=(0, 1, 2)) #handles pad to fft_shape
 
-    # 5. Point-wise multiplication in the frequency domain
+    # Point-wise multiplication in the frequency domain
     # vol_freq is (Z, Y, X_freq). ker_freq is (Z, Y, X_freq, C).
     # We expand vol_freq's dimensions to broadcast across the channels.
     result_freq = vol_freq[..., None] * ker_freq
 
-    # 6. Apply optional 3D frequency-domain anti-aliasing (Butterworth low-pass)
+    # Apply optional 3D frequency-domain anti-aliasing (Butterworth low-pass)
     if apply_antialias:
         fz = jnp.fft.fftfreq(fft_shape[0])
         fy = jnp.fft.fftfreq(fft_shape[1])
@@ -235,16 +208,16 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, apply_a
         aa_filter = 1.0 / (1.0 + (F_sq / (aa_cutoff**2))**aa_order)
         result_freq = result_freq * aa_filter[..., None]
 
-    # 7. Inverse N-Dimensional Real FFT to return to the spatial domain
+    # Inverse N-Dimensional Real FFT to return to the spatial domain
     conv_result = jnp.fft.irfftn(result_freq, s=fft_shape, axes=(0, 1, 2))
 
-    # 9. Handle Epsilon: Optionally suppress microscopic floating-point numerical noise
+    # Handle Epsilon: Optionally suppress microscopic floating-point numerical noise
     if suppress_epsilons:
         cleaned_result = jnp.where(jnp.abs(conv_result) < epsilon, 0.0, conv_result)
     else:
         cleaned_result = conv_result
 
-    if was_3d:
-        return cleaned_result[..., 0]
+    # if was_3d:
+    #     return cleaned_result[..., 0]
 
     return cleaned_result
