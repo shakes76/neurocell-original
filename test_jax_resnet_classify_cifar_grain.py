@@ -34,7 +34,8 @@ print("N:", N, "Epochs:", epochs)
 path = '/home/shakes/'
 # path = 'F:/'
 
-# 1. Grain Transformations (Augmentations & Preprocessing)
+# ==============================================================================
+# Grain Transformations (Augmentations & Preprocessing)
 # ==============================================================================
 class RandomHorizontalFlip(grain.RandomMapTransform):
     """Randomly flips the image horizontally with a 50% probability."""
@@ -60,7 +61,7 @@ class RandomCrop(grain.RandomMapTransform):
         padded_image = np.pad(
             image,
             ((self.padding, self.padding), (self.padding, self.padding), (0, 0)),
-            mode='constant'
+            mode='reflect'
         )
 
         # Select random origin for crop
@@ -406,7 +407,6 @@ for epoch in range(epochs):
             y = jax_batch['label']
 
             logits, state_test = network.apply(params, state, x, is_training=False) #if reshaped, use squeeze
-            # predicted = jnp.squeeze(logits, axis=-1)
             predicted = jnp.argmax(logits, axis=-1)
             correct += jnp.sum(predicted == y)
             total += y.shape[0]
@@ -429,10 +429,9 @@ for test_step in trange(total_test_batches):
     y = jax_batch['label']
 
     logits, state_test = network.apply(params, state, x, is_training=False)
-    # predicted = jnp.squeeze(logits, axis=-1)
     predicted = jnp.argmax(logits, axis=-1)
-    correct += jnp.sum(predicted == x)
-    total += x.shape[0]
+    correct += jnp.sum(predicted == y)
+    total += y.shape[0]
 
 accuracy = 100 * correct / total
 print(f"[Final Test Accuracy {accuracy}]")
