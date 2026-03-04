@@ -12,7 +12,7 @@ import os
 # 2. (Optional) Limit JAX to a specific percentage of GPU memory
 # os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.95"
 
-# 3. (Optional) Bypasses JAX's internal memory pool and forces it to use the standard CUDA malloc and free.
+# 3. (Optional) Bypasses JAX's internal memory pool and forces it to use the standard CUDA malloc and free. Slower!
 # This is often much better at handling the massive, temporary workspace spikes caused by 3D FFTs without fragmenting.
 # os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
@@ -40,11 +40,11 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 24
+layers = 12
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (9,9,49) #channel first, depth last
+kernel_size = (11,11,25) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -53,8 +53,8 @@ max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't cou
 depth = 2
 blocks = 1
 blocks_depth = depth//blocks #depth per block
-Nx = length + 4*(kernel_size[0]-1)
-Ny = length + 4*(kernel_size[1]-1)
+Nx = length + 5*(kernel_size[0]-1)
+Ny = length + 5*(kernel_size[1]-1)
 Nz = max_depth + 2*(kernel_size[2]-1) #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)

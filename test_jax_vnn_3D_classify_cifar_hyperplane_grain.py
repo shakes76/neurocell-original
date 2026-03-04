@@ -51,8 +51,8 @@ max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't cou
 depth = max_depth
 blocks = 8
 blocks_depth = depth//blocks #depth per block
-Nx = length + 2*(kernel_size[0]-1)
-Ny = length + 2*(kernel_size[1]-1)
+Nx = length + 4*(kernel_size[0]-1)
+Ny = length + 4*(kernel_size[1]-1)
 Nz = max_depth + 1*(kernel_size[2]-1) + 4 #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
@@ -224,12 +224,12 @@ for epoch in range(epochs):
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
         total_loss += loss_value/batch_size
-        break
+        # break
     total_loss /= total_batches
 
-    visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=input_offset)
-    visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
-    break
+    # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=input_offset)
+    # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
+    # break
 
     if epoch % 1 == 0:
         # Periodically evaluate on train & test sets.
