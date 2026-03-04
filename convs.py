@@ -159,8 +159,8 @@ def _fast_conv_2D(image, kernel, epsilon=1e-7, apply_antialias=False, aa_cutoff=
 
     return cleaned_result
 
-@partial(jax.jit, static_argnums=(2,3,4,5,6))
-def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, apply_antialias=False, aa_cutoff=0.4, aa_order=3):
+@partial(jax.jit, static_argnums=(2,3,4,5,6,7))
+def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_volume=False, apply_antialias=False, aa_cutoff=0.5, aa_order=3):
     """
     Performs a 3D convolution using FFT with proper phase alignment,
     numerical noise suppression, and optional anti-aliasing.
@@ -170,6 +170,8 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, apply_a
         kernel: 3D or 4D JAX array. If 4D, expects (Z, Y, X, C) for multi-channel CNN-like output.
         epsilon: Threshold to zero-out microscopic floating-point noise.
         suppress_epsilons: If True, applies the epsilon threshold to zero-out noise.
+        pad_volume: If True, pads the volume to prevent circular spatial aliasing (linear convolution).
+                    If False, performs faster circular convolution.
         apply_antialias: If True, applies a Butterworth low-pass filter in the
                          frequency domain to prevent frequency aliasing.
         aa_cutoff: Cutoff frequency for the Butterworth filter (0.0 to 0.5).
@@ -187,41 +189,29 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, apply_a
     vol_shape = volume.shape
     ker_shape = kernel.shape[:3]
     num_channels = kernel.shape[3]
-    fft_shape = vol_shape
 
-    # 2. Pad the 3D kernel to match the fft_shape, placing it dead center.
-    pad_z_before = (fft_shape[0] - ker_shape[0]) // 2
-    pad_z_after = fft_shape[0] - ker_shape[0] - pad_z_before
+    # 1. Calculate the target shape (linear convolution prevents spatial aliasing)
+    if pad_volume:
+        fft_shape = (
+            vol_shape[0] + ker_shape[0] - 1,
+            vol_shape[1] + ker_shape[1] - 1,
+            vol_shape[2] + ker_shape[2] - 1
+        )
+    else:
+        fft_shape = vol_shape
 
-    pad_y_before = (fft_shape[1] - ker_shape[1]) // 2
-    pad_y_after = fft_shape[1] - ker_shape[1] - pad_y_before
+    # 2. Transform to frequency domain using N-Dimensional Real FFT
+    # The `s` parameter automatically pads the arrays with zeros at the end,
+    # entirely replacing the need for manual `jnp.pad` and `ifftshift`.
+    vol_freq = jnp.fft.rfftn(volume, s=fft_shape)
+    ker_freq = jnp.fft.rfftn(kernel, s=fft_shape, axes=(0, 1, 2))
 
-    pad_x_before = (fft_shape[2] - ker_shape[2]) // 2
-    pad_x_after = fft_shape[2] - ker_shape[2] - pad_x_before
-
-    padded_kernel = jnp.pad(
-        kernel,
-        ((pad_z_before, pad_z_after),
-         (pad_y_before, pad_y_after),
-         (pad_x_before, pad_x_after),
-         (0, 0)), # Do not pad the channel dimension
-        mode='constant'
-    )
-
-    # 3. Apply ifftshift to the padded spatial kernel to zero the phase.
-    # We restrict the shift strictly to spatial axes (0, 1, 2)
-    shifted_kernel = jnp.fft.ifftshift(padded_kernel, axes=(0, 1, 2))
-
-    # 4. Transform to frequency domain using N-Dimensional Real FFT
-    vol_freq = jnp.fft.rfftn(volume)
-    ker_freq = jnp.fft.rfftn(shifted_kernel, axes=(0, 1, 2))
-
-    # 5. Point-wise multiplication in the frequency domain
+    # 3. Point-wise multiplication in the frequency domain
     # vol_freq is (Z, Y, X_freq). ker_freq is (Z, Y, X_freq, C).
     # We expand vol_freq's dimensions to broadcast across the channels.
     result_freq = vol_freq[..., None] * ker_freq
 
-    # 6. Apply optional 3D frequency-domain anti-aliasing (Butterworth low-pass)
+    # 4. Apply optional 3D frequency-domain anti-aliasing (Butterworth low-pass)
     if apply_antialias:
         fz = jnp.fft.fftfreq(fft_shape[0])
         fy = jnp.fft.fftfreq(fft_shape[1])
@@ -235,14 +225,30 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, apply_a
         aa_filter = 1.0 / (1.0 + (F_sq / (aa_cutoff**2))**aa_order)
         result_freq = result_freq * aa_filter[..., None]
 
-    # 7. Inverse N-Dimensional Real FFT to return to the spatial domain
+    # 5. Inverse N-Dimensional Real FFT to return to the spatial domain
     conv_result = jnp.fft.irfftn(result_freq, s=fft_shape, axes=(0, 1, 2))
 
-    # 9. Handle Epsilon: Optionally suppress microscopic floating-point numerical noise
-    if suppress_epsilons:
-        cleaned_result = jnp.where(jnp.abs(conv_result) < epsilon, 0.0, conv_result)
+    # 6. Crop or roll back to the original volume shape
+    # Because the kernel was implicitly zero-padded at the end, its origin is (0,0,0).
+    sz, sy, sx = ker_shape[0] // 2, ker_shape[1] // 2, ker_shape[2] // 2
+
+    if pad_volume:
+        # To get a centered 'same' convolution, we shift the crop window by the kernel's center.
+        cropped_result = conv_result[
+            sz : sz + vol_shape[0],
+            sy : sy + vol_shape[1],
+            sx : sx + vol_shape[2],
+            :
+        ]
     else:
-        cleaned_result = conv_result
+        # For circular convolution, roll the array to center the kernel response
+        cropped_result = jnp.roll(conv_result, shift=(-sz, -sy, -sx), axis=(0, 1, 2))
+
+    # 7. Handle Epsilon: Optionally suppress microscopic floating-point numerical noise
+    if suppress_epsilons:
+        cleaned_result = jnp.where(jnp.abs(cropped_result) < epsilon, 0.0, cropped_result)
+    else:
+        cleaned_result = cropped_result
 
     if was_3d:
         return cleaned_result[..., 0]

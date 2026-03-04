@@ -7,12 +7,23 @@ You may need to disable the XLA conv picker using env variables:
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export XLA_FLAGS="--xla_gpu_strict_conv_algorithm_picker=false --xla_gpu_force_compilation_parallelism=1"
 '''
-# import os
+import os
+os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
+
+# 1. Prevent JAX from taking all GPU memory at start
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+
+# 2. (Optional) Limit JAX to a specific percentage of GPU memory
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
+
+# 3. (Optional) Release memory immediately (very slow)
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 # # Set the XLA flags here, before any JAX import
 # os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = "false"
 # os.environ['XLA_FLAGS'] = "--xla_gpu_strict_conv_algorithm_picker=false --xla_gpu_force_compilation_parallelism=1"
 
+import numpy as np
 import jax
 import jax.numpy as jnp
 import haiku as hk
@@ -37,25 +48,27 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 8
+layers = 12
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (25,9,9) #channel first, depth last
+kernel_size = (9,9,25) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
-# depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
-depth = 4
 
 color_layers = 1
 padding = color_layers*2+1
 depth_input = 2*padding+channels
 
-max_depth = depth_full + 1 + depth_input
-Nx = max_depth + 2*(kernel_size[0]-1) + 4 #channel first
-Ny = length + 1*(kernel_size[1]-1) + 4
-Nz = length + 1*(kernel_size[2]-1) + 4
+max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't count
+# depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
+depth = 2
+blocks = 1
+blocks_depth = depth//blocks #depth per block
+Nx = length + 3*(kernel_size[0]-1) + 8
+Ny = length + 3*(kernel_size[1]-1) + 8
+Nz = max_depth + 4*(kernel_size[2]-1) #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
-print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth)
+print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
 
 #network IO paths
 path = '/home/shakes/'
@@ -264,18 +277,18 @@ centerx = Nx//2
 centery = Ny//2
 centerz = Nz//2
 #input
-input_top = centerx-max_depth//2
+input_top = centerx-length//2
 input_left = centery-length//2
-input_inner = centerz-length//2
+input_inner = centerz-max_depth//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
-output_top = input_top+max_depth
+output_top = centerx-num_classes//2
 output_left = centery
-output_inner = centerz-num_classes//2 #include out layer
+output_inner = input_inner+max_depth+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
-input_size = (depth_input,length,length)
+input_size = (length,length,depth_input)
 input_offset = (input_top,input_left,input_inner)
-output_size = (1,1,num_classes)
+output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
 activation = jax.nn.leaky_relu
 final_activation = jax.nn.leaky_relu
@@ -319,18 +332,17 @@ opt_state = opt.init(params)
 # print(params)
 
 # plot first batch
-center_point = ((depth_input-1)//2, length//2, length//2)
+center_point = (length//2, length//2, (depth_input-1)//2)
 visualize.plot_orthogonal_views(x[0], center=center_point, cmap="gray")
 
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
 
-center_point = (output_top, centery, centerz)
 # plt.imshow(params['universe3_d']['s'][:,center,:])
 # plt.title("Initial States")
 # plt.savefig("vnn_3D_classify_cifar_states_init.png", dpi=150)
 # plt.show()
-visualize.plot_orthogonal_views(params['universe3_d']['s'], center=center_point)
+visualize.plot_orthogonal_views(params['universe3_d']['s'], center=output_offset)
 
 #loss function
 @jax.jit
