@@ -44,13 +44,13 @@ layers = 24
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (11,11,25) #channel first, depth last
+kernel_size = (9,9,49) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
 max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't count
 # depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
-depth = 4
+depth = 2
 blocks = 1
 blocks_depth = depth//blocks #depth per block
 Nx = length + 4*(kernel_size[0]-1)
