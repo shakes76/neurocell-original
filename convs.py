@@ -159,8 +159,8 @@ def _fast_conv_2D(image, kernel, epsilon=1e-7, apply_antialias=False, aa_cutoff=
 
     return cleaned_result
 
-@partial(jax.jit, static_argnums=(2,3,4,5,6,7))
-def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_volume=False, apply_antialias=False, aa_cutoff=0.5, aa_order=3):
+@jax.jit(static_argnames=['suppress_epsilons', 'pad_volume', 'normalize', 'apply_antialias'])
+def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_volume=False, normalize=False, apply_antialias=False, aa_cutoff=0.5, aa_order=3):
     """
     Performs a 3D convolution using FFT with proper phase alignment,
     numerical noise suppression, and optional anti-aliasing.
@@ -172,8 +172,12 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
         suppress_epsilons: If True, applies the epsilon threshold to zero-out noise.
         pad_volume: If True, pads the volume to prevent circular spatial aliasing (linear convolution).
                     If False, performs faster circular convolution.
+        normalize: If True, normalizes the output feature maps to have a mean of zero
+                   and a variance of 1. Variance normalization is computed in the
+                   frequency domain for unpadded volumes (`pad_volume=False`) and
+                   in the spatial domain for padded volumes (`pad_volume=True`).
         apply_antialias: If True, applies a Butterworth low-pass filter in the
-                            frequency domain to prevent frequency aliasing.
+                         frequency domain to prevent frequency aliasing.
         aa_cutoff: Cutoff frequency for the Butterworth filter (0.0 to 0.5).
         aa_order: Order of the Butterworth filter.
 
@@ -225,10 +229,40 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
         aa_filter = 1.0 / (1.0 + (F_sq / (aa_cutoff**2))**aa_order)
         result_freq = result_freq * aa_filter[..., None]
 
-    # 5. Inverse N-Dimensional Real FFT to return to the spatial domain
+    # 5. Optional Zero-Mean Normalization
+    # The DC component (0,0,0) of the frequency spectrum represents the sum of the spatial values.
+    # Zeroing it out perfectly subtracts the mean from the resulting spatial feature maps.
+    if normalize:
+        result_freq = result_freq.at[0, 0, 0, :].set(0.0)
+
+    # 6. Optional Unit-Variance Normalization (Frequency Domain for unpadded volume)
+    # Parseval's theorem allows us to compute spatial variance directly from the frequency spectrum.
+    # Because rfftn only keeps half the X frequencies, we apply a weight mask to recover full energy.
+    if normalize and not pad_volume:
+        Nx = fft_shape[2]
+        Nx_rfft = result_freq.shape[2]
+
+        # Weight mask: DC is 1, conjugate symmetric pairs are 2, Nyquist (if even) is 1.
+        weights = jnp.full((Nx_rfft,), 2.0)
+        weights = weights.at[0].set(1.0)
+        if Nx % 2 == 0:
+            weights = weights.at[-1].set(1.0)
+
+        weights = weights.reshape(1, 1, -1, 1) # Reshape for broadcasting
+
+        # Sum of squared magnitudes in the full theoretical frequency spectrum
+        sum_sq_X = jnp.sum(jnp.abs(result_freq)**2 * weights, axis=(0, 1, 2), keepdims=True)
+
+        # Spatial standard deviation derived via Parseval's theorem
+        N_total = fft_shape[0] * fft_shape[1] * fft_shape[2]
+        sigma = jnp.sqrt(sum_sq_X) / N_total
+
+        result_freq = result_freq / (sigma + 1e-8)
+
+    # 7. Inverse N-Dimensional Real FFT to return to the spatial domain
     conv_result = jnp.fft.irfftn(result_freq, s=fft_shape, axes=(0, 1, 2))
 
-    # 6. Crop or roll back to the original volume shape
+    # 8. Crop or roll back to the original volume shape
     # Because the kernel was implicitly zero-padded at the end, its origin is (0,0,0).
     sz, sy, sx = ker_shape[0] // 2, ker_shape[1] // 2, ker_shape[2] // 2
 
@@ -244,7 +278,14 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
         # For circular convolution, roll the array to center the kernel response
         cropped_result = jnp.roll(conv_result, shift=(-sz, -sy, -sx), axis=(0, 1, 2))
 
-    # 7. Handle Epsilon: Optionally suppress microscopic floating-point numerical noise
+    # 9. Optional Unit-Variance Normalization (Spatial Domain for padded volume)
+    # Frequency variance computation is inaccurate when pad_volume=True because the frequency
+    # spectrum represents the padded volume, not the cropped map. Thus, we apply it spatially.
+    if normalize and pad_volume:
+        std_dev = jnp.std(cropped_result, axis=(0, 1, 2), keepdims=True)
+        cropped_result = cropped_result / (std_dev + 1e-8)  # Add small epsilon to prevent div by zero
+
+    # 10. Handle Epsilon: Optionally suppress microscopic floating-point numerical noise
     if suppress_epsilons:
         cleaned_result = jnp.where(jnp.abs(cropped_result) < epsilon, 0.0, cropped_result)
     else:

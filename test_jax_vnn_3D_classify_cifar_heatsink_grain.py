@@ -8,20 +8,16 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export XLA_FLAGS="--xla_gpu_strict_conv_algorithm_picker=false --xla_gpu_force_compilation_parallelism=1"
 '''
 import os
-os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
+# os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 
 # 1. Prevent JAX from taking all GPU memory at start
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 # 2. (Optional) Limit JAX to a specific percentage of GPU memory
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.95"
 
 # 3. (Optional) Release memory immediately (very slow)
-os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
-
-# # Set the XLA flags here, before any JAX import
-# os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = "false"
-# os.environ['XLA_FLAGS'] = "--xla_gpu_strict_conv_algorithm_picker=false --xla_gpu_force_compilation_parallelism=1"
+# os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 import numpy as np
 import jax
@@ -64,9 +60,9 @@ max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't cou
 depth = 2
 blocks = 1
 blocks_depth = depth//blocks #depth per block
-Nx = length + 3*(kernel_size[0]-1) + 8
-Ny = length + 3*(kernel_size[1]-1) + 8
-Nz = max_depth + 3*(kernel_size[2]-1) #channel last
+Nx = length + 4*(kernel_size[0]-1)
+Ny = length + 4*(kernel_size[1]-1)
+Nz = max_depth + 2*(kernel_size[2]-1) #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
 
@@ -301,7 +297,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = Universe3D((Nx,Ny,Nz), sharpen=False)
+    mlp = Universe3D((Nx,Ny,Nz), blocks=blocks, sharpen=False)
     mlp.initialize_3D(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
     return mlp(batch, activation, final_activation, norm=True)
 

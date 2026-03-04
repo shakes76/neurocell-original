@@ -1806,18 +1806,18 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
     #valid mode approach, reduced complexity, handles boundaries better?
     # result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
     #Fast Fourier conv
-    result_block = _fast_conv_3D(result_block, filters)
+    result_block = _fast_conv_3D(result_block, filters, pad_volume=False, normalize=True, apply_antialias=False)
     # result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #Same mode approach
     # result_block = _fast_conv(result_block, filters, dn, padding_mode="SAME")
     # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
     # print("result_block padded",result_block.shape)
 
-    if norm:
-        mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
-        # print("mean axes", mean_axes)
-        #norm, note no B in result due to vectorization
-        result_block = jax.nn.standardize(result_block, axis=mean_axes)
+    # if norm:
+    #     mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
+    #     # print("mean axes", mean_axes)
+    #     #norm, note no B in result due to vectorization
+    #     result_block = jax.nn.standardize(result_block, axis=mean_axes)
 
     # result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #we do this after norm to ensure padding does not skew the norm after valid approach
