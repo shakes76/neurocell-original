@@ -128,7 +128,7 @@ def _forward(batch) -> jnp.ndarray:
     return mlp(batch, activation, final_activation, norm=True)
 
 # Make the network and optimizer. Haiku standard
-network = hk.without_apply_rng(hk.transform_with_state(_forward))
+network = hk.without_apply_rng(hk.transform(_forward))
 
 # Make the network and optimizer. Haiku standard
 total_steps = (total_batches*epochs)
@@ -149,7 +149,7 @@ jax_batch = jax.tree.map(jnp.asarray, next(train_ds))
 x = jax_batch['image']
 # x = jnp.zeros((batch_size,length,length,channels))
 # print("INIT SHAPE", x.shape)
-params, state = network.init(jax.random.PRNGKey(42), x)
+params = network.init(jax.random.PRNGKey(42), x)
 opt_state = opt.init(params)
 # print(params)
 
@@ -168,33 +168,32 @@ visualize.plot_orthogonal_views(params['universe3_d']['s'], center=output_offset
 
 #loss function
 @jax.jit
-def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
+def loss(params: hk.Params, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
     Cross entropy
     '''
     labels = jax.nn.one_hot(labels, num_classes)
-    logits, state = network.apply(params, state, batch)
+    logits = network.apply(params, batch)
     logits = logits.reshape(logits.shape[0],num_classes)
     # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape)
 
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
-    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
+    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean()
 
 @jax.jit
 def update(
         params: hk.Params,
         opt_state: optax.OptState,
-        state,
         batch,
         labels
     ) -> Tuple[hk.Params, optax.OptState]:
     """Learning rule (stochastic gradient descent)."""
-    (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
+    loss_value, grads = jax.value_and_grad(loss, has_aux=False)(params, batch, labels)
     updates, opt_state = opt.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
-    return new_params, opt_state, loss_value, state
+    return new_params, opt_state, loss_value
 
 # Train/eval loop.
 start = time.time() #time generation
@@ -208,7 +207,7 @@ for epoch in range(epochs):
         x = jax_batch['image']
         y = jax_batch['label']
 
-        params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
+        params, opt_state, loss_value = update(params, opt_state, x, y)
         total_loss += loss_value/batch_size
         # break
     total_loss /= total_batches
@@ -228,7 +227,7 @@ for epoch in range(epochs):
             x = jax_batch['image']
             y = jax_batch['label']
 
-            logits, state_test = network.apply(params, state, x) #if reshaped, use squeeze
+            logits = network.apply(params, x) #if reshaped, use squeeze
             predicted = logits.reshape(logits.shape[0],num_classes)
             predicted = jnp.argmax(predicted, axis=-1)
             correct += jnp.sum(predicted == y)
@@ -241,7 +240,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
+# visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
 
 jnp.savez("3D_classify_cifar_cells.npz",
             weights=params['universe3_d']['w'],
@@ -263,7 +262,7 @@ for test_step in trange(total_test_batches):
     x = jax_batch['image']
     y = jax_batch['label']
 
-    logits, state_test = network.apply(params, state, x)
+    logits = network.apply(params, x)
     predicted = logits.reshape(logits.shape[0],num_classes)
     predicted = jnp.argmax(predicted, axis=-1)
     correct += jnp.sum(predicted == y)
@@ -311,9 +310,9 @@ plt.title("Final States (Thresholded)")
 plt.savefig("vnn_3D_classify_cifar_states_thres.png", dpi=150)
 plt.show()
 
-plt.imshow(state['universe3_d']['universe'][:,centery,:])
-plt.title("Final Universe")
-plt.savefig("vnn_3D_classify_cifar_universe.png", dpi=150)
-plt.show()
+# plt.imshow(state['universe3_d']['universe'][:,centery,:])
+# plt.title("Final Universe")
+# plt.savefig("vnn_3D_classify_cifar_universe.png", dpi=150)
+# plt.show()
 
 print("END")

@@ -1175,8 +1175,8 @@ class Universe3D(UniverseLP):
         self.depth = depth
         self.directions = directions
 
-        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
-        hk.set_state("universe", cells)
+        # cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        # hk.set_state("universe", cells)
 
         init_scale = 1./jnp.sqrt(jnp.prod(jnp.asarray(self.grid_size))) #shape is (rows,cols) before array creation
         init_filter_scale = 1./jnp.sqrt(jnp.prod(jnp.asarray(self.kernel_size)))
@@ -1223,7 +1223,7 @@ class Universe3D(UniverseLP):
 
         self.forward_op = jax.vmap(_forward_propagate_full_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
-        return hk.get_state("universe")
+        # return hk.get_state("universe")
 
     def initialize_hyperplane(self, in_sizes, out_sizes, in_offsets, out_offsets, depth, kernel_size=(3,3,3), directions=1):
         """
@@ -1241,8 +1241,8 @@ class Universe3D(UniverseLP):
         self.depth = depth
         self.directions = directions
 
-        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
-        hk.set_state("universe", cells)
+        # cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        # hk.set_state("universe", cells)
 
         init_scale = 1./jnp.sqrt(self.depth*self.grid_size[0]*self.grid_size[1])
         init_filter_scale = 1./jnp.sqrt(self.kernel_size[0]*self.kernel_size[1]*self.kernel_size[2]*self.directions) #shape is (rows,cols) before array creation
@@ -1287,7 +1287,7 @@ class Universe3D(UniverseLP):
 
         self.forward_op = jax.vmap(_forward_propagate_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
-        return hk.get_state("universe")
+        # return hk.get_state("universe")
 
     def __call__(self, inputs, activate=nn.tanh, final_activate=nn.sigmoid, norm=True):
         # get params
@@ -1297,9 +1297,9 @@ class Universe3D(UniverseLP):
         biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
 
         #reset cells
-        # cells = jnp.zeros(self.grid_size, dtype=self.dtype)
-        cells = hk.get_state("universe")
-        cells = cells.at[...].set(0.)  #clear cells
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        # cells = hk.get_state("universe")
+        # cells = cells.at[...].set(0.)  #clear cells
         # hk.set_state("universe", cells)
 
         #smooth/sharpen weights
@@ -1333,8 +1333,9 @@ class Universe3D(UniverseLP):
         # cells = _forward_propagate_fast_mlp(inputs, self.in_offset, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn)
         # cells = _forward_propagate_fast_1D(self.in_offset[1], self.depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm)
         # forward_propagate_fast = jax.vmap(_forward_propagate_fast_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
-        cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, self.blocks, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, self.window_stride)
-        hk.set_state("universe", cells[0]) #remove vmap batch dim
+        # cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, self.blocks, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, self.window_stride)
+        outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, self.blocks, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, self.window_stride)
+        # hk.set_state("universe", cells[0]) #remove vmap batch dim
 
         return outputs
 
@@ -1588,7 +1589,7 @@ def _forward_propagate_mlp_blocks(input, offset, out_offset, out_size, depth, bl
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
 
-    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+    return jax.lax.dynamic_slice(cells, out_offset, out_size)
 
 @partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,13,14,15))
 def _forward_propagate_full_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
@@ -1625,7 +1626,7 @@ def _forward_propagate_full_mlp_blocks(input, offset, out_offset, out_size, dept
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 
-    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+    return jax.lax.dynamic_slice(cells, out_offset, out_size)
 
 # forward step operators
 @partial(jax.jit, static_argnums=(5,6,7))
