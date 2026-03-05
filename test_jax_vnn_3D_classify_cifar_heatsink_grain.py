@@ -53,8 +53,8 @@ max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't cou
 depth = 2
 blocks = 1
 blocks_depth = depth//blocks #depth per block
-Nx = length + 5*(kernel_size[0]-1)
-Ny = length + 5*(kernel_size[1]-1)
+Nx = length + 6*(kernel_size[0]-1)
+Ny = length + 6*(kernel_size[1]-1)
 Nz = max_depth + 2*(kernel_size[2]-1) #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
@@ -105,7 +105,7 @@ input_inner = centerz-max_depth//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
 output_top = centerx-num_classes//2
 output_left = centery
-output_inner = input_inner+max_depth #include out layer
+output_inner = input_inner+max_depth+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
 input_size = (length,length,depth_input)
