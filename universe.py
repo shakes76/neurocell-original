@@ -14,7 +14,7 @@ import math
 from functools import partial
 
 import filters #local
-from convs import _fast_conv, _fast_conv_3D, _filter
+from convs import _fast_conv, _fast_conv_3D, _fast_conv_3D_compact, _filter
 import utils
 
 #kernels for larger networks
@@ -1621,8 +1621,8 @@ def _forward_propagate_full_mlp_blocks(input, offset, out_offset, out_size, dept
     for j in range(blocks):
         #propagate per block
         for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
-            cells = _forward_full(1, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides) #not inplace
-    cells = _forward_full(1, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides) #final prop and activate
+            cells = _forward_full_fast_compact(1, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides) #not inplace
+    cells = _forward_full_fast_compact(1, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides) #final prop and activate
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 
@@ -1874,30 +1874,29 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     # sub_biases = biases[:,centre-width//2-padding:centre+width//2+padding]
     # sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
 
-    # cells = cells[...,jnp.newaxis]
+    #broadcasting used later for mul, can be memory intensive for large cell arrays, see compact version
+    cells = cells[...,jnp.newaxis]
     weights = weights[...,jnp.newaxis]
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]
 
     #conv to eval neighbourhood
     # padding VALID mode approach, reduced complexity, handles boundaries better?
-    # result = _fast_conv(cells, filters, dn, window_strides, padding_mode="VALID")
-    #Fast Fourier conv
-    result = _fast_conv_3D(cells, filters, pad_volume=False, normalize=True, apply_antialias=False)
+    result = _fast_conv(cells, filters, dn, window_strides, padding_mode="VALID")
     # result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
     # result = _fast_conv(cells[:,centre-width//2-padding:centre+width//2+padding], filters, dn)
     # padding SAME mode approach
     # result = _fast_conv(cells, filters, dn, window_strides) #produces result channel dims matching filters channel dims
     # print("Conv Result Shape:",result.shape)
 
-    # if norm:
-    #     mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
-    #     # print("mean axes", mean_axes, "result", result)
-    #     #norm, note no B in result due to vectorization
-    #     result = jax.nn.standardize(result, axis=mean_axes)
-    #     # filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
+    if norm:
+        mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
+        # print("mean axes", mean_axes, "result", result)
+        #norm, note no B in result due to vectorization
+        result = jax.nn.standardize(result, axis=mean_axes)
+        # filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
 
-    # result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
+    result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
     #we do this after norm to ensure padding does not skew the norm after valid approach
 
     #norm states to 0-1 range
@@ -1913,6 +1912,73 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
         result = result*weights*(1.0-states) + activate(result+biases)*states
 
     return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
+
+# Define the complete list of static argument indices so JAX knows not to trace them as dynamic arrays
+_static_argnums_full = (0,6,7,8,9)
+@partial(jax.jit, static_argnums=_static_argnums_full)
+def _forward_full_fast(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+    """
+    Compute the forward pass by computing each neuron depending on its state for a subregion of width.
+    Assumes subregion width is centred within universe WRT columns and width is even.
+
+    This version computes the forward across the full array with the nethood applied to it
+    The result is a full 2D convolution with the nethood, which can be expensive.
+    Multiple nethoods or filters are supported, returns the mean result of these filters
+
+    FFT based convolution version with memory constraints on back propagation
+
+    All operations are done on the entire universe.
+    """
+    # centre = cells.shape[1]//2
+    # padding = filters.shape[1]-1
+    filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
+    height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape)) # half of all dims of filter
+    height_pad_shape = height_pad_shape + (0,) #padding for each dim plus filter dim
+    height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
+    # print("height_pad_shape", height_pad_shape,"height_pad",height_pad)
+
+    # sub_weights = weights[:,centre-width//2-padding:centre+width//2+padding]
+    # sub_biases = biases[:,centre-width//2-padding:centre+width//2+padding]
+    # sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
+
+    #broadcasting used later for mul, can be memory intensive for large cell arrays, see compact version
+    weights = weights[...,jnp.newaxis]
+    biases = biases[...,jnp.newaxis]
+    states = states[...,jnp.newaxis]
+
+    #conv to eval neighbourhood
+    #Fast Fourier conv
+    # result = _fast_conv_3D(cells, filters, pad_volume=False, normalize=True, apply_antialias=False)
+    result = _fast_conv_3D_compact(cells, filters, pad_volume=False, normalize=True, apply_antialias=False)
+
+    #norm states to 0-1 range
+    states = jax.nn.sigmoid(states)
+    # states = (states - states.min()) / (states.max() - states.min())
+
+    #check states
+    #if passive apply activation, else signal state so weight, let the grad descent decide
+    #the operation is akin to adversarial states
+    if activate == None:
+        result = result*weights*(1.0-states) + (result+biases)*states
+    else:
+        result = result*weights*(1.0-states) + activate(result+biases)*states
+
+    return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
+
+# Memory-efficient version for Deep Learning training (Backward pass memory savings)
+# Applying jax.checkpoint (remat) inside jax.jit ensures intermediate FFT arrays are discarded
+# and recomputed during backpropagation, saving massive amounts of VRAM.
+_forward_full_fast_jit = jax.jit(
+    jax.checkpoint(
+        _forward_full_fast,
+        static_argnums=_static_argnums_full
+    ),
+    static_argnums=_static_argnums_full
+)
+
+def _forward_full_fast_compact(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+    """Memory-efficient full forward operator for neural network training."""
+    return _forward_full_fast_jit(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
 
 @partial(jax.jit, static_argnums=(0,6,7))
 def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activate, norm):

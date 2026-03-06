@@ -159,7 +159,11 @@ def _fast_conv_2D(image, kernel, epsilon=1e-7, apply_antialias=False, aa_cutoff=
 
     return cleaned_result
 
-@jax.jit(static_argnames=['suppress_epsilons', 'pad_volume', 'normalize', 'apply_antialias'])
+# Define the complete list of static argument indices so JAX knows not to trace them as dynamic arrays
+# Indices: epsilon (2), suppress_epsilons (3), pad_volume (4),
+# normalize (5), apply_antialias (6), aa_cutoff (7), aa_order (8)
+_static_argnums = (2, 3, 4, 5, 6, 7, 8)
+@partial(jax.jit, static_argnums=_static_argnums)
 def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_volume=False, normalize=False, apply_antialias=False, aa_cutoff=0.5, aa_order=3):
     """
     Performs a 3D convolution using FFT with proper phase alignment,
@@ -213,7 +217,9 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
     # 3. Point-wise multiplication in the frequency domain
     # vol_freq is (Z, Y, X_freq). ker_freq is (Z, Y, X_freq, C).
     # We expand vol_freq's dimensions to broadcast across the channels.
-    result_freq = vol_freq[..., None] * ker_freq
+    # result_freq = vol_freq[..., None] * ker_freq
+    # result_freq = jnp.einsum('ijk, ijkl -> ijkl', vol_freq, ker_freq)
+    result_freq = jnp.einsum('..., ...l -> ...l', vol_freq, ker_freq)
 
     # 4. Apply optional 3D frequency-domain anti-aliasing (Butterworth low-pass)
     if apply_antialias:
@@ -295,3 +301,27 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
         return cleaned_result[..., 0]
 
     return cleaned_result
+
+# Compiled Function Variants
+
+# Memory-efficient version for Deep Learning training (Backward pass memory savings)
+# Applying jax.checkpoint (remat) inside jax.jit ensures intermediate FFT arrays are discarded
+# and recomputed during backpropagation, saving massive amounts of VRAM.
+_fast_conv_3D_compact_jit = jax.jit(
+    jax.checkpoint(
+        _fast_conv_3D,
+        static_argnums=_static_argnums
+    ),
+    static_argnums=_static_argnums
+)
+
+# --- User-Facing Wrappers ---
+# These wrappers allow you to call the function using kwargs (e.g., epsilon=1e-6)
+# while safely translating them into pure positional arguments for the compiled JAX inner functions.
+# This entirely prevents the "static_argnums out of bounds" ValueError!
+# def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=True, pad_volume=True, normalize=False, apply_antialias=False, aa_cutoff=0.2, aa_order=3):
+#     """Standard fast 3D FFT convolution."""
+#     return _fast_conv_3D_jit(volume, kernel, epsilon, suppress_epsilons, pad_volume, normalize, apply_antialias, aa_cutoff, aa_order)
+def _fast_conv_3D_compact(volume, kernel, epsilon=1e-7, suppress_epsilons=True, pad_volume=True, normalize=False, apply_antialias=False, aa_cutoff=0.2, aa_order=3):
+    """Memory-efficient 3D FFT convolution for neural network training."""
+    return _fast_conv_3D_compact_jit(volume, kernel, epsilon, suppress_epsilons, pad_volume, normalize, apply_antialias, aa_cutoff, aa_order)
