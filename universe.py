@@ -1221,7 +1221,7 @@ class Universe3D(UniverseLP):
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_full_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_full_mlp_blocks_fast, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -1285,7 +1285,7 @@ class Universe3D(UniverseLP):
                                 self.filters.shape,  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(_forward_propagate_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(_forward_propagate_mlp_blocks_fast, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -1590,8 +1590,87 @@ def _forward_propagate_mlp_blocks(input, offset, out_offset, out_size, depth, bl
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
+@partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,14,15))
+def _forward_propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
+    """
+    Propagate input across cellular net based on weights etc. as a traditional MLP
+
+    Uses column/last hyperplane based computation for efficiency and propagates up to provided depth and
+    then one more for output layer.
+    Each block is done depth//blocks of the propagation assuming there are blocks filters for each block
+    """
+    zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
+    depth_block = depth//blocks #first plane is untouched
+    # print("depth", depth, "blocks", blocks, "depth_block", depth_block)
+
+    # if norm or isinstance(norm, list):
+    #     # gamma for scaled weights standardization equivalent to batch norm
+    #     # Calculate scaling factor for ReLU
+    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+
+    #     # Apply the standardization function to the weights
+    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+    #     # print("mean axes", mean_axes, "filters", filters.shape)
+    #     filters = jax.nn.standardize(filters, axis=mean_axes)
+
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
+
+    for j in range(blocks):
+        #propagate per block
+        index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
+        # print("forward index",index, "j", j)
+        for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
+            # print("j", j, "i", i, "full index", index+i)
+            result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides)
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
+    # print("final index",index+depth, depth+1, index+depth_block)
+    #final propagation
+    result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides)
+    if not final_activate == None:
+        result_block = final_activate(result_block) #force final activation, assume output layer
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+
 @partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,13,14,15))
 def _forward_propagate_full_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
+    """
+    Propagate input across cellular net based on weights etc. as a traditional MLP
+    """
+    depth_block = depth//blocks
+    # print("blocks", blocks, "depth_block", depth_block)
+
+    # if norm: #with no definite 'layers', we need norm free approach, hence weights standardization
+    #     # gamma for scaled weights standardization equivalent to batch norm
+    #     # Calculate scaling factor for ReLU
+    #     # gamma = utils.get_relu_gain_gamma([filters.shape[-2]])
+
+    #     # Apply the standardization function to the weights
+    #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
+    #     # print("mean axes", mean_axes, "filters", filters.shape)
+    #     # filters = jax.nn.standardize(filters, axis=mean_axes)
+    #     filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
+
+    #     # # Apply the standardization function to the weights
+    #     # mean_axes = tuple(i for i in range(len(weights.shape))) #nD cells need norm'ing, ignore B and C
+    #     # # print("mean axes", mean_axes, "filters", filters.shape)
+    #     # weights = jax.nn.standardize(weights, axis=mean_axes)
+    #     # weights = utils.normalize_l2(weights, axis=mean_axes) # unit norm
+
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
+
+    for j in range(blocks):
+        #propagate per block
+        for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
+            cells = _forward_full(1, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides) #not inplace
+    cells = _forward_full(1, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides) #final prop and activate
+    if not final_activate == None:
+        cells = final_activate(cells) #force final activation, assume output layer
+
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+
+@partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,13,14,15))
+def _forward_propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
     """
@@ -1752,6 +1831,102 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
 
     return jnp.mean(result_block, axis=-1) # averaged across filters, back to 1 channel dim
 
+_static_argnums_column = (0,6,8,9)
+@partial(jax.jit, static_argnums=_static_argnums_column)
+def _forward_column_fast(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+    """
+    Compute the forward pass by computing each neuron depending on its state for a subregion.
+
+    This version computes the forward WRT a central row/column (provided by index) with the nethood applied to it
+    according to the width of the nethood. For a nethood of width 3, that means central row/column
+    plus one before and one after it.
+
+    All operations are done on the sub-region defined by width of nethood and central index
+
+    Supports row/column in 2D and second-last/last hyperplane in nD
+
+    Assumes filters are odd sized @todo generalise and doesn't have leading axis
+    """
+    filter_shape = filters.shape[:-1] #shape is (rows,cols,...,1), remove last dims
+    width = filter_shape[-1] # last dim, column in 2D
+    height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape[:-1])) # half of other dims of filter
+    height_pad_shape = height_pad_shape + (0,) + (0,) #padding for each dim plus nth dim and add filter dim
+    height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
+    width_pad = max(1, (width-1)//2) # half of last dim of filter
+    # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
+
+    #selects hyper plane (n-1)D at last dim
+    sub_weights = weights[...,index]
+    sub_biases = biases[...,index]
+    sub_states = states[...,index]
+    # print("sub_states",sub_states.shape)
+
+    #extract sub array of filter width to conv
+    # print("cells",cells.shape)
+    result_block = cells[...,index-width_pad:index-width_pad+width]
+
+    #restore to nD
+    sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+
+    # print("result_block",result_block.shape, "filters", filters.shape)
+    #Fast Fourier conv
+    # result_block = _fast_conv_3D(result_block, filters, padding_mode="VALID", normalize=True, apply_antialias=False)
+    result_block = _fast_conv_3D_compact(result_block, filters, padding_mode="VALID", normalize=True, apply_antialias=False)
+    # print("result_block conv",result_block.shape)
+
+    if norm or isinstance(norm, list):
+        # mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
+        # print("mean axes", mean_axes)
+        #norm, note no B in result due to vectorization
+        # result_block = jax.nn.standardize(result_block, axis=mean_axes)
+        # result_block = utils.iqr_median_normalize(result_block, axis=mean_axes)
+        # mean_axes = tuple(i for i in range(len(dn.lhs_spec)-3)) #nD cells need norm'ing, ignore B and C
+        # gamma for scaled weights standardization equivalent to batch norm
+        # Calculate scaling factor for ReLU
+        # gamma = utils.get_relu_gain_gamma([sub_weights.shape[-3]])
+        # sub_weights = jax.nn.standardize(sub_weights, axis=-3)
+        if isinstance(norm, list): #assume layer norm wanted
+            scale = norm[0][index] #usually learnt per layer
+            shift = norm[1][index] #usually learnt per layer
+            # print("layer norm:", scale, shift)
+            result_block = result_block * scale + shift #scale and shift distribution
+
+    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
+    #we do this after norm to ensure padding does not skew the norm after valid approach
+    # print("result_block pad",result_block.shape)
+
+    #norm states to 0-1 range
+    sub_states = jax.nn.sigmoid(sub_states)
+    # sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
+
+    #check states
+    #if passive apply activation, else signal state so weight, let the grad descent decide
+    #the operation is akin to adversarial states
+    # print("result_block",result_block.shape, "sub_weights", sub_weights.shape)
+    if activate == None:
+        result_block = result_block*sub_weights*(1.0-sub_states) + (result_block+sub_biases)*sub_states
+    else:
+        result_block = result_block*sub_weights*(1.0-sub_states) + activate(result_block+sub_biases)*sub_states
+
+    return jnp.mean(result_block, axis=-1) # averaged across filters, back to 1 channel dim
+
+# Memory-efficient version for Deep Learning training (Backward pass memory savings)
+# Applying jax.checkpoint (remat) inside jax.jit ensures intermediate FFT arrays are discarded
+# and recomputed during backpropagation, saving massive amounts of VRAM.
+_forward_column_fast_jit = jax.jit(
+    jax.checkpoint(
+        _forward_column_fast,
+        static_argnums=_static_argnums_column
+    ),
+    static_argnums=_static_argnums_column
+)
+
+def _forward_column_fast_compact(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+    """Memory-efficient column forward operator for neural network training."""
+    return _forward_column_fast_jit(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
+
 @partial(jax.jit, static_argnums=(0,6,7,8,9))
 def _forward_row(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
     """
@@ -1860,6 +2035,8 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     Multiple nethoods or filters are supported, returns the mean result of these filters
 
     All operations are done on the entire universe.
+
+    Assumes filters are odd sized @todo generalise
     """
     # centre = cells.shape[1]//2
     # padding = filters.shape[1]-1
@@ -1927,6 +2104,8 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
     FFT based convolution version with memory constraints on back propagation
 
     All operations are done on the entire universe.
+
+    Assumes filters are odd sized @todo generalise and doesn't have leading axis
     """
     # centre = cells.shape[1]//2
     # padding = filters.shape[1]-1
@@ -1948,7 +2127,7 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
     #conv to eval neighbourhood
     #Fast Fourier conv
     # result = _fast_conv_3D(cells, filters, pad_volume=False, normalize=True, apply_antialias=False)
-    result = _fast_conv_3D_compact(cells, filters, pad_volume=False, normalize=True, apply_antialias=False)
+    result = _fast_conv_3D_compact(cells, filters, padding_mode="CIRCULAR", normalize=True, apply_antialias=False)
 
     #norm states to 0-1 range
     states = jax.nn.sigmoid(states)

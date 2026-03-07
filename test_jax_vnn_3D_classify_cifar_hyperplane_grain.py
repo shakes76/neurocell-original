@@ -10,7 +10,7 @@ import os
 # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 # 2. (Optional) Limit JAX to a specific percentage of GPU memory
-# os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.95"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
 
 # 3. (Optional) Bypasses JAX's internal memory pool and forces it to use the standard CUDA malloc and free.
 # This is often much better at handling the massive, temporary workspace spikes caused by 3D FFTs without fragmenting.

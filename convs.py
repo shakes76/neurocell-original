@@ -164,7 +164,7 @@ def _fast_conv_2D(image, kernel, epsilon=1e-7, apply_antialias=False, aa_cutoff=
 # normalize (5), apply_antialias (6), aa_cutoff (7), aa_order (8)
 _static_argnums = (2, 3, 4, 5, 6, 7, 8)
 @partial(jax.jit, static_argnums=_static_argnums)
-def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_volume=False, normalize=False, apply_antialias=False, aa_cutoff=0.5, aa_order=3):
+def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, padding_mode="SAME", normalize=False, apply_antialias=False, aa_cutoff=0.5, aa_order=3):
     """
     Performs a 3D convolution using FFT with proper phase alignment,
     numerical noise suppression, and optional anti-aliasing.
@@ -174,20 +174,22 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
         kernel: 3D or 4D JAX array. If 4D, expects (Z, Y, X, C) for multi-channel CNN-like output.
         epsilon: Threshold to zero-out microscopic floating-point noise.
         suppress_epsilons: If True, applies the epsilon threshold to zero-out noise.
-        pad_volume: If True, pads the volume to prevent circular spatial aliasing (linear convolution).
-                    If False, performs faster circular convolution.
+        padding_mode: String indicating the spatial padding and cropping strategy:
+                        - "SAME": Output shape matches input. Pads volume to prevent aliasing.
+                        - "VALID": Only returns regions of full overlap. Output shape shrinks.
+                        - "CIRCULAR": Fastest mode. No volume padding (circular wrap-around).
         normalize: If True, normalizes the output feature maps to have a mean of zero
-                   and a variance of 1. Variance normalization is computed in the
-                   frequency domain for unpadded volumes (`pad_volume=False`) and
-                   in the spatial domain for padded volumes (`pad_volume=True`).
+                    and a variance of 1. Variance normalization is computed in the
+                    frequency domain for circular convolution (`padding_mode='CIRCULAR'`)
+                    and in the spatial domain for linear convolutions (`'SAME'` or `'VALID'`).
         apply_antialias: If True, applies a Butterworth low-pass filter in the
-                         frequency domain to prevent frequency aliasing.
+                            frequency domain to prevent frequency aliasing.
         aa_cutoff: Cutoff frequency for the Butterworth filter (0.0 to 0.5).
         aa_order: Order of the Butterworth filter.
 
     Returns:
-        JAX array of the convolved volume. Shape matches volume if kernel is 3D,
-        or (Z, Y, X, C) if kernel is 4D.
+        JAX array of the convolved volume. Shape matches volume (for SAME/CIRCULAR)
+        or shrinks (for VALID). Includes channel dim if kernel is 4D.
     """
     # Track original dimensions for backward compatibility
     was_3d = kernel.ndim == 3
@@ -197,16 +199,20 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
     vol_shape = volume.shape
     ker_shape = kernel.shape[:3]
     num_channels = kernel.shape[3]
+    padding_mode = padding_mode.upper()
 
-    # 1. Calculate the target shape (linear convolution prevents spatial aliasing)
-    if pad_volume:
+    # 1. Calculate the target shape
+    if padding_mode in ["SAME", "VALID"]:
+        # Linear convolution prevents spatial aliasing
         fft_shape = (
             vol_shape[0] + ker_shape[0] - 1,
             vol_shape[1] + ker_shape[1] - 1,
             vol_shape[2] + ker_shape[2] - 1
         )
-    else:
+    elif padding_mode == "CIRCULAR":
         fft_shape = vol_shape
+    else:
+        raise ValueError(f"Unsupported padding_mode: {padding_mode}. Use 'SAME', 'VALID', or 'CIRCULAR'.")
 
     # 2. Transform to frequency domain using N-Dimensional Real FFT
     # The `s` parameter automatically pads the arrays with zeros at the end,
@@ -217,9 +223,7 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
     # 3. Point-wise multiplication in the frequency domain
     # vol_freq is (Z, Y, X_freq). ker_freq is (Z, Y, X_freq, C).
     # We expand vol_freq's dimensions to broadcast across the channels.
-    # result_freq = vol_freq[..., None] * ker_freq
-    # result_freq = jnp.einsum('ijk, ijkl -> ijkl', vol_freq, ker_freq)
-    result_freq = jnp.einsum('..., ...l -> ...l', vol_freq, ker_freq)
+    result_freq = vol_freq[..., None] * ker_freq
 
     # 4. Apply optional 3D frequency-domain anti-aliasing (Butterworth low-pass)
     if apply_antialias:
@@ -244,7 +248,7 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
     # 6. Optional Unit-Variance Normalization (Frequency Domain for unpadded volume)
     # Parseval's theorem allows us to compute spatial variance directly from the frequency spectrum.
     # Because rfftn only keeps half the X frequencies, we apply a weight mask to recover full energy.
-    if normalize and not pad_volume:
+    if normalize and padding_mode == "CIRCULAR":
         Nx = fft_shape[2]
         Nx_rfft = result_freq.shape[2]
 
@@ -268,26 +272,33 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, pad_vol
     # 7. Inverse N-Dimensional Real FFT to return to the spatial domain
     conv_result = jnp.fft.irfftn(result_freq, s=fft_shape, axes=(0, 1, 2))
 
-    # 8. Crop or roll back to the original volume shape
-    # Because the kernel was implicitly zero-padded at the end, its origin is (0,0,0).
+    # 8. Crop or roll back to the desired spatial mode
     sz, sy, sx = ker_shape[0] // 2, ker_shape[1] // 2, ker_shape[2] // 2
 
-    if pad_volume:
-        # To get a centered 'same' convolution, we shift the crop window by the kernel's center.
+    if padding_mode == "SAME":
+        # Shift the crop window by the kernel's center to get 'same' convolution
         cropped_result = conv_result[
             sz : sz + vol_shape[0],
             sy : sy + vol_shape[1],
             sx : sx + vol_shape[2],
             :
         ]
-    else:
+    elif padding_mode == "VALID":
+        # Only return the interior region where the kernel completely overlaps the volume
+        cropped_result = conv_result[
+            ker_shape[0] - 1 : vol_shape[0],
+            ker_shape[1] - 1 : vol_shape[1],
+            ker_shape[2] - 1 : vol_shape[2],
+            :
+        ]
+    elif padding_mode == "CIRCULAR":
         # For circular convolution, roll the array to center the kernel response
         cropped_result = jnp.roll(conv_result, shift=(-sz, -sy, -sx), axis=(0, 1, 2))
 
     # 9. Optional Unit-Variance Normalization (Spatial Domain for padded volume)
-    # Frequency variance computation is inaccurate when pad_volume=True because the frequency
-    # spectrum represents the padded volume, not the cropped map. Thus, we apply it spatially.
-    if normalize and pad_volume:
+    # Frequency variance computation is inaccurate when padding because the frequency
+    # spectrum represents the padded space, not the cropped map. Thus, we apply it spatially.
+    if normalize and padding_mode in ["SAME", "VALID"]:
         std_dev = jnp.std(cropped_result, axis=(0, 1, 2), keepdims=True)
         cropped_result = cropped_result / (std_dev + 1e-8)  # Add small epsilon to prevent div by zero
 
@@ -322,6 +333,6 @@ _fast_conv_3D_compact_jit = jax.jit(
 # def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=True, pad_volume=True, normalize=False, apply_antialias=False, aa_cutoff=0.2, aa_order=3):
 #     """Standard fast 3D FFT convolution."""
 #     return _fast_conv_3D_jit(volume, kernel, epsilon, suppress_epsilons, pad_volume, normalize, apply_antialias, aa_cutoff, aa_order)
-def _fast_conv_3D_compact(volume, kernel, epsilon=1e-7, suppress_epsilons=True, pad_volume=True, normalize=False, apply_antialias=False, aa_cutoff=0.2, aa_order=3):
+def _fast_conv_3D_compact(volume, kernel, epsilon=1e-7, suppress_epsilons=False, padding_mode="SAME", normalize=False, apply_antialias=False, aa_cutoff=0.5, aa_order=3):
     """Memory-efficient 3D FFT convolution for neural network training."""
-    return _fast_conv_3D_compact_jit(volume, kernel, epsilon, suppress_epsilons, pad_volume, normalize, apply_antialias, aa_cutoff, aa_order)
+    return _fast_conv_3D_compact_jit(volume, kernel, epsilon, suppress_epsilons, padding_mode, normalize, apply_antialias, aa_cutoff, aa_order)
