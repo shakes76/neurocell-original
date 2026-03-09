@@ -40,11 +40,11 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 24
+layers = 12
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (17,17,57) #channel first, depth last
+kernel_size = (33,33,33) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -53,9 +53,9 @@ max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't cou
 depth = 2
 blocks = 1
 blocks_depth = depth//blocks #depth per block
-Nx = length + 4*(kernel_size[0]-1)
-Ny = length + 4*(kernel_size[1]-1)
-Nz = max_depth + 1*(kernel_size[2]-1) + 4 #channel last
+Nx = length + 1*(kernel_size[0]-1)
+Ny = length + 1*(kernel_size[1]-1)
+Nz = max_depth + 1*(kernel_size[2]-1) #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
 
@@ -112,8 +112,9 @@ input_size = (length,length,depth_input)
 input_offset = (input_top,input_left,input_inner)
 output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
-activation = jax.nn.leaky_relu
-final_activation = jax.nn.leaky_relu
+# activation = utils.sqnl
+activation = jax.nn.leaky_relu #leaky_relu, swish, mish
+final_activation = None #softmax done in loss
 directions = 8 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
@@ -138,11 +139,11 @@ opt = optax.adamw(learning_rate=schedule)
 
 # AGC should typically be applied BEFORE the optimizer (SGD/Adam) updates are calculated
 # or AFTER, depending on interpretation. In NFNets, it clips the raw gradients.
-# clip_factor = 0.01 #AGC parameter
-# opt = optax.chain(
-#     optax.adamw(learning_rate=schedule),
-#     utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
-# )
+clip_factor = 0.01 #AGC parameter
+opt = optax.chain(
+    utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
+    optax.adamw(learning_rate=schedule),
+)
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 jax_batch = jax.tree.map(jnp.asarray, next(train_ds))
@@ -172,7 +173,7 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     '''
     Cross entropy
     '''
-    labels = jax.nn.one_hot(labels, num_classes)
+    # labels = jax.nn.one_hot(labels, num_classes)
     logits, state = network.apply(params, state, batch)
     logits = logits.reshape(logits.shape[0],num_classes)
     # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape)
@@ -180,7 +181,8 @@ def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarra
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
     # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
 
-    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
+    # return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
+    return optax.softmax_cross_entropy_with_integer_labels(logits=logits, labels=labels).mean(), state
 
 @jax.jit
 def update(

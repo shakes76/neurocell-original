@@ -1191,12 +1191,12 @@ class Universe3D(UniverseLP):
         # hk.set_state("states", self.states)
         # we need input and out shaped array to force input/output states to be active, used later
         # assumes all ins and outs are same size by taking first element, TODO: remove this restriction
-        self.input_states = None
-        self.output_states = None
-        self.output_weights = None
-        # self.input_states = jnp.full(in_sizes, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
-        # self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
-        # self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
+        # self.input_states = None
+        # self.output_states = None
+        # self.output_weights = None
+        self.input_states = jnp.full(in_sizes, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_states = jnp.full(self.out_size, STATE_ACTIVE_VALUE, dtype=self.states_dtype)
+        self.output_weights = jnp.full(self.out_size, 1., dtype=jnp.float32)
 
         #init weights (random)
         self.w_init = VectorCells(in_sizes, out_sizes, in_offsets, out_offsets, is_states=False, clear=False, random_init=init_scale)
@@ -1685,8 +1685,8 @@ def _forward_propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size,
     #     # Apply the standardization function to the weights
     #     mean_axes = tuple(i for i in range(len(filters.shape)-1)) #nD cells need norm'ing, ignore B and C
     #     # print("mean axes", mean_axes, "filters", filters.shape)
-    #     # filters = jax.nn.standardize(filters, axis=mean_axes)
-    #     filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
+    #     filters = jax.nn.standardize(filters, axis=mean_axes)
+    #     # filters = utils.normalize_l2(filters, axis=mean_axes) # unit norm
 
     #     # # Apply the standardization function to the weights
     #     # mean_axes = tuple(i for i in range(len(weights.shape))) #nD cells need norm'ing, ignore B and C
@@ -1699,8 +1699,9 @@ def _forward_propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size,
     for j in range(blocks):
         #propagate per block
         for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
-            cells = _forward_full_fast_compact(1, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides) #not inplace
-    cells = _forward_full_fast_compact(1, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides) #final prop and activate
+            index = j*depth_block+i
+            cells = _forward_full_fast_compact(index, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides) #not inplace
+    cells = _forward_full_fast_compact(depth, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides) #final prop and activate
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 
@@ -2128,6 +2129,13 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
     #Fast Fourier conv
     # result = _fast_conv_3D(cells, filters, pad_volume=False, normalize=True, apply_antialias=False)
     result = _fast_conv_3D_compact(cells, filters, padding_mode="CIRCULAR", normalize=True, apply_antialias=False)
+
+    # if bool(norm) or isinstance(norm, list):
+    #     if isinstance(norm, list): #assume layer norm wanted
+    #         scale = norm[0][width] #usually learnt per layer
+    #         shift = norm[1][width] #usually learnt per layer
+    #         # print("layer norm:", scale, shift)
+    #         result = result * scale + shift #scale and shift distribution
 
     #norm states to 0-1 range
     states = jax.nn.sigmoid(states)
