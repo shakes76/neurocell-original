@@ -338,8 +338,8 @@ def _propagate_full_mlp_blocks(input, offset, out_offset, out_size, depth, block
     for j in range(blocks):
         #propagate per block
         for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
-            cells = _forward_full(1, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides) #not inplace
-    cells = _forward_full(1, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides) #final prop and activate
+            cells = _forward_full(1, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
+    cells = _forward_full(1, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 
@@ -376,8 +376,10 @@ def _propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size, depth, 
         #propagate per block
         for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
             index = j*depth_block+i
-            cells = _forward_full_fast_compact(index, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides) #not inplace
-    cells = _forward_full_fast_compact(depth, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides) #final prop and activate
+            # print("index", index, "cells shape", cells.shape)
+            cells = _forward_full_fast_compact(index, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
+    cells = _forward_full_fast_compact(depth, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
+    # print("index", index, "cells shape", cells.shape)
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 
@@ -701,8 +703,8 @@ def _forward_row(index, cells, weights, biases, states, filters, activate, norm,
 
     return jnp.mean(result_block, axis=-1) # averaged across filters, back to 1 channel dim
 
-@partial(jax.jit, static_argnums=(0,6,7,8,9))
-def _forward_full(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+@partial(jax.jit, static_argnums=(0,6,7,8,9,10))
+def _forward_full(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1), mode="COMPRESS"):
     """
     Compute the forward pass by computing each neuron depending on its state for a subregion of width.
     Assumes subregion width is centred within universe WRT columns and width is even.
@@ -728,7 +730,8 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     # sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
 
     #broadcasting used later for mul, can be memory intensive for large cell arrays, see compact version
-    cells = cells[...,jnp.newaxis]
+    if len(cells.shape) == len(filter_shape): #if 3D
+        cells = cells[...,jnp.newaxis] #add features/channels dim
     weights = weights[...,jnp.newaxis]
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]
@@ -764,12 +767,17 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     else:
         result = result*weights*(1.0-states) + activate(result+biases)*states
 
-    return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
+    if mode.lower() == "compress":
+        return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
+    elif mode.lower() == "expand":
+        return result
+    else:
+        raise ValueError(f"Unsupported mode: {mode}. Use 'COMPRESS' or 'EXPAND'.")
 
 # Define the complete list of static argument indices so JAX knows not to trace them as dynamic arrays
-_static_argnums_full = (0,6,7,8,9)
+_static_argnums_full = (0,6,7,8,9,10)
 @partial(jax.jit, static_argnums=_static_argnums_full)
-def _forward_full_fast(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+def _forward_full_fast(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1), mode="COMPRESS"):
     """
     Compute the forward pass by computing each neuron depending on its state for a subregion of width.
     Assumes subregion width is centred within universe WRT columns and width is even.
@@ -797,6 +805,8 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
     # sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
 
     #broadcasting used later for mul, can be memory intensive for large cell arrays, see compact version
+    if len(cells.shape) == len(filter_shape): #if 3D
+        cells = cells[...,jnp.newaxis] #add features/channels dim
     weights = weights[...,jnp.newaxis]
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]
@@ -825,7 +835,12 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
     else:
         result = result*weights*(1.0-states) + activate(result+biases)*states
 
-    return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
+    if mode.lower() == "compress":
+        return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
+    elif mode.lower() == "expand":
+        return result
+    else:
+        raise ValueError(f"Unsupported mode: {mode}. Use 'COMPRESS' or 'EXPAND'.")
 
 # Memory-efficient version for Deep Learning training (Backward pass memory savings)
 # Applying jax.checkpoint (remat) inside jax.jit ensures intermediate FFT arrays are discarded
@@ -838,9 +853,9 @@ _forward_full_fast_jit = jax.jit(
     static_argnums=_static_argnums_full
 )
 
-def _forward_full_fast_compact(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+def _forward_full_fast_compact(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1), mode="COMPRESS"):
     """Memory-efficient full forward operator for neural network training."""
-    return _forward_full_fast_jit(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
+    return _forward_full_fast_jit(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides, mode)
 
 @partial(jax.jit, static_argnums=(0,6,7))
 def _forward_fast_1D(index, cells, weights, biases, states, filter_ffts, activate, norm):

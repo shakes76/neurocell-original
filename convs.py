@@ -170,35 +170,38 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, padding
     numerical noise suppression, and optional anti-aliasing.
 
     Args:
-        volume: 3D JAX array representing the volume (Z, Y, X).
+        volume: 3D or 4D JAX array representing the volume. If 4D, expects (Z, Y, X, C).
         kernel: 3D or 4D JAX array. If 4D, expects (Z, Y, X, C) for multi-channel CNN-like output.
         epsilon: Threshold to zero-out microscopic floating-point noise.
         suppress_epsilons: If True, applies the epsilon threshold to zero-out noise.
         padding_mode: String indicating the spatial padding and cropping strategy:
-                        - "SAME": Output shape matches input. Pads volume to prevent aliasing.
-                        - "VALID": Only returns regions of full overlap. Output shape shrinks.
-                        - "CIRCULAR": Fastest mode. No volume padding (circular wrap-around).
+                      - "SAME": Output shape matches input. Pads volume to prevent aliasing.
+                      - "VALID": Only returns regions of full overlap. Output shape shrinks.
+                      - "CIRCULAR": Fastest mode. No volume padding (circular wrap-around).
         normalize: If True, normalizes the output feature maps to have a mean of zero
-                    and a variance of 1. Variance normalization is computed in the
-                    frequency domain for circular convolution (`padding_mode='CIRCULAR'`)
-                    and in the spatial domain for linear convolutions (`'SAME'` or `'VALID'`).
+                   and a variance of 1. Variance normalization is computed in the
+                   frequency domain for circular convolution (`padding_mode='CIRCULAR'`)
+                   and in the spatial domain for linear convolutions (`'SAME'` or `'VALID'`).
         apply_antialias: If True, applies a Butterworth low-pass filter in the
-                            frequency domain to prevent frequency aliasing.
+                         frequency domain to prevent frequency aliasing.
         aa_cutoff: Cutoff frequency for the Butterworth filter (0.0 to 0.5).
         aa_order: Order of the Butterworth filter.
 
     Returns:
         JAX array of the convolved volume. Shape matches volume (for SAME/CIRCULAR)
-        or shrinks (for VALID). Includes channel dim if kernel is 4D.
+        or shrinks (for VALID). Includes channel dim if volume or kernel is 4D.
     """
     # Track original dimensions for backward compatibility
-    was_3d = kernel.ndim == 3
-    if was_3d:
-        kernel = kernel[..., None] # Convert to (Z, Y, X, 1)
+    vol_was_3d = volume.ndim == 3
+    if vol_was_3d:
+        volume = volume[..., None] # Convert to (Z, Y, X, 1)
 
-    vol_shape = volume.shape
+    ker_was_3d = kernel.ndim == 3
+    if ker_was_3d:
+        kernel = kernel[..., None] # Convert to (Kz, Ky, Kx, 1)
+
+    vol_shape = volume.shape[:3]
     ker_shape = kernel.shape[:3]
-    num_channels = kernel.shape[3]
     padding_mode = padding_mode.upper()
 
     # 1. Calculate the target shape
@@ -217,13 +220,14 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, padding
     # 2. Transform to frequency domain using N-Dimensional Real FFT
     # The `s` parameter automatically pads the arrays with zeros at the end,
     # entirely replacing the need for manual `jnp.pad` and `ifftshift`.
-    vol_freq = jnp.fft.rfftn(volume, s=fft_shape)
+    # axes=(0, 1, 2) ensures the channel dimension is not transformed.
+    vol_freq = jnp.fft.rfftn(volume, s=fft_shape, axes=(0, 1, 2))
     ker_freq = jnp.fft.rfftn(kernel, s=fft_shape, axes=(0, 1, 2))
 
     # 3. Point-wise multiplication in the frequency domain
-    # vol_freq is (Z, Y, X_freq). ker_freq is (Z, Y, X_freq, C).
-    # We expand vol_freq's dimensions to broadcast across the channels.
-    result_freq = vol_freq[..., None] * ker_freq
+    # vol_freq is (Z, Y, X_freq, Cv) and ker_freq is (Kz, Ky, X_freq, Ck).
+    # We rely on standard JAX broadcasting to align the channels correctly.
+    result_freq = vol_freq * ker_freq
 
     # 4. Apply optional 3D frequency-domain anti-aliasing (Butterworth low-pass)
     if apply_antialias:
@@ -308,7 +312,7 @@ def _fast_conv_3D(volume, kernel, epsilon=1e-7, suppress_epsilons=False, padding
     else:
         cleaned_result = cropped_result
 
-    if was_3d:
+    if vol_was_3d and ker_was_3d:
         return cleaned_result[..., 0]
 
     return cleaned_result
