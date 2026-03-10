@@ -341,9 +341,12 @@ def _propagate_full_mlp_blocks(input, offset, out_offset, out_size, depth, block
     for j in range(blocks):
         #propagate per block
         for i in range(depth_block): #0 to depth-1, depth in total with no overlap required
-            cells = _forward_full(1, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
+            index = j*depth_block+i #unused atm
+            # print("index", index, "cells shape", cells.shape, "filters", filters[j][jnp.newaxis,...].shape)
+            cells = _forward_full(1, cells, weights, biases, states, filters[j][jnp.newaxis,...], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
     #final propagation using final filter
-    cells = _forward_full(1, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
+    cells = _forward_full(1, cells, weights, biases, states, filters[blocks][jnp.newaxis,...], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
+    # print("index", index, "cells shape", cells.shape)
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 
@@ -381,7 +384,7 @@ def _propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size, depth, 
         #propagate per block
         for i in range(depth_block): #0 to depth-1, depth in total with no overlap required
             index = j*depth_block+i #unused atm
-            # print("index", index, "cells shape", cells.shape)
+            # print("index", index, "cells shape", cells.shape, "filters", filters[j].shape)
             cells = _forward_full_fast_compact(index, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
     #final propagation using final filter
     cells = _forward_full_fast_compact(depth, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
@@ -463,9 +466,11 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
         # print("cells",cells.shape)
         result_block = cells[...,index-width_pad:index-width_pad+width]
         result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
+        groups_count = 1
     else:
         #extract sub array of filter width to conv, and preserve the channel dim
         result_block = cells[...,index-width_pad:index-width_pad+width,:]
+        groups_count = filters.shape[-1]
 
     sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
@@ -474,7 +479,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach in all dims, reduced complexity by deliberately squishing last hyperplane as well to current index
     #handles boundaries better?
-    result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID")
+    result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID", feature_group_count=groups_count)
     #Fast Fourier conv
     # result_block = _fast_conv_3D(result_block, filters, pad_volume=False, normalize=True, apply_antialias=False)
     # print("result_block conv",result_block.shape)
@@ -755,15 +760,17 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     # sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
 
     #broadcasting used later for mul, can be memory intensive for large cell arrays, see compact version
+    groups_count = filters.shape[-1]
     if len(cells.shape) == len(filter_shape): #if 3D
         cells = cells[...,jnp.newaxis] #add features/channels dim
+        groups_count = 1
     weights = weights[...,jnp.newaxis]
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]
 
     #conv to eval neighbourhood
     # padding VALID mode approach, reduced complexity, handles boundaries better?
-    result = _fast_conv(cells, filters, dn, window_strides, padding_mode="VALID")
+    result = _fast_conv(cells, filters, dn, window_strides, padding_mode="VALID", feature_group_count=groups_count)
     # result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
     # result = _fast_conv(cells[:,centre-width//2-padding:centre+width//2+padding], filters, dn)
     # padding SAME mode approach

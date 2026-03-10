@@ -37,8 +37,8 @@ def _filter(cells, nethood, dn, window_strides, lhs_dilation=None, rhs_dilation=
     return cells[0,...,0] # NHWC
 
 # conv operators
-@partial(jax.jit, static_argnums=(2,3,4,5,6))
-def _fast_conv(sub_cells, filters, dn, window_strides, padding_mode="SAME", lhs_dilation=None, rhs_dilation=None):
+@partial(jax.jit, static_argnums=(2,3,4,5,6,7))
+def _fast_conv(sub_cells, filters, dn, window_strides, padding_mode="SAME", lhs_dilation=None, rhs_dilation=None, feature_group_count=1):
     """
     nD conv done with filters with JAX builtin general conv func. Supports multiple filters in channel dim.
     Assumes sub_cells has matching channel dim to filters
@@ -54,7 +54,9 @@ def _fast_conv(sub_cells, filters, dn, window_strides, padding_mode="SAME", lhs_
                                         padding_mode, # padding mode
                                         lhs_dilation,  # lhs/image dilation
                                         rhs_dilation,  # rhs/kernel dilation
-                                        dn)     # dimension_numbers = lhs, rhs, out dimension permutation
+                                        dn,  # dimension_numbers = lhs, rhs, out dimension permutation
+                                        feature_group_count, #used for grouped convolutions
+                                        )
     return sub_cells_conv[0] # NHWC, remove extra batch dim, return multi-filters result
 
 @partial(jax.jit, static_argnums=())
