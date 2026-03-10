@@ -249,17 +249,18 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
+    #propagate signals across cells using blocks of filters
     for j in range(blocks):
         #propagate per block
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
         # print("forward index",index, "j", j)
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i)
-            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j][jnp.newaxis,...], activate, norm, dn, window_strides)
+            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j][jnp.newaxis,...], activate, norm, dn, window_strides, mode="EXPAND")
             cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
     # print("final index",index+depth, depth+1, index+depth_block)
-    #final propagation
-    result_block = _forward_column(index+depth_block, cells, weights, biases, states, filters[-1][jnp.newaxis,...], final_activate, norm, dn, window_strides)
+    #final propagation using final filter
+    result_block = _forward_column(index+depth_block, cells, weights, biases, states, filters[blocks][jnp.newaxis,...], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
@@ -291,17 +292,18 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
+    #propagate signals across cells using blocks of filters
     for j in range(blocks):
         #propagate per block
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
         # print("forward index",index, "j", j)
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i)
-            result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides)
+            result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND")
             cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
     # print("final index",index+depth, depth+1, index+depth_block)
-    #final propagation
-    result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides)
+    #final propagation using final filter
+    result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
@@ -335,11 +337,13 @@ def _propagate_full_mlp_blocks(input, offset, out_offset, out_size, depth, block
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
+    #propagate signals across cells using blocks of filters
     for j in range(blocks):
         #propagate per block
-        for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
+        for i in range(depth_block): #0 to depth-1, depth in total with no overlap required
             cells = _forward_full(1, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
-    cells = _forward_full(1, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
+    #final propagation using final filter
+    cells = _forward_full(1, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
 
@@ -372,13 +376,15 @@ def _propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size, depth, 
 
     cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
+    #propagate signals across cells using blocks of filters
     for j in range(blocks):
         #propagate per block
-        for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
-            index = j*depth_block+i
+        for i in range(depth_block): #0 to depth-1, depth in total with no overlap required
+            index = j*depth_block+i #unused atm
             # print("index", index, "cells shape", cells.shape)
             cells = _forward_full_fast_compact(index, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
-    cells = _forward_full_fast_compact(depth, cells, weights, biases, states, filters[-1], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
+    #final propagation using final filter
+    cells = _forward_full_fast_compact(depth, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
     # print("index", index, "cells shape", cells.shape)
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer
@@ -423,7 +429,7 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
     return cells
 
 @partial(jax.jit, static_argnums=(0,6,8,9))
-def _forward_column(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+def _forward_column(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1), mode="COMPRESS"):
     """
     Compute the forward pass by computing each neuron depending on its state for a subregion.
 
@@ -446,18 +452,21 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
     #selects hyper plane (n-1)D at last dim
-    # sub_cells = cells[:,index-1:index-1+width]
     sub_weights = weights[...,index]
     sub_biases = biases[...,index]
     sub_states = states[...,index]
     # print("sub_states",sub_states.shape)
 
-    #extract sub array of filter width to conv
-    # print("cells",cells.shape)
-    result_block = cells[...,index-width_pad:index-width_pad+width]
+    #process only width of kernel and restore to nD if needed
+    if len(cells.shape) == len(filter_shape): #if 3D
+        #extract sub array of filter width to conv
+        # print("cells",cells.shape)
+        result_block = cells[...,index-width_pad:index-width_pad+width]
+        result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
+    else:
+        #extract sub array of filter width to conv, and preserve the channel dim
+        result_block = cells[...,index-width_pad:index-width_pad+width,:]
 
-    #restore to nD
-    result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
     sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
@@ -508,11 +517,16 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     else:
         result_block = result_block*sub_weights*(1.0-sub_states) + activate(result_block+sub_biases)*sub_states
 
-    return jnp.mean(result_block, axis=-1) # averaged across filters, back to 1 channel dim
+    if mode.lower() == "compress":
+        return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
+    elif mode.lower() == "expand":
+        return result
+    else:
+        raise ValueError(f"Unsupported mode: {mode}. Use 'COMPRESS' or 'EXPAND'.")
 
 _static_argnums_column = (0,6,8,9)
 @partial(jax.jit, static_argnums=_static_argnums_column)
-def _forward_column_fast(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+def _forward_column_fast(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1), mode="COMPRESS"):
     """
     Compute the forward pass by computing each neuron depending on its state for a subregion.
 
@@ -540,9 +554,15 @@ def _forward_column_fast(index, cells, weights, biases, states, filters, activat
     sub_states = states[...,index]
     # print("sub_states",sub_states.shape)
 
-    #extract sub array of filter width to conv
-    # print("cells",cells.shape)
-    result_block = cells[...,index-width_pad:index-width_pad+width]
+    #process only width of kernel and restore to nD if needed
+    if len(cells.shape) == len(filter_shape): #if 3D
+        #extract sub array of filter width to conv
+        # print("cells",cells.shape)
+        result_block = cells[...,index-width_pad:index-width_pad+width]
+        result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
+    else:
+        #extract sub array of filter width to conv, and preserve the channel dim
+        result_block = cells[...,index-width_pad:index-width_pad+width,:]
 
     #restore to nD
     sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
@@ -589,7 +609,12 @@ def _forward_column_fast(index, cells, weights, biases, states, filters, activat
     else:
         result_block = result_block*sub_weights*(1.0-sub_states) + activate(result_block+sub_biases)*sub_states
 
-    return jnp.mean(result_block, axis=-1) # averaged across filters, back to 1 channel dim
+    if mode.lower() == "compress":
+        return jnp.mean(result, axis=-1) # averaged across filters, back to 1 channel dim
+    elif mode.lower() == "expand":
+        return result
+    else:
+        raise ValueError(f"Unsupported mode: {mode}. Use 'COMPRESS' or 'EXPAND'.")
 
 # Memory-efficient version for Deep Learning training (Backward pass memory savings)
 # Applying jax.checkpoint (remat) inside jax.jit ensures intermediate FFT arrays are discarded
@@ -602,9 +627,9 @@ _forward_column_fast_jit = jax.jit(
     static_argnums=_static_argnums_column
 )
 
-def _forward_column_fast_compact(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
+def _forward_column_fast_compact(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1), mode="COMPRESS"):
     """Memory-efficient column forward operator for neural network training."""
-    return _forward_column_fast_jit(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides)
+    return _forward_column_fast_jit(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides, mode)
 
 @partial(jax.jit, static_argnums=(0,6,7,8,9))
 def _forward_row(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1)):
