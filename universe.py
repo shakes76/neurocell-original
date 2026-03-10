@@ -1238,7 +1238,7 @@ class Universe3D(UniverseLP):
         self.depth = depth
         self.directions = directions
 
-        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
+        cells = jnp.zeros(self.grid_size+(self.directions,), dtype=self.dtype)
         hk.set_state("universe", cells)
 
         init_scale = 1./jnp.sqrt(self.depth*self.grid_size[0]*self.grid_size[1])
