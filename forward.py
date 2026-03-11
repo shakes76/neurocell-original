@@ -406,9 +406,9 @@ def _propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size, depth, 
         for i in range(depth_block): #0 to depth-1, depth in total with no overlap required
             index = j*depth_block+i #unused atm
             # print("index", index, "cells shape", cells.shape, "filters", filters[j].shape)
-            cells = _forward_full_fast_compact(index, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
+            cells = _forward_full_fast_compact(index, cells, weights, biases, states, filters[j,0], activate, norm, dn, window_strides, mode="EXPAND") #not inplace
     #final propagation using final filter, compress back into single channel
-    cells = _forward_full_fast_compact(depth, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
+    cells = _forward_full_fast_compact(depth, cells, weights, biases, states, filters[blocks,0], final_activate, norm, dn, window_strides, mode="COMPRESS") #final prop and activate
     # print("index", index, "cells shape", cells.shape)
     if not final_activate == None:
         cells = final_activate(cells) #force final activation, assume output layer

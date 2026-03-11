@@ -44,7 +44,7 @@ layers = 12
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (33,33,33) #channel first, depth last
+kernel_size = (17,17,33) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -115,7 +115,7 @@ output_offset = (output_top,output_left,output_inner)
 # activation = utils.sqnl
 activation = jax.nn.leaky_relu #leaky_relu, swish, mish
 final_activation = None #softmax done in loss
-directions = 16 #how many filters, i.e. possible directions, to learn
+directions = 32 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========

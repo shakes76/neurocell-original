@@ -1216,7 +1216,7 @@ class Universe3D(UniverseLP):
         self.offset = None
 
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
-                                self.filters.shape,  # only ndim matters, not shape
+                                self.filters_shape[1:],  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
         self.forward_op = jax.vmap(forward._propagate_full_mlp_blocks_fast, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
