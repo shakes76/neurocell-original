@@ -1266,7 +1266,7 @@ class Universe3D(UniverseLP):
         self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
 
         #init filters
-        self.filters_shape = (self.blocks+1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions) #+1 for final forward
+        self.filters_shape = (self.blocks+1,1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions) #+1 for final forward
         self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
 
@@ -1277,7 +1277,7 @@ class Universe3D(UniverseLP):
         self.shift = hk.get_parameter("shift", self.layer_shape, self.dtype, self.offset_init) #shift per layer
 
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
-                                self.filters.shape,  # only ndim matters, not shape
+                                self.filters.shape[1:],  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
         self.forward_op = jax.vmap(forward._propagate_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])

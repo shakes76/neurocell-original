@@ -229,6 +229,7 @@ for epoch in range(epochs):
 
     # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=input_offset)
     # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
+    # print("universe shape", state['universe3_d']['universe'].shape)
     # break
 
     if epoch % 1 == 0:

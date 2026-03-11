@@ -263,12 +263,12 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
         # print("forward index",index, "j", j)
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i)
-            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j][jnp.newaxis,...], activate, norm, dn, window_strides, mode="EXPAND")
+            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND")
             cells_current = jax.lax.dynamic_update_slice(cells_current, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
             cells = cells_current
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
-    result_block = _forward_column(index+depth_block, cells, weights, biases, states, filters[blocks][jnp.newaxis,...], final_activate, norm, dn, window_strides, mode="COMPRESS")
+    result_block = _forward_column(index+depth_block, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     # print("cells shape", cells.shape, "result_block shape", result_block.shape)
