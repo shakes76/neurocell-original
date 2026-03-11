@@ -247,28 +247,35 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
     #     # print("mean axes", mean_axes, "filters", filters.shape)
     #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
-    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
+    cells = jax.lax.dynamic_update_slice(cells, input[...,jnp.newaxis], offset+(0,)) #place input into cells
     # print("cells shape", cells.shape)
 
     #expanded cells for expanded convs
-    cells_xpd = jnp.zeros(cells.shape+(filters.shape[-1],), dtype=cells.dtype)
-    cells_xpd = jax.lax.dynamic_update_slice(cells_xpd, input[...,jnp.newaxis], offset+(0,)) #place input into cells
+    # cells_xpd = jnp.zeros(cells.shape+(filters.shape[-1],), dtype=cells.dtype)
+    # cells_xpd = jax.lax.dynamic_update_slice(cells_xpd, input[...,jnp.newaxis], offset+(0,)) #place input into cells
     # print("cells_xpd shape", cells_xpd)
 
+    expand_filters = filters[0]
+    bneck_filters = filters[1]
+    groups_count = 1
+
     #propagate signals across cells using blocks of filters
-    cells_current = cells_xpd
+    # cells_current = cells_xpd
     for j in range(blocks):
         #propagate per block
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
         # print("forward index",index, "j", j)
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
-            # print("j", j, "i", i, "full index", index+i)
-            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND")
-            cells_current = jax.lax.dynamic_update_slice(cells_current, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
-            cells = cells_current
+            # print("j", j, "i", i, "full index", index+i, "cells shape", cells.shape, "expand_filters shape", expand_filters[j].shape)
+            result_block = _forward_column(index+i, cells, weights, biases, states, expand_filters[j], activate, norm, dn, window_strides, mode="EXPAND")
+            # print("result_block shape", result_block.shape)
+            result_block = _fast_conv(result_block, bneck_filters[j], dn, window_strides, padding_mode="SAME", feature_group_count=groups_count)
+            # print("result_block conv shape", result_block.shape)
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
+            # cells = cells_current
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
-    result_block = _forward_column(index+depth_block, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS")
+    result_block = _forward_column(index+depth_block, cells, weights, biases, states, expand_filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     # print("cells shape", cells.shape, "result_block shape", result_block.shape)
@@ -300,27 +307,30 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
     #     # print("mean axes", mean_axes, "filters", filters.shape)
     #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
-    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
+    cells = jax.lax.dynamic_update_slice(cells, input[...,jnp.newaxis], offset+(0,)) #place input into cells
 
     #expanded cells for expanded convs
-    cells_xpd = jnp.zeros(cells.shape+(filters.shape[-1],), dtype=cells.dtype)
-    cells_xpd = jax.lax.dynamic_update_slice(cells_xpd, input[...,jnp.newaxis], offset+(0,)) #place input into cells
+    # cells_xpd = jnp.zeros(cells.shape+(filters.shape[-1],), dtype=cells.dtype)
+    # cells_xpd = jax.lax.dynamic_update_slice(cells_xpd, input[...,jnp.newaxis], offset+(0,)) #place input into cells
     # print("cells_xpd shape", cells_xpd)
 
+    expand_filters = filters[0]
+    bneck_filters = filters[1]
+
     #propagate signals across cells using blocks of filters
-    cells_current = cells_xpd
+    # cells_current = cells_xpd
     for j in range(blocks):
         #propagate per block
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
         # print("forward index",index, "j", j)
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i)
-            result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND")
-            cells_current = jax.lax.dynamic_update_slice(cells_current, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
-            cells = cells_current
+            result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, expand_filters[j,0], activate, norm, dn, window_strides, mode="EXPAND")
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
+            # cells = cells_current
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
-    result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS")
+    result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, expand_filters[blocks,0], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block[...,jnp.newaxis], zeros_tuple+(index+depth,)+(0,)) #place back into final col (or hyper plane)
@@ -493,17 +503,19 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # print("sub_states",sub_states.shape)
 
     #process only width of kernel and restore to nD if needed
-    # groups_count = 1
+    groups_count = cells.shape[-1]
+    # groups_count = filters.shape[-1]//cells.shape[-1]
+    # print("groups_count", groups_count, "cells shape", cells.shape)
     if len(cells.shape) == len(filter_shape): #if 3D
         #extract sub array of filter width to conv
         # print("cells",cells.shape)
         result_block = cells[...,index-width_pad:index-width_pad+width]
         result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
-        groups_count = 1
+        # groups_count = 1
     else:
         #extract sub array of filter width to conv, and preserve the channel dim
         result_block = cells[...,index-width_pad:index-width_pad+width,:]
-        groups_count = filters.shape[-1]
+        # groups_count = filters.shape[-1]
 
     sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
@@ -793,11 +805,11 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
     # sub_states = states[:,centre-width//2-padding:centre+width//2+padding]
 
     #broadcasting used later for mul, can be memory intensive for large cell arrays, see compact version
-    # groups_count = 1
-    groups_count = filters.shape[-1]
+    groups_count = 1
+    # groups_count = filters.shape[-1]
     if len(cells.shape) == len(filter_shape): #if 3D
         cells = cells[...,jnp.newaxis] #add features/channels dim
-        groups_count = 1
+        # groups_count = 1
     weights = weights[...,jnp.newaxis]
     biases = biases[...,jnp.newaxis]
     states = states[...,jnp.newaxis]

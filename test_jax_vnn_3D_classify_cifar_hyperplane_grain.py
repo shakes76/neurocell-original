@@ -43,7 +43,7 @@ layers = 12
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (11,11,13) #channel first, depth last
+kernel_size = (9,9,9) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -51,8 +51,8 @@ max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't cou
 depth = max_depth
 blocks = 4
 blocks_depth = depth//blocks #depth per block
-Nx = length + 2*(kernel_size[0]-1)
-Ny = length + 2*(kernel_size[1]-1)
+Nx = length + 1*(kernel_size[0]-1) + 4
+Ny = length + 1*(kernel_size[1]-1) + 4
 Nz = max_depth + 1*(kernel_size[2]-1) + 4 #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
@@ -113,7 +113,7 @@ output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
 activation = jax.nn.leaky_relu
 final_activation = jax.nn.leaky_relu
-directions = 8 #how many filters, i.e. possible directions, to learn
+directions = 32 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========
