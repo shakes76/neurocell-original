@@ -115,7 +115,7 @@ output_offset = (output_top,output_left,output_inner)
 # activation = utils.sqnl
 activation = jax.nn.leaky_relu #leaky_relu, swish, mish
 final_activation = None #softmax done in loss
-directions = 8 #how many filters, i.e. possible directions, to learn
+directions = 16 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========

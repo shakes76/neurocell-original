@@ -247,10 +247,16 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
     #     # print("mean axes", mean_axes, "filters", filters.shape)
     #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
-    cells = jax.lax.dynamic_update_slice(cells, input[...,jnp.newaxis], offset+(0,)) #place input into cells
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
     # print("cells shape", cells.shape)
 
+    #expanded cells for expanded convs
+    cells_xpd = jnp.zeros(cells.shape+(filters.shape[-1],), dtype=cells.dtype)
+    cells_xpd = jax.lax.dynamic_update_slice(cells_xpd, input[...,jnp.newaxis], offset+(0,)) #place input into cells
+    # print("cells_xpd shape", cells_xpd)
+
     #propagate signals across cells using blocks of filters
+    cells_current = cells_xpd
     for j in range(blocks):
         #propagate per block
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
@@ -258,7 +264,8 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i)
             result_block = _forward_column(index+i, cells, weights, biases, states, filters[j][jnp.newaxis,...], activate, norm, dn, window_strides, mode="EXPAND")
-            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
+            cells_current = jax.lax.dynamic_update_slice(cells_current, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
+            cells = cells_current
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
     result_block = _forward_column(index+depth_block, cells, weights, biases, states, filters[blocks][jnp.newaxis,...], final_activate, norm, dn, window_strides, mode="COMPRESS")
@@ -269,7 +276,8 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
 
     return cells[...,0], jax.lax.dynamic_slice(cells[...,0], out_offset, out_size)
 
-@partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,14,15))
+_static_argnums_mlp_blocks = (1,2,3,4,5,11,12,14,15)
+@partial(jax.jit, static_argnums=_static_argnums_mlp_blocks)
 def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
@@ -292,9 +300,15 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
     #     # print("mean axes", mean_axes, "filters", filters.shape)
     #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
-    cells = jax.lax.dynamic_update_slice(cells, input[...,jnp.newaxis], offset+(0,)) #place input into cells
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
+
+    #expanded cells for expanded convs
+    cells_xpd = jnp.zeros(cells.shape+(filters.shape[-1],), dtype=cells.dtype)
+    cells_xpd = jax.lax.dynamic_update_slice(cells_xpd, input[...,jnp.newaxis], offset+(0,)) #place input into cells
+    # print("cells_xpd shape", cells_xpd)
 
     #propagate signals across cells using blocks of filters
+    cells_current = cells_xpd
     for j in range(blocks):
         #propagate per block
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
@@ -302,7 +316,8 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i)
             result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND")
-            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
+            cells_current = jax.lax.dynamic_update_slice(cells_current, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
+            cells = cells_current
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
     result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS")
@@ -311,6 +326,21 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
     cells = jax.lax.dynamic_update_slice(cells, result_block[...,jnp.newaxis], zeros_tuple+(index+depth,)+(0,)) #place back into final col (or hyper plane)
 
     return cells[...,0], jax.lax.dynamic_slice(cells[...,0], out_offset, out_size)
+
+# Memory-efficient version for Deep Learning training (Backward pass memory savings)
+# Applying jax.checkpoint (remat) inside jax.jit ensures intermediate FFT arrays are discarded
+# and recomputed during backpropagation, saving massive amounts of VRAM.
+_propagate_mlp_blocks_fast_jit = jax.jit(
+    jax.checkpoint(
+        _propagate_mlp_blocks_fast,
+        static_argnums=_static_argnums_mlp_blocks
+    ),
+    static_argnums=_static_argnums_mlp_blocks
+)
+
+def _propagate_mlp_blocks_fast_compact(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
+    """Memory-efficient column forward operator for neural network training."""
+    return _propagate_mlp_blocks_fast_jit(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides)
 
 @partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,13,14,15))
 def _propagate_full_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):

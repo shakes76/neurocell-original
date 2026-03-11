@@ -1206,7 +1206,6 @@ class Universe3D(UniverseLP):
         #init filters
         self.filters_shape = (self.blocks+1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions) #+1 for final forward
         self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
-        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
 
         # norms
@@ -1238,7 +1237,7 @@ class Universe3D(UniverseLP):
         self.depth = depth
         self.directions = directions
 
-        cells = jnp.zeros(self.grid_size+(self.directions,), dtype=self.dtype)
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
         init_scale = 1./jnp.sqrt(self.depth*self.grid_size[0]*self.grid_size[1])
@@ -1269,7 +1268,6 @@ class Universe3D(UniverseLP):
         #init filters
         self.filters_shape = (self.blocks+1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions) #+1 for final forward
         self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
-        # nethood_forward = filters.forward(dtype=jnp.float32, norm=False)[jnp.newaxis,:,:,jnp.newaxis] # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
 
         # norms

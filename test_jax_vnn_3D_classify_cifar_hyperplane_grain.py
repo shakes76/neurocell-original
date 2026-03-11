@@ -43,7 +43,7 @@ layers = 12
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (9,9,17) #channel first, depth last
+kernel_size = (11,11,13) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -113,7 +113,7 @@ output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
 activation = jax.nn.leaky_relu
 final_activation = jax.nn.leaky_relu
-directions = 32 #how many filters, i.e. possible directions, to learn
+directions = 8 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========
