@@ -39,7 +39,7 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 12
+layers = 24
 batch_size = 100
 length = 32
 channels = 3
@@ -49,7 +49,7 @@ depth_input = 2*padding+channels
 
 max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't count
 depth = max_depth
-blocks = 4
+blocks = 8
 blocks_depth = depth//blocks #depth per block
 Nx = length + 1*(kernel_size[0]-1) + 4
 Ny = length + 1*(kernel_size[1]-1) + 4

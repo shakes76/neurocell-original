@@ -1206,7 +1206,7 @@ class Universe3D(UniverseLP):
         self.biases = hk.get_parameter("b", shape=self.grid_size, dtype=self.dtype, init=self.b_init)
 
         #init filters
-        self.filters_shape = (self.blocks+1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions) #+1 for final forward
+        self.filters_shape = (self.blocks+1,1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions) #+1 for final forward
         self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
         self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
 
@@ -1238,10 +1238,10 @@ class Universe3D(UniverseLP):
         self.kernel_size = kernel_size
         self.depth = depth
         self.directions = directions
-        self.expansion_factor = 8 #how much to exapnd in cells, 1 is all
-        self.expansion = self.directions//self.expansion_factor
+        # self.expansion_factor = 8 #how much to exapnd in cells, 1 is all
+        # self.expansion = self.directions//self.expansion_factor
 
-        cells = jnp.zeros(self.grid_size+(self.expansion,), dtype=self.dtype)
+        cells = jnp.zeros(self.grid_size+(self.directions,), dtype=self.dtype)
         hk.set_state("universe", cells)
 
         init_scale = 1./jnp.sqrt(self.depth*self.grid_size[0]*self.grid_size[1])
@@ -1272,10 +1272,10 @@ class Universe3D(UniverseLP):
         #init filters
         self.f_init = FiltersCells(is_forward=False, random_init=init_filter_scale) # 8 connected kernel
         self.filters_shape = (self.blocks+1,1,kernel_size[0],kernel_size[1],kernel_size[2],self.directions) #+1 for final forward
-        self.expand_filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
-        self.bottleneck_shape = (self.blocks,self.directions,1,1,1,self.expansion) #1x1x1
-        self.bottleneck_filters = hk.get_parameter("g", shape=self.bottleneck_shape, dtype=self.dtype, init=self.f_init)
-        self.filters = [self.expand_filters, self.bottleneck_filters]
+        self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
+        # self.bottleneck_shape = (self.blocks,self.directions,1,1,1,self.expansion) #1x1x1
+        # self.bottleneck_filters = hk.get_parameter("g", shape=self.bottleneck_shape, dtype=self.dtype, init=self.f_init)
+        # self.filters = [self.expand_filters, self.bottleneck_filters]
 
         # norms
         self.layer_shape = [self.N,] #maximum of N layers, each with (scale, shift)
@@ -1287,7 +1287,7 @@ class Universe3D(UniverseLP):
                                 self.filters_shape[1:],  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(forward._propagate_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(forward._propagate_mlp_blocks_fast_compact, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
@@ -1307,12 +1307,6 @@ class Universe3D(UniverseLP):
         #smooth/sharpen weights
         if self.sharpen:
             weights = _filter(weights, self.sharpen_filter, self.dn, self.window_stride)
-
-        #precompute FFTs of filters
-        # expand_filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
-        # bottleneck_filters = hk.get_parameter("g", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
-        # self.filters = [self.expand_filters, self.bottleneck_filters]
-        # filters = filters[depth,:,:,:,0]
 
         # force input/output states to be active
         if not self.input_states is None:
