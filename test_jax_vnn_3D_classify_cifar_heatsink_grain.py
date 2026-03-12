@@ -40,11 +40,11 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 24
+layers = 16
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (17,17,57) #channel first, depth last
+kernel_size = (11,11,41) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -55,7 +55,7 @@ blocks = 2
 blocks_depth = depth//blocks #depth per block
 Nx = length + 1*(kernel_size[0]-1)
 Ny = length + 1*(kernel_size[1]-1)
-Nz = max_depth + 2*(kernel_size[2]-1) #channel last
+Nz = max_depth + 1*(kernel_size[2]-1) + 4 #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
 
@@ -114,8 +114,8 @@ output_size = (num_classes,1,1)
 output_offset = (output_top,output_left,output_inner)
 # activation = utils.sqnl
 activation = jax.nn.leaky_relu #leaky_relu, swish, mish
-final_activation = None #softmax done in loss
-directions = 16 #how many filters, i.e. possible directions, to learn
+final_activation = jax.nn.leaky_relu #softmax done in loss
+directions = 32 #how many filters, i.e. possible directions, to learn
 print("depth:", depth, "directions:", directions, "total batches:", total_batches)
 
 #===========

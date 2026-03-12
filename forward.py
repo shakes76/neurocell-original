@@ -851,10 +851,10 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
     """
     # centre = cells.shape[1]//2
     # padding = filters.shape[1]-1
-    filter_shape = filters.shape[1:-1] #shape is (1,rows,cols,...,1), remove first and last dims
-    height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape)) # half of all dims of filter
-    height_pad_shape = height_pad_shape + (0,) #padding for each dim plus filter dim
-    height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
+    filter_shape = filters.shape[:-1] #shape is (rows,cols,...,1), remove last dims
+    # height_pad_shape = tuple(map(lambda x: (x-1)//2, filter_shape)) # half of all dims of filter
+    # height_pad_shape = height_pad_shape + (0,) #padding for each dim plus filter dim
+    # height_pad = tuple([(pad_value, pad_value) for pad_value in height_pad_shape]) #pad before and after
     # print("height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
     # sub_weights = weights[:,centre-width//2-padding:centre+width//2+padding]
@@ -879,6 +879,9 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
     #         shift = norm[1][width] #usually learnt per layer
     #         # print("layer norm:", scale, shift)
     #         result = result * scale + shift #scale and shift distribution
+
+    # result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
+    #we do this after norm to ensure padding does not skew the norm after valid approach
 
     #norm states to 0-1 range
     states = jax.nn.sigmoid(states)
