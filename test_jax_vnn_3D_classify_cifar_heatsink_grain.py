@@ -44,7 +44,7 @@ layers = 16
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (11,11,41) #channel first, depth last
+kernel_size = (13,13,41) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -135,7 +135,7 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 total_steps = (total_batches*epochs)
 schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.adam(learning_rate=schedule)
-opt = optax.adamw(learning_rate=schedule)
+# opt = optax.adamw(learning_rate=schedule)
 
 # AGC should typically be applied BEFORE the optimizer (SGD/Adam) updates are calculated
 # or AFTER, depending on interpretation. In NFNets, it clips the raw gradients.
