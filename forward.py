@@ -373,7 +373,8 @@ def _propagate_full_mlp_blocks(input, offset, out_offset, out_size, depth, block
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
-@partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,13,14,15))
+static_argnums_mlp_blocks = (1,2,3,4,5,11,12,13,14,15)
+@partial(jax.jit, static_argnums=static_argnums_mlp_blocks)
 def _propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
@@ -414,6 +415,21 @@ def _propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size, depth, 
         cells = final_activate(cells) #force final activation, assume output layer
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
+
+# Memory-efficient version for Deep Learning training (Backward pass memory savings)
+# Applying jax.checkpoint (remat) inside jax.jit ensures intermediate FFT arrays are discarded
+# and recomputed during backpropagation, saving massive amounts of VRAM.
+_propagate_full_mlp_blocks_fast_jit = jax.jit(
+    jax.checkpoint(
+        _propagate_full_mlp_blocks_fast,
+        static_argnums=static_argnums_mlp_blocks
+    ),
+    static_argnums=static_argnums_mlp_blocks
+)
+
+def _propagate_full_mlp_blocks_fast_compact(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
+    """Memory-efficient column forward operator for neural network training."""
+    return _propagate_full_mlp_blocks_fast_jit(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides)
 
 # forward step operators
 @partial(jax.jit, static_argnums=(5,6,7))

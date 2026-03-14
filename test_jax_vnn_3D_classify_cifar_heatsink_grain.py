@@ -135,15 +135,15 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 total_steps = (total_batches*epochs)
 schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0005)
 # opt = optax.adam(learning_rate=schedule)
-# opt = optax.adamw(learning_rate=schedule)
+opt = optax.adamw(learning_rate=schedule)
 
 # AGC should typically be applied BEFORE the optimizer (SGD/Adam) updates are calculated
 # or AFTER, depending on interpretation. In NFNets, it clips the raw gradients.
-clip_factor = 0.01 #AGC parameter
-opt = optax.chain(
-    utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
-    optax.adamw(learning_rate=schedule),
-)
+# clip_factor = 0.01 #AGC parameter
+# opt = optax.chain(
+#     utils.adaptive_gradient_clipping(clipping_threshold=clip_factor),
+#     optax.adamw(learning_rate=schedule),
+# )
 
 # Initialize network and optimiser; note we draw an input to get shapes.
 jax_batch = jax.tree.map(jnp.asarray, next(train_ds))
