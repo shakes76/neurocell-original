@@ -373,7 +373,7 @@ def _propagate_full_mlp_blocks(input, offset, out_offset, out_size, depth, block
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
-static_argnums_mlp_blocks = (1,2,3,4,5,11,12,13,14,15)
+static_argnums_mlp_blocks = (1,2,3,4,5,11,12,14,15)
 @partial(jax.jit, static_argnums=static_argnums_mlp_blocks)
 def _propagate_full_mlp_blocks_fast(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
@@ -848,7 +848,7 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
         raise ValueError(f"Unsupported mode: {mode}. Use 'COMPRESS' or 'EXPAND'.")
 
 # Define the complete list of static argument indices so JAX knows not to trace them as dynamic arrays
-_static_argnums_full = (0,6,7,8,9,10)
+_static_argnums_full = (0,6,8,9,10)
 @partial(jax.jit, static_argnums=_static_argnums_full)
 def _forward_full_fast(width, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1), mode="COMPRESS"):
     """
@@ -888,13 +888,14 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
     #Fast Fourier conv
     # result = _fast_conv_3D(cells, filters, pad_volume=False, normalize=True, apply_antialias=False)
     result = _fast_conv_3D_compact(cells, filters, padding_mode="CIRCULAR", normalize=True, apply_antialias=False)
+    # result = _fast_conv_3D_compact(cells, filters, padding_mode="VALID", normalize=True, apply_antialias=False)
 
-    # if bool(norm) or isinstance(norm, list):
-    #     if isinstance(norm, list): #assume layer norm wanted
-    #         scale = norm[0][width] #usually learnt per layer
-    #         shift = norm[1][width] #usually learnt per layer
-    #         # print("layer norm:", scale, shift)
-    #         result = result * scale + shift #scale and shift distribution
+    if bool(norm) or isinstance(norm, list):
+        if isinstance(norm, list): #assume layer norm wanted
+            scale = norm[0][width] #usually learnt per layer
+            shift = norm[1][width] #usually learnt per layer
+            # print("layer norm:", scale, shift)
+            result = result * scale + shift #scale and shift distribution
 
     # result = jnp.pad(result, height_pad) #pad rows to undo valid conv in rows and cols
     #we do this after norm to ensure padding does not skew the norm after valid approach

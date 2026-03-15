@@ -40,18 +40,18 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 16
+layers = 36
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (11,11,41) #channel first, depth last
+kernel_size = (13,13,81) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
 max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't count
 # depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
-depth = 2
-blocks = 2
+depth = 1
+blocks = 1
 blocks_depth = depth//blocks #depth per block
 Nx = length + 1*(kernel_size[0]-1)
 Ny = length + 1*(kernel_size[1]-1)
@@ -60,7 +60,7 @@ print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:",
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
 
 #network IO paths
-path = '/home/uqscha22/'
+path = '/home/shakes/'
 # path = 'F:/'
 
 #===========
@@ -105,8 +105,10 @@ input_inner = centerz-max_depth//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
 output_top = centerx-num_classes//2
 output_left = centery
-output_inner = input_inner+max_depth+1 #include out layer
-# print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
+# output_inner = input_inner+max_depth+1 #include out layer
+output_inner = input_inner+(Nz-depth_input)//2 #middle of the circular distance
+print("input_top", input_top, "input_left", input_left, "input_inner", input_inner)
+print("output_top", output_top, "output_left", output_left, "output_inner", output_inner)
 #setup parameters and lengths
 input_size = (length,length,depth_input)
 input_offset = (input_top,input_left,input_inner)

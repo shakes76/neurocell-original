@@ -1211,9 +1211,10 @@ class Universe3D(UniverseLP):
         self.filters = hk.get_parameter("f", shape=self.filters_shape, dtype=self.dtype, init=self.f_init)
 
         # norms
-        self.layer_shape = None
-        self.scale = None
-        self.offset = None
+        self.layer_shape = [self.blocks+1,] #maximum of N layers, each with (scale, shift)
+        # print("layer_shape", self.layer_shape)
+        self.scale = hk.get_parameter("scale", self.layer_shape, self.dtype, self.scale_init) #scale per layer
+        self.shift = hk.get_parameter("shift", self.layer_shape, self.dtype, self.offset_init) #shift per layer
 
         self.dn = jax.lax.conv_dimension_numbers(self.img_shape,     # only ndim matters, not shape
                                 self.filters_shape[1:],  # only ndim matters, not shape
