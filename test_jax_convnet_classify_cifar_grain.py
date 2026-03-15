@@ -1,0 +1,282 @@
+'''
+ResNet for classifying CIFAR10 dataset
+'''
+import numpy as np
+import jax
+import jax.numpy as jnp
+import haiku as hk
+import optax
+# import matplotlib as mpl
+# mpl.use('Agg')
+import matplotlib.pyplot as plt
+from typing import Dict, Any, Tuple
+from tqdm import tqdm, trange #progbar
+import time
+
+#dataset
+import grains #local
+
+import utils #local
+
+utils.jax_status()
+
+#parameters
+epochs = 35
+num_classes = 10
+batch_size = 100
+length = 32
+channels = 3
+N = length
+print("N:", N, "Epochs:", epochs)
+
+#network IO paths
+path = '/home/shakes/'
+# path = 'F:/'
+
+#===========
+# Data
+grains.padding = 0
+# Create the dataloader and get total images
+train_loader, total_images = grains.create_cifar10_dataloader(
+    split="train",
+    batch_size=batch_size,
+    shuffle=True,
+    num_epochs=epochs,
+    worker_count=0, # Use 0 for debugging in the main thread
+    data_dir=path+'data'
+)
+
+test_loader, total_test_images = grains.create_cifar10_dataloader(
+    split="test",
+    batch_size=batch_size,
+    shuffle=False,
+    num_epochs=epochs+1,
+    worker_count=0, # Use 0 for debugging in the main thread
+    data_dir=path+'data'
+)
+
+total_batches = total_images // batch_size
+total_test_batches = total_test_images // batch_size
+
+# Grain dataloaders yield standard python dictionaries with numpy arrays.
+# For JAX, we iterate through the loader and move the arrays to the device.
+train_ds = iter(train_loader)
+test_ds = iter(test_loader)
+
+#===========
+##create model
+class NormBlock(hk.Module):
+    '''
+    Normed Conv Block
+    Supports dilation via rate that results in a dilated net (DRN) block
+    '''
+    def __init__(self, channels, stride, rate=1, kernel_shape=3, bn_config=None, name=None):
+        super().__init__(name=name)
+
+        self.bn_config = dict(bn_config or {})
+        self.bn_config.setdefault("create_scale", True)
+        self.bn_config.setdefault("create_offset", True)
+        self.bn_config.setdefault("decay_rate", 0.999)
+
+        conv_0 = hk.Conv2D(
+            output_channels=channels,
+            kernel_shape=kernel_shape,
+            stride=stride,
+            rate=rate,
+            with_bias=False,
+            w_init=hk.initializers.Orthogonal(),
+            padding="SAME",
+            name=self.name+"_conv_0")
+        bn_0 = hk.BatchNorm(name=self.name+"_bn_0", **self.bn_config)
+
+        conv_1 = hk.Conv2D(
+            output_channels=channels,
+            kernel_shape=kernel_shape,
+            stride=1,
+            rate=rate,
+            with_bias=False,
+            w_init=hk.initializers.Orthogonal(),
+            padding="SAME",
+            name=self.name+"_conv_1")
+        bn_1 = hk.BatchNorm(name=self.name+"_bn_1", **self.bn_config)
+
+        self.layers = ((conv_0, bn_0), (conv_1, bn_1))
+
+    def __call__(self, x, is_training, test_local_stats=False):
+        out = x
+
+        for (conv_i, bn_i) in self.layers:
+            out = conv_i(out)
+            out = bn_i(out, is_training, test_local_stats)
+            out = jax.nn.relu(out)
+
+        return out
+
+#conv nets
+class ConvNet(hk.Module):
+    '''
+    A standard VGG-like network but much smaller
+    Assumes image is input and returns logits
+    conv_layers defines this many conv layers
+    channels sets the initial number of filters
+    Subsequent conv layers are increased by powers of 2
+    dense_size sets the largest dense layer size right after conv layers
+    and uses two dense layers down (each downsampled by 4) to output_size
+    '''
+    def __init__(self, output_size, conv_layers=2, kernel_size=3, channels=32, dense_size=256, bn_config=None, logits_config=None, name=None):
+        super().__init__(name=name)
+        self.output_size = output_size
+        self.conv_layers = conv_layers
+        self.kernel_size = kernel_size
+        self.channels = channels
+        self.dense_size = dense_size
+        self.bn_config = dict(bn_config or {})
+
+        #batch norm config
+        self.bn_config.setdefault("decay_rate", 0.9)
+        self.bn_config.setdefault("eps", 1e-5)
+        self.bn_config.setdefault("create_scale", True)
+        self.bn_config.setdefault("create_offset", True)
+
+        self.logits_config = dict(logits_config or {})
+        self.logits_config.setdefault("w_init", jax.numpy.zeros)
+        self.logits_config.setdefault("name", "logits")
+
+    def __call__(self, x, is_training, test_local_stats=False):
+        '''
+        ConvNet Network
+        '''
+        #define conv layers
+        net=NormBlock(self.channels, stride=1, bn_config=self.bn_config, name="normblock_initial_1")(x, is_training)
+        net=NormBlock(self.channels, stride=1, bn_config=self.bn_config, name="normblock_initial_2")(net, is_training)
+        for n in range(1,self.conv_layers):
+            net=NormBlock(self.channels, stride=2, bn_config=self.bn_config, name="normblock_"+str(n)+"_x2")(net, is_training)
+            net=NormBlock(self.channels, stride=1, bn_config=self.bn_config, name="normblock_"+str(n)+"_x1")(net, is_training)
+        # GlobalAveragePooling2D
+        net=jax.numpy.mean(net, axis=[1, 2])
+        #define dense layers
+        # net=hk.Flatten()(net)
+        net=hk.Linear(self.dense_size)(net)
+        net=jax.nn.relu(net)
+        net=hk.Linear(self.dense_size//4)(net)
+        net=jax.nn.relu(net)
+        net=hk.Linear(self.output_size, **self.logits_config)(net)
+
+        return net
+
+def _forward(batch, is_training: bool) -> jnp.ndarray:
+    '''
+    Forward pass through network
+    '''
+    cnn = ConvNet(num_classes, conv_layers=3, kernel_size=3, channels=128, dense_size=1024)
+    return cnn(batch, is_training=is_training)
+
+# Make the network and optimizer. Haiku standard
+network = hk.without_apply_rng(hk.transform_with_state(_forward))
+
+#===========
+# Training setup
+# Make the network and optimizer. Haiku standard
+total_steps = (total_batches*epochs)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.02*total_steps,decay_steps=total_steps,end_value=0.0005)
+# opt = optax.adam(learning_rate=schedule)
+opt = optax.adamw(learning_rate=schedule)
+
+# Initialize network and optimiser; note we draw an input to get shapes.
+# batch = next(train_ds)
+x = jnp.zeros((batch_size,length,length,channels))
+print("INIT SHAPE", x.shape)
+params, state = network.init(jax.random.PRNGKey(42), x, is_training=True)
+opt_state = opt.init(params)
+# print(params)
+
+#loss function
+@jax.jit
+def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
+    '''
+    Cross entropy
+    '''
+    labels = jax.nn.one_hot(labels, num_classes)
+    logits, state = network.apply(params, state, batch, is_training=True)
+    # logits = jnp.squeeze(logits, axis=-1) #remove extra dim
+    # print("LOSS SHAPE SQUEEZE", labels.shape, logits.shape)
+
+    # return -jnp.mean(labels * jax.nn.log_softmax(logits)) + l2*l2_scaling, state
+    # return -jnp.mean(labels * jax.nn.log_softmax(logits)), state
+
+    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean(), state
+
+@jax.jit
+def update(
+        params: hk.Params,
+        opt_state: optax.OptState,
+        state,
+        batch,
+        labels
+    ) -> Tuple[hk.Params, optax.OptState]:
+    """Learning rule (stochastic gradient descent)."""
+    (loss_value, state), grads = jax.value_and_grad(loss, has_aux=True)(params, state, batch, labels)
+    updates, opt_state = opt.update(grads, opt_state, params)
+    new_params = optax.apply_updates(params, updates)
+    return new_params, opt_state, loss_value, state
+
+# Train/eval loop.
+start = time.time() #time generation
+for epoch in range(epochs):
+    total_loss = 0
+    # Do SGD on a batch of training examples.
+    for step in trange(total_batches):
+        # Convert numpy arrays to JAX DeviceArrays
+        jax_batch = jax.tree.map(jnp.asarray, next(train_ds))
+
+        x = jax_batch['image']
+        y = jax_batch['label']
+
+        params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
+        total_loss += loss_value/batch_size
+        # break
+    total_loss /= total_batches
+
+    if epoch % 1 == 0:
+        # Periodically evaluate on train & test sets.
+        correct = 0
+        total = 0
+        # for batch in tqdm(test_loader, total=total_test_batches, desc=f"Testing"):
+        for test_step in trange(total_test_batches):
+            # Convert numpy arrays to JAX DeviceArrays
+            jax_batch = jax.tree.map(jnp.asarray, next(test_ds))
+
+            x = jax_batch['image']
+            y = jax_batch['label']
+
+            logits, state_test = network.apply(params, state, x, is_training=False) #if reshaped, use squeeze
+            predicted = jnp.argmax(logits, axis=-1)
+            correct += jnp.sum(predicted == y)
+            total += y.shape[0]
+        accuracy = 100 * correct / total
+        print(f"[Epoch {epoch}, Loss {total_loss}, Test Accuracy {accuracy}]")
+    else:
+        print(f"[Epoch {epoch}, Loss {total_loss}]")
+end = time.time()
+elapsed = end - start
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
+
+#test performance
+correct = 0
+total = 0
+for test_step in trange(total_test_batches):
+    # Convert numpy arrays to JAX DeviceArrays
+    jax_batch = jax.tree.map(jnp.asarray, next(test_ds))
+
+    x = jax_batch['image']
+    y = jax_batch['label']
+
+    logits, state_test = network.apply(params, state, x, is_training=False)
+    predicted = jnp.argmax(logits, axis=-1)
+    correct += jnp.sum(predicted == y)
+    total += y.shape[0]
+
+accuracy = 100 * correct / total
+print(f"[Final Test Accuracy {accuracy}]")
+
+print("END")
