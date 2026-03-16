@@ -105,8 +105,10 @@ input_inner = centerz-max_depth//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
 output_top = centerx-num_classes//2
 output_left = centery
-output_inner = input_inner+max_depth+1 #include out layer
-# print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
+# output_inner = input_inner+max_depth+1 #include out layer
+output_inner = input_inner+(Nz-depth_input)//2 #middle of circular distance
+print("input_top", input_top, "input_left", input_left, "input_inner", input_inner)
+print("output_top", output_top, "output_left", output_left, "output_inner", output_inner)
 #setup parameters and lengths
 input_size = (length,length,depth_input)
 input_offset = (input_top,input_left,input_inner)
