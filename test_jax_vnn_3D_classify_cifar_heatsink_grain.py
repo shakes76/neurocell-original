@@ -50,8 +50,8 @@ depth_input = 2*padding+channels
 
 max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't count
 # depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
-depth = 2
-blocks = 2
+depth = 3
+blocks = 3
 blocks_depth = depth//blocks #depth per block
 Nx = length + 1*(kernel_size[0]-1)
 Ny = length + 1*(kernel_size[1]-1)
@@ -106,7 +106,7 @@ input_inner = centerz-max_depth//2
 output_top = centerx-num_classes//2
 output_left = centery
 # output_inner = input_inner+max_depth+1 #include out layer
-output_inner = input_inner+(Nz-depth_input)//2 #middle of circular distance
+output_inner = input_inner+(Nz-depth_input)//2+1 #middle of circular distance
 print("input_top", input_top, "input_left", input_left, "input_inner", input_inner)
 print("output_top", output_top, "output_left", output_left, "output_inner", output_inner)
 #setup parameters and lengths
