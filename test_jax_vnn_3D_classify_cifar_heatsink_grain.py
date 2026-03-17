@@ -50,8 +50,8 @@ depth_input = 2*padding+channels
 
 max_depth = depth_full + depth_input - 1  #first plane is untouched, doesn't count
 # depth = (depth_full+length)//( (kernel_size[0]-1)//2 ) # propagation speed is (kernel_size-1)//2 per step, go upto first channel
-depth = 3
-blocks = 3
+depth = 4
+blocks = 4
 blocks_depth = depth//blocks #depth per block
 Nx = length + 1*(kernel_size[0]-1)
 Ny = length + 1*(kernel_size[1]-1)
