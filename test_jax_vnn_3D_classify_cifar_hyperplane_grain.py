@@ -47,9 +47,9 @@ kernel_size = (9,9,17) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
-max_depth = (depth_full + depth_input - 1) // ((kernel_size[-1]-1)//2)  #first plane is untouched, doesn't count
-depth = max_depth
-blocks = 8
+max_depth = (depth_full + depth_input - 1)  #first plane is untouched, doesn't count
+depth = max_depth//((kernel_size[-1]-1)//2)
+blocks = depth
 blocks_depth = depth//blocks #depth per block
 Nx = length + 1*(kernel_size[0]-1) + 4
 Ny = length + 1*(kernel_size[1]-1) + 4
@@ -99,11 +99,11 @@ centerz = Nz//2
 #input
 input_top = centerx-length//2
 input_left = centery-length//2
-input_inner = centerz-depth//2
+input_inner = centerz-max_depth//2
 #output, doesn't have to be at end of layers, propagator will learn directions to output
 output_top = centerx-num_classes//2
 output_left = centery
-output_inner = input_inner+depth+1 #include out layer
+output_inner = input_inner+max_depth+1 #include out layer
 print("input_top", input_top, "input_left", input_left, "input_inner", input_inner)
 print("output_top", output_top, "output_left", output_left, "output_inner", output_inner)
 #setup parameters and lengths

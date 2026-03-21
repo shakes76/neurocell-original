@@ -287,7 +287,10 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
     zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
     depth_block = depth//blocks #first plane is untouched
     update_offset = (filters[blocks,0].shape[-2]-1)//2 #used to account for result size with being filter size in this dim
-    # print("depth", depth, "blocks", blocks, "depth_block", depth_block)
+    overlap = 1
+    step_offset = (filters[blocks,0].shape[-2]-1)//2
+    step_offset //= overlap
+    #~ print("depth", depth, "blocks", blocks, "depth_block", depth_block, "step_offset", step_offset)
 
     # if norm or isinstance(norm, list):
     #     # gamma for scaled weights standardization equivalent to batch norm
@@ -304,16 +307,16 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
     #propagate signals across cells using blocks of filters
     for j in range(blocks):
         #propagate per block
-        index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
-        # print("forward index",index, "j", j)
-        for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
-            # print("j", j, "i", i, "full index", index+i)
-            result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j,0], activate, norm, dn, window_strides, mode="COMPRESS")
+        index = offset[-1]+j*depth_block*step_offset+1 #first col (or last hyper plane) next to input
+        print("forward index",index, "j", j)
+        for i in range(depth_block*overlap): #0 to depth-1, depth in total plus one overlap
+            print("\tj", j, "i", i, "index", index, "full index", index+i*step_offset)
+            result_block = _forward_column_fast_compact(index+i*step_offset, cells, weights, biases, states, filters[j,0], activate, norm, dn, window_strides, mode="COMPRESS")
             #~ print("result_block shape", result_block.shape)
             cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i-update_offset,)) #place back into col (or hyper plane)
-    # print("final index",index+depth, depth+1, index+depth_block)
+    print("final index",index+depth, depth+1, index+(depth_block*overlap)*step_offset)
     #final propagation using final filter, compress back into single channel
-    result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, filters[blocks,0], final_activate, norm, dn, window_strides, mode="COMPRESS")
+    result_block = _forward_column_fast_compact(index+(depth_block*overlap)*step_offset, cells, weights, biases, states, filters[blocks,0], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth-update_offset,)) #place back into final col (or hyper plane)
