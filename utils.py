@@ -115,6 +115,30 @@ def iqr_median_normalize(data, axis=None, keepdims=True, epsilon=1e-7):
 
     return normalized_data
 
+@jax.jit
+def min_max_normalize(x, axis=None, eps=1e-8):
+    """
+    Applies Min-Max normalization to a JAX array, scaling values to the [0, 1] range.
+
+    Formula: (x - min(x)) / (max(x) - min(x) + eps)
+
+    Args:
+        x: The input JAX array.
+        axis: The axis or axes along which to compute the min and max.
+              If None (default), computes over the entire array.
+              For example, use axis=-1 to normalize independently across the last dimension.
+        eps: A small constant to prevent division by zero if all elements are equal.
+
+    Returns:
+        A JAX array of the same shape, scaled to the interval [0, 1].
+    """
+    # keepdims=True is crucial here so that the shapes broadcast correctly
+    # when we subtract the min and divide by the range.
+    x_min = jnp.min(x, axis=axis, keepdims=True)
+    x_max = jnp.max(x, axis=axis, keepdims=True)
+
+    return (x - x_min) / (x_max - x_min + eps)
+
 # square non-linearity
 # https://ieeexplore.ieee.org/document/8489043
 @jax.jit
@@ -129,6 +153,24 @@ def sqnl(x):
 
     # Cap values outside (-2, 2) to -1 or 1
     return jnp.clip(neg, -1.0, 1.0)
+
+@jax.jit
+def clipped_relu(x):
+    """
+    Computes the Clipped ReLU (ReLU1) activation function.
+    Maps the input array to the interval [0, 1] by clipping.
+
+    Formula: f(x) = min(max(0, x), 1)
+
+    Args:
+        x: A JAX array (logits or pre-activations).
+
+    Returns:
+        A JAX array of the same shape with values bounded between 0.0 and 1.0.
+    """
+    # Using the explicit mathematical formula: min(max(0, x), 1)
+    # The @jax.jit decorator ensures this compiles to optimized XLA instructions.
+    return jnp.minimum(jnp.maximum(0.0, x), 1.0)
 
 # We use functools.partial to pass static_argnames to the JIT compiler.
 # 'axis' must be static because it changes the shape of the intermediate

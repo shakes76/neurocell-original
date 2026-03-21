@@ -10,7 +10,7 @@ import os
 # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 # 2. (Optional) Limit JAX to a specific percentage of GPU memory
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.95"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
 
 # 3. (Optional) Bypasses JAX's internal memory pool and forces it to use the standard CUDA malloc and free.
 # This is often much better at handling the massive, temporary workspace spikes caused by 3D FFTs without fragmenting.
@@ -39,11 +39,11 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 24
+layers = 16
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (9,9,9) #channel first, depth last
+kernel_size = (9,9,17) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 

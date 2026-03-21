@@ -12,6 +12,7 @@ import jax.numpy as jnp
 from functools import partial
 
 from convs import _fast_conv, _fast_conv_3D, _fast_conv_3D_compact, _filter
+#~ import utils
 
 #propagate funcs
 @partial(jax.jit, static_argnums=(0,1,7,8,9,10))
@@ -247,7 +248,7 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
     #     # print("mean axes", mean_axes, "filters", filters.shape)
     #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
-    cells = jax.lax.dynamic_update_slice(cells, input[...,jnp.newaxis], offset+(0,)) #place input into cells
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
     # print("cells shape", cells.shape)
 
     #propagate signals across cells using blocks of filters
@@ -258,9 +259,9 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
         # print("forward index",index, "j", j)
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i, "cells shape", cells.shape, "expand_filters shape", expand_filters[j].shape)
-            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="EXPAND")
-            # print("result_block conv shape", result_block.shape)
-            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
+            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="COMPRESS")
+            #~ print("result_block conv shape", result_block.shape)
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
             # cells = cells_current
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
@@ -268,9 +269,9 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     # print("cells shape", cells.shape, "result_block shape", result_block.shape)
-    cells = jax.lax.dynamic_update_slice(cells, result_block[...,jnp.newaxis], zeros_tuple+(index+depth,)+(0,)) #place back into final col (or hyper plane)
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
 
-    return cells[...,0], jax.lax.dynamic_slice(cells[...,0], out_offset, out_size)
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
 _static_argnums_mlp_blocks = (1,2,3,4,5,11,12,14,15)
 @partial(jax.jit, static_argnums=_static_argnums_mlp_blocks)
@@ -296,7 +297,7 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
     #     # print("mean axes", mean_axes, "filters", filters.shape)
     #     filters = jax.nn.standardize(filters, axis=mean_axes)
 
-    cells = jax.lax.dynamic_update_slice(cells, input[...,jnp.newaxis], offset+(0,)) #place input into cells
+    cells = jax.lax.dynamic_update_slice(cells, input, offset) #place input into cells
 
     #propagate signals across cells using blocks of filters
     for j in range(blocks):
@@ -305,16 +306,16 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
         # print("forward index",index, "j", j)
         for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i)
-            result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j,0], activate, norm, dn, window_strides, mode="EXPAND")
-            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)+(0,)) #place back into col (or hyper plane)
+            result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j,0], activate, norm, dn, window_strides, mode="COMPRESS")
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
     result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, filters[blocks,0], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
-    cells = jax.lax.dynamic_update_slice(cells, result_block[...,jnp.newaxis], zeros_tuple+(index+depth,)+(0,)) #place back into final col (or hyper plane)
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
 
-    return cells[...,0], jax.lax.dynamic_slice(cells[...,0], out_offset, out_size)
+    return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
 # Memory-efficient version for Deep Learning training (Backward pass memory savings)
 # Applying jax.checkpoint (remat) inside jax.jit ensures intermediate FFT arrays are discarded
@@ -498,7 +499,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # print("sub_states",sub_states.shape)
 
     #process only width of kernel and restore to nD if needed
-    groups_count = cells.shape[-1]
+    #~ groups_count = cells.shape[-1]
     # groups_count = filters.shape[-1]//cells.shape[-1]
     # print("groups_count", groups_count, "cells shape", cells.shape)
     if len(cells.shape) == len(filter_shape): #if 3D
@@ -506,11 +507,11 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
         # print("cells",cells.shape)
         result_block = cells[...,index-width_pad:index-width_pad+width]
         result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
-        # groups_count = 1
+        groups_count = 1
     else:
         #extract sub array of filter width to conv, and preserve the channel dim
         result_block = cells[...,index-width_pad:index-width_pad+width,:]
-        # groups_count = filters.shape[-1]
+        groups_count = filters.shape[-1]
 
     sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
@@ -551,7 +552,9 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
 
     #norm states to 0-1 range
     sub_states = jax.nn.sigmoid(sub_states)
-    # sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
+    #~ sub_states = jax.nn.hard_sigmoid(sub_states)
+    #~ sub_states = jax.nn.leaky_relu(sub_states)
+    #~ sub_states = utils.min_max_normalize(sub_states)
 
     #check states
     #if passive apply activation, else signal state so weight, let the grad descent decide
@@ -643,7 +646,9 @@ def _forward_column_fast(index, cells, weights, biases, states, filters, activat
 
     #norm states to 0-1 range
     sub_states = jax.nn.sigmoid(sub_states)
-    # sub_states = (sub_states - sub_states.min()) / (sub_states.max() - sub_states.min())
+    #~ sub_states = jax.nn.hard_sigmoid(sub_states)
+    #~ sub_states = jax.nn.leaky_relu(sub_states)
+    #~ sub_states = utils.min_max_normalize(sub_states)
 
     #check states
     #if passive apply activation, else signal state so weight, let the grad descent decide
@@ -830,7 +835,9 @@ def _forward_full(width, cells, weights, biases, states, filters, activate, norm
 
     #norm states to 0-1 range
     states = jax.nn.sigmoid(states)
-    # states = (states - states.min()) / (states.max() - states.min())
+    #~ states = jax.nn.hard_sigmoid(states)
+    #~ states = jax.nn.gelu(states)
+    #~ states = utils.min_max_normalize(states)
 
     #check states
     #if passive apply activation, else signal state so weight, let the grad descent decide
@@ -902,7 +909,9 @@ def _forward_full_fast(width, cells, weights, biases, states, filters, activate,
 
     #norm states to 0-1 range
     states = jax.nn.sigmoid(states)
-    # states = (states - states.min()) / (states.max() - states.min())
+    #~ states = jax.nn.hard_sigmoid(states)
+    #~ states = jax.nn.leaky_relu(states)
+    #~ states = utils.min_max_normalize(states)
 
     #check states
     #if passive apply activation, else signal state so weight, let the grad descent decide

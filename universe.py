@@ -1242,7 +1242,7 @@ class Universe3D(UniverseLP):
         # self.expansion_factor = 8 #how much to exapnd in cells, 1 is all
         # self.expansion = self.directions//self.expansion_factor
 
-        cells = jnp.zeros(self.grid_size+(self.directions,), dtype=self.dtype)
+        cells = jnp.zeros(self.grid_size, dtype=self.dtype)
         hk.set_state("universe", cells)
 
         init_scale = 1./jnp.sqrt(self.depth*self.grid_size[0]*self.grid_size[1])
@@ -1288,7 +1288,7 @@ class Universe3D(UniverseLP):
                                 self.filters_shape[1:],  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(forward._propagate_mlp_blocks_fast_compact, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(forward._propagate_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 
