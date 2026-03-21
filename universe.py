@@ -1288,7 +1288,7 @@ class Universe3D(UniverseLP):
                                 self.filters_shape[1:],  # only ndim matters, not shape
                                 ('NHWDC', 'IHWDO', 'NHWDC'))  # the important bit
 
-        self.forward_op = jax.vmap(forward._propagate_mlp_blocks, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
+        self.forward_op = jax.vmap(forward._propagate_mlp_blocks_fast, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None])
 
         return hk.get_state("universe")
 

@@ -236,6 +236,7 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
     """
     zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
     depth_block = depth//blocks #first plane is untouched
+    update_offset = (filters[blocks,0].shape[-2]-1)//2 #used to account for result size with being filter size in this dim
     # print("depth", depth, "blocks", blocks, "depth_block", depth_block, "zeros_tuple", zeros_tuple)
 
     # if norm or isinstance(norm, list):
@@ -257,11 +258,11 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
         #propagate per block
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
         # print("forward index",index, "j", j)
-        for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
+        for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i, "cells shape", cells.shape, "expand_filters shape", expand_filters[j].shape)
             result_block = _forward_column(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="COMPRESS")
-            #~ print("result_block conv shape", result_block.shape)
-            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
+            #~ print("result_block conv shape", result_block.shape, "update offset", zeros_tuple+(index+i-update_offset,))
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i-update_offset,)) #place back into col (or hyper plane)
             # cells = cells_current
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
@@ -269,7 +270,7 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
     # print("cells shape", cells.shape, "result_block shape", result_block.shape)
-    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth-update_offset,)) #place back into final col (or hyper plane)
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
@@ -285,6 +286,7 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
     """
     zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
     depth_block = depth//blocks #first plane is untouched
+    update_offset = (filters[blocks,0].shape[-2]-1)//2 #used to account for result size with being filter size in this dim
     # print("depth", depth, "blocks", blocks, "depth_block", depth_block)
 
     # if norm or isinstance(norm, list):
@@ -304,16 +306,17 @@ def _propagate_mlp_blocks_fast(input, offset, out_offset, out_size, depth, block
         #propagate per block
         index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
         # print("forward index",index, "j", j)
-        for i in range(depth_block+1): #0 to depth-1, depth in total plus one overlap
+        for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
             # print("j", j, "i", i, "full index", index+i)
             result_block = _forward_column_fast_compact(index+i, cells, weights, biases, states, filters[j,0], activate, norm, dn, window_strides, mode="COMPRESS")
-            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i,)) #place back into col (or hyper plane)
+            #~ print("result_block shape", result_block.shape)
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i-update_offset,)) #place back into col (or hyper plane)
     # print("final index",index+depth, depth+1, index+depth_block)
     #final propagation using final filter, compress back into single channel
     result_block = _forward_column_fast_compact(index+depth_block, cells, weights, biases, states, filters[blocks,0], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
-    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth,)) #place back into final col (or hyper plane)
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth-update_offset,)) #place back into final col (or hyper plane)
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
@@ -520,7 +523,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach in all dims, reduced complexity by deliberately squishing last hyperplane as well to current index
     #handles boundaries better?
-    result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="VALID", feature_group_count=groups_count)
+    result_block = _fast_conv(result_block, filters, dn, window_strides, padding_mode="SAME", feature_group_count=groups_count)
     #Fast Fourier conv
     # result_block = _fast_conv_3D(result_block, filters, pad_volume=False, normalize=True, apply_antialias=False)
     # print("result_block conv",result_block.shape)
@@ -547,7 +550,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
             # print("layer norm:", scale, shift)
             result_block = result_block * scale + shift #scale and shift distribution
 
-    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
+    #~ result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #we do this after norm to ensure padding does not skew the norm after valid approach
 
     #norm states to 0-1 range
@@ -620,7 +623,7 @@ def _forward_column_fast(index, cells, weights, biases, states, filters, activat
     # print("result_block",result_block.shape, "filters", filters.shape)
     #Fast Fourier conv
     # result_block = _fast_conv_3D(result_block, filters, padding_mode="VALID", normalize=True, apply_antialias=False)
-    result_block = _fast_conv_3D_compact(result_block, filters, padding_mode="VALID", normalize=True, apply_antialias=False)
+    result_block = _fast_conv_3D_compact(result_block, filters, padding_mode="CIRCULAR", normalize=True, apply_antialias=False)
     # print("result_block conv",result_block.shape)
 
     if norm or isinstance(norm, list):
@@ -640,7 +643,7 @@ def _forward_column_fast(index, cells, weights, biases, states, filters, activat
             # print("layer norm:", scale, shift)
             result_block = result_block * scale + shift #scale and shift distribution
 
-    result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
+    #~ result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #we do this after norm to ensure padding does not skew the norm after valid approach
     # print("result_block pad",result_block.shape)
 
