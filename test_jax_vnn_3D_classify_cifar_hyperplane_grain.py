@@ -45,7 +45,7 @@ length = 32
 channels = 3
 grains.padding = 2
 padding = grains.padding
-kernel_size = (9,9,41) #channel first, depth last
+kernel_size = (9,9,21) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -55,7 +55,7 @@ blocks = depth
 blocks_depth = depth//blocks #depth per block
 Nx = length + 1*(kernel_size[0]-1) + 4
 Ny = length + 1*(kernel_size[1]-1) + 4
-Nz = (depth_input-1) + max_depth + 1*(kernel_size[2]-1) #channel last
+Nz = (depth_input-1) + max_depth + 1*(kernel_size[2]-1) + 4 #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
 
@@ -103,7 +103,7 @@ centerz = Nz//2
 #input
 input_top = centerx-length//2
 input_left = centery-length//2
-input_inner = centerz-(depth_input+max_depth)//2-1
+input_inner = centerz-((depth_input-1)+max_depth)//2-1
 #output, doesn't have to be at end of layers, propagator will learn directions to output
 output_top = centerx-num_classes//2
 output_left = centery
