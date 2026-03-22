@@ -28,7 +28,7 @@ from tqdm import tqdm, trange #progbar
 import time
 
 #dataset
-from grains import create_cifar10_dataloader, padding #local
+import grains #local
 
 from universe import Universe3D #local
 import utils #local
@@ -39,23 +39,27 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 16
+layers = 20
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (9,9,17) #channel first, depth last
+grains.padding = 2
+padding = grains.padding
+kernel_size = (9,9,41) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
-max_depth = (depth_full + depth_input - 1)  #first plane is untouched, doesn't count
+max_depth = depth_full  #count from first hplane after input
 depth = max_depth//((kernel_size[-1]-1)//2)
 blocks = depth
 blocks_depth = depth//blocks #depth per block
 Nx = length + 1*(kernel_size[0]-1) + 4
 Ny = length + 1*(kernel_size[1]-1) + 4
-Nz = max_depth + 1*(kernel_size[2]-1) + 4 #channel last
+Nz = (depth_input-1) + max_depth + 1*(kernel_size[2]-1) #channel last
 print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:", kernel_size)
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
+
+#~ if not max_depth%((kernel_size[-1]-1)//2) and not
 
 #network IO paths
 path = '/home/shakes/'
@@ -64,7 +68,7 @@ path = '/home/shakes/'
 #===========
 # Data
 # Create the dataloader and get total images
-train_loader, total_images = create_cifar10_dataloader(
+train_loader, total_images = grains.create_cifar10_dataloader(
     split="train",
     batch_size=batch_size,
     shuffle=True,
@@ -73,7 +77,7 @@ train_loader, total_images = create_cifar10_dataloader(
     data_dir=path+'data'
 )
 
-test_loader, total_test_images = create_cifar10_dataloader(
+test_loader, total_test_images = grains.create_cifar10_dataloader(
     split="test",
     batch_size=batch_size,
     shuffle=False,
@@ -99,11 +103,11 @@ centerz = Nz//2
 #input
 input_top = centerx-length//2
 input_left = centery-length//2
-input_inner = centerz-max_depth//2
+input_inner = centerz-(depth_input+max_depth)//2-1
 #output, doesn't have to be at end of layers, propagator will learn directions to output
 output_top = centerx-num_classes//2
 output_left = centery
-output_inner = input_inner+max_depth+1 #include out layer
+output_inner = input_inner+depth_input+max_depth #include out layer
 print("input_top", input_top, "input_left", input_left, "input_inner", input_inner)
 print("output_top", output_top, "output_left", output_left, "output_inner", output_inner)
 #setup parameters and lengths
@@ -224,13 +228,13 @@ for epoch in range(epochs):
 
         params, opt_state, loss_value, state = update(params, opt_state, state, x, y)
         total_loss += loss_value/batch_size
-        # break
+        #~ break
     total_loss /= total_batches
 
-    # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=input_offset)
-    # visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
-    # print("universe shape", state['universe3_d']['universe'].shape)
-    # break
+    #~ visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=input_offset)
+    #~ visualize.plot_orthogonal_views(state['universe3_d']['universe'], center=output_offset)
+    #~ print("universe shape", state['universe3_d']['universe'].shape)
+    #~ break
 
     if epoch % 1 == 0:
         # Periodically evaluate on train & test sets.
