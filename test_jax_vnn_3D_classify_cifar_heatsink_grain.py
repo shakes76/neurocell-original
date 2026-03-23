@@ -29,7 +29,8 @@ from tqdm import tqdm, trange #progbar
 import time
 
 #dataset
-from grains import create_cifar10_dataloader, padding #local
+import grains
+from grains import create_cifar10_dataloader #local
 
 from universe import Universe3D #local
 import utils #local
@@ -40,11 +41,13 @@ utils.jax_status()
 #parameters
 epochs = 35
 num_classes = 10
-layers = 36
+layers = 16
 batch_size = 100
 length = 32
 channels = 3
-kernel_size = (13,13,81) #channel first, depth last
+grains.padding = 3 
+padding = grains.padding
+kernel_size = (11,11,41) #channel first, depth last
 depth_full = 2*layers #-(channels-1) #(k-1)/2 hyperplanes per layer, counting from last channel
 depth_input = 2*padding+channels
 
@@ -60,7 +63,7 @@ print("N:", (Nx,Ny,Nz), "depth full:", depth_full, "Epochs:", epochs, "Kernel:",
 print("padding:", padding, "depth_input:", depth_input, "max_depth:", max_depth, "blocks", blocks, "blocks_depth", blocks_depth)
 
 #network IO paths
-path = '/home/shakes/'
+path = '/home/uqscha22/'
 # path = 'F:/'
 
 #===========
