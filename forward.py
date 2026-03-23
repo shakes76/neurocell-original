@@ -501,9 +501,9 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
     #selects hyper plane (n-1)D at last dim
-    sub_weights = weights[...,index]
-    sub_biases = biases[...,index]
-    sub_states = states[...,index]
+    sub_weights = weights[...,index-width_pad:index-width_pad+width]
+    sub_biases = biases[...,index-width_pad:index-width_pad+width]
+    sub_states = states[...,index-width_pad:index-width_pad+width]
     # print("sub_states",sub_states.shape)
 
     #process only width of kernel and restore to nD if needed
@@ -521,9 +521,9 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
         result_block = cells[...,index-width_pad:index-width_pad+width,:]
         groups_count = filters.shape[-1]
 
-    sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
-    sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
-    sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_weights = sub_weights[...,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_biases = sub_biases[...,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_states = sub_states[...,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #valid mode approach in all dims, reduced complexity by deliberately squishing last hyperplane as well to current index
@@ -605,9 +605,9 @@ def _forward_column_fast(index, cells, weights, biases, states, filters, activat
     # print("index",index,"width_pad",width_pad, "height_pad_shape", height_pad_shape,"height_pad",height_pad)
 
     #selects hyper plane (n-1)D at last dim
-    sub_weights = weights[...,index]
-    sub_biases = biases[...,index]
-    sub_states = states[...,index]
+    sub_weights = weights[...,index-width_pad:index-width_pad+width]
+    sub_biases = biases[...,index-width_pad:index-width_pad+width]
+    sub_states = states[...,index-width_pad:index-width_pad+width]
     # print("sub_states",sub_states.shape)
 
     #process only width of kernel and restore to nD if needed
@@ -621,9 +621,9 @@ def _forward_column_fast(index, cells, weights, biases, states, filters, activat
         result_block = cells[...,index-width_pad:index-width_pad+width,:]
 
     #restore to nD
-    sub_weights = sub_weights[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
-    sub_biases = sub_biases[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
-    sub_states = sub_states[...,jnp.newaxis,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_weights = sub_weights[...,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_biases = sub_biases[...,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
+    sub_states = sub_states[...,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
 
     # print("result_block",result_block.shape, "filters", filters.shape)
     #Fast Fourier conv
