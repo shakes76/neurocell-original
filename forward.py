@@ -237,6 +237,9 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
     zeros_tuple = (0,) * (len(offset)-1) #offset for entire hyper plane
     depth_block = depth//blocks #first plane is untouched
     update_offset = (filters[blocks,0].shape[-2]-1)//2 #used to account for result size with being filter size in this dim
+    overlap = 1 #factor of kernel overlap
+    step = (filters[blocks,0].shape[-2]-1)//2
+    step //= overlap
     # print("depth", depth, "blocks", blocks, "depth_block", depth_block, "zeros_tuple", zeros_tuple)
 
     # if norm or isinstance(norm, list):
@@ -253,24 +256,23 @@ def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, ce
     # print("cells shape", cells.shape)
 
     #propagate signals across cells using blocks of filters
-    # cells_current = cells_xpd
+    step_offset = input.shape[-1]
     for j in range(blocks):
         #propagate per block
-        index = offset[-1]+j*depth_block+1 #first col (or last hyper plane) next to input
-        # print("forward index",index, "j", j)
-        for i in range(depth_block): #0 to depth-1, depth in total plus one overlap
-            # print("j", j, "i", i, "full index", index+i, "cells shape", cells.shape, "expand_filters shape", expand_filters[j].shape)
-            result_block = _forward_column(index+i, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="COMPRESS")
-            #~ print("result_block conv shape", result_block.shape, "update offset", zeros_tuple+(index+i-update_offset,))
-            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i-update_offset,)) #place back into col (or hyper plane)
-            # cells = cells_current
-    # print("final index",index+depth, depth+1, index+depth_block)
+        index = offset[-1]+j*depth_block*overlap*step+step_offset #first col (or last hyper plane) next to input including its size
+        print("forward index",index, "j", j, "step_offset", step_offset)
+        for i in range(depth_block*overlap): #0 to depth-1, depth in total plus one overlap
+            print("\tj", j, "i", i, "index", index, "full index", index+i*step)
+            result_block = _forward_column(index+i*step, cells, weights, biases, states, filters[j], activate, norm, dn, window_strides, mode="COMPRESS")
+            #~ print("result_block shape", result_block.shape)
+            cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+i*step-update_offset,)) #place back into col (or hyper plane)
+        #~ step_offset = 1
+    print("final index",index+depth, depth+1, index+1, out_offset[-1])
     #final propagation using final filter, compress back into single channel
-    result_block = _forward_column(index+depth_block, cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS")
+    result_block = _forward_column(out_offset[-1], cells, weights, biases, states, filters[blocks], final_activate, norm, dn, window_strides, mode="COMPRESS")
     if not final_activate == None:
         result_block = final_activate(result_block) #force final activation, assume output layer
-    # print("cells shape", cells.shape, "result_block shape", result_block.shape)
-    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(index+depth-update_offset,)) #place back into final col (or hyper plane)
+    cells = jax.lax.dynamic_update_slice(cells, result_block, zeros_tuple+(out_offset[-1]-update_offset,)) #place back into final col (or hyper plane)
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
@@ -507,7 +509,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # print("sub_states",sub_states.shape)
 
     #process only width of kernel and restore to nD if needed
-    #~ groups_count = cells.shape[-1]
+    groups_count = 1
     # groups_count = filters.shape[-1]//cells.shape[-1]
     # print("groups_count", groups_count, "cells shape", cells.shape)
     if len(cells.shape) == len(filter_shape): #if 3D
@@ -515,11 +517,11 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
         # print("cells",cells.shape)
         result_block = cells[...,index-width_pad:index-width_pad+width]
         result_block = result_block[...,jnp.newaxis] # add dim to support filter channel
-        groups_count = 1
+        #~ groups_count = 1
     else:
         #extract sub array of filter width to conv, and preserve the channel dim
         result_block = cells[...,index-width_pad:index-width_pad+width,:]
-        groups_count = filters.shape[-1]
+        #~ groups_count = filters.shape[-1]
 
     sub_weights = sub_weights[...,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
     sub_biases = sub_biases[...,jnp.newaxis] #promotes to column vec (2D) or back to nD and support filter channel
