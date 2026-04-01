@@ -12,7 +12,7 @@ import optax
 # mpl.use('Agg')
 import matplotlib.pyplot as plt
 from typing import Tuple
-import time
+import time, math
 
 from sklearn.model_selection import train_test_split
 
@@ -23,7 +23,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 200
+epochs = 100
 n = 8
 # bit_depth = 2**(n-1)
 length = 2*n
@@ -41,7 +41,7 @@ print("N:", N, "Epochs:", epochs)
 
 #===========
 ##data
-X1f, X2f, Y_raw = data.generate_arithmetic(samples, "add", n, batch_size, delta)
+X1f, X2f, Y_raw = data.generate_arithmetic(samples, "xor", n, batch_size, delta)
 
 #stack
 X_preproc = np.concatenate([X1f, X2f], axis=-1)
@@ -74,7 +74,7 @@ output_size = (1,n)
 output_offset = (output_mid,output_left)
 activation = jax.nn.tanh
 final_activation = None
-directions = 2 #how many filters, i.e. possible directions, to learn
+directions = 16 #how many filters, i.e. possible directions, to learn
 depth = output_left-input_left
 print("depth:", depth)
 
@@ -177,7 +177,7 @@ end = time.time()
 elapsed = end - start
 print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("tm_arithmetic_cells.npz",
+jnp.savez("vnn_tm_arithmetic_cells.npz",
             weights=params['universe_lp']['w'],
             biases=params['universe_lp']['b'],
             filters=params['universe_lp']['f'],
@@ -197,13 +197,17 @@ plt.title("Final Biases")
 plt.savefig("vnn_tm_arithmetic_biases.png", dpi=150)
 plt.show()
 
-fig = plt.figure(figsize=(4,4))
-for c in range(directions):
-    plt.subplot(2, 1, c+1)
-    plt.imshow(params['universe_lp']['f'][0,:,:,c])
-    plt.tight_layout()
-    plt.title("Filter "+str(c))
-plt.savefig("vnn_tm_arithmetic_filter.png", dpi=75)
+fig_width = int(math.sqrt(directions))
+fig = plt.figure(figsize=(2*fig_width,2*fig_width))
+for c1 in range(fig_width):
+    for c2 in range(fig_width):
+        c = c1*fig_width+c2
+        plt.subplot(fig_width, fig_width, c+1)
+        plt.imshow(params['universe_lp']['f'][0,:,:,c])
+        plt.tight_layout()
+        plt.axis('off') # Hides both x and y axes
+        plt.title("Filter "+str(c))
+plt.savefig("vnn_alu_arithmetic_filter.png", dpi=150)
 plt.show()
 
 plt.imshow(params['universe_lp']['s'])

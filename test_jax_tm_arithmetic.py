@@ -21,22 +21,22 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 200
+epochs = 100
 n = 8
 # bit_depth = 2**(n-1)
 length = 2*n
 blanks = 2*n
-samples = 12800
-batch_size = 320
+samples = 32000
+batch_size = 128
 num_batches = samples//batch_size
-delta = 0.1
+delta = 0.2
 padding = 4*(length+n+blanks)
 N = length + n + blanks + 16*padding
 print("N:", N, "Epochs:", epochs)
 
 #===========
 #data
-X1f, X2f, Y_raw = data.generate_arithmetic(samples, "add", n, batch_size, delta)
+X1f, X2f, Y_raw = data.generate_arithmetic(samples, "xor", n, batch_size, delta)
 
 #stack
 X_preproc = np.concatenate([X1f, X2f], axis=-1)
@@ -62,8 +62,8 @@ output_size = (1,n)
 output_offset = (0,center[1]+(n+1)+blanks//2) #+1 output layer, add blanks
 kernel_size = (1,8*n+1) #(1,3*n+2)
 activation = jax.nn.tanh
-final_activation = jax.nn.sigmoid
-directions = 8 #how many instructions, i.e. possible directions, to learn
+final_activation = None
+directions = 16 #how many instructions, i.e. possible directions, to learn
 depth = 4
 print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
 
@@ -82,7 +82,7 @@ network = hk.without_apply_rng(hk.transform_with_state(_forward))
 
 #optimizer
 total_steps = epochs*num_batches
-schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.025*total_steps,decay_steps=total_steps,end_value=0.0005)
+schedule = optax.warmup_cosine_decay_schedule(init_value=0.001,peak_value=0.03,warmup_steps=0.025*total_steps,decay_steps=total_steps)
 # opt = optax.sgd(learning_rate=0.005)
 # opt = optax.adam(learning_rate=schedule)
 opt = optax.adamw(learning_rate=schedule)
