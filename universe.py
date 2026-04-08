@@ -719,7 +719,7 @@ class UniverseLP(hk.Module):
         # cells = forward._propagate_fast_1D(self.in_offset[1], self.depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm)
         # forward_propagate_fast = jax.vmap(forward._propagate_fast_mlp, in_axes=[0, None, None, None, None, None, None, None, None, None, None, None, None, None])
         cells, outputs = self.forward_op(inputs, self.in_offset, self.out_offset, self.out_size, self.depth, cells, weights, biases, states, filters, activate, final_activate, norm, self.dn, self.window_stride)
-        hk.set_state("universe", cells[0]) #remove vmap batch dim
+        hk.set_state("universe", cells) #remove vmap batch dim
 
         #read output
         # if self.type_MLP:

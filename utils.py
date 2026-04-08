@@ -301,7 +301,7 @@ def adaptive_gradient_clipping(
     return optax.GradientTransformation(init_fn, update_fn)
 
 @jax.jit
-def compute_vector_field_jax(frame1, frame2, epsilon=1e-5):
+def compute_vector_field(frame1, frame2, epsilon=1e-5):
     """
     Computes the 2D vector field (u, v) using JAX for GPU/TPU acceleration.
     The @jax.jit decorator compiles this for high performance.
