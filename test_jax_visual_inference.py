@@ -21,40 +21,6 @@ utils.jax_status()
 
 #propagate with visuals
 @utils.partial(jax.jit, static_argnums=(2,3,4,10,11,12,13,14))
-def _propagate_full_mlp_list_gradients(inputs, offsets, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
-    """
-    Propagate input across cellular net based on weights etc. as a traditional MLP, inputs are list of inputs, twos output
-    First two outputs are arrays with gradients of each step made, other is the final output
-    """
-    # gradients_u = jnp.zeros((depth,)+cells.shape, dtype=cells.dtype)
-    # gradients_v = jnp.zeros((depth,)+cells.shape, dtype=cells.dtype)
-
-    for input, offset in zip(inputs, offsets): #place inputs to cells
-        cells = jax.lax.dynamic_update_slice(cells, input, offset)
-
-    #propagate
-    gradients_u = []
-    gradients_v = []
-    for i in range(1, depth):
-        updated_cells = forward._forward_full(1, cells, weights, biases, states, filters, activate, norm, dn, window_strides) #not inplace
-        u, v = utils.compute_vector_field(cells, updated_cells)
-        gradients_u.append(u)
-        gradients_v.append(v)
-        cells = updated_cells
-    updated_cells = forward._forward_full(1, cells, weights, biases, states, filters, final_activate, norm, dn, window_strides) #final prop and activate
-    u, v = utils.compute_vector_field(cells, updated_cells)
-    gradients_u.append(u)
-    gradients_v.append(v)
-    cells = updated_cells
-    if not final_activate == None:
-        cells = final_activate(cells) #force final activation, assume output layer
-
-    gradients_u = jnp.asarray(gradients_u)
-    gradients_v = jnp.asarray(gradients_v)
-
-    return (gradients_u, gradients_v), jax.lax.dynamic_slice(cells, out_offset, out_size)
-
-@utils.partial(jax.jit, static_argnums=(2,3,4,10,11,12,13,14))
 def _propagate_full_mlp_list_visual(inputs, offsets, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP, inputs are list of inputs, twos output
@@ -240,17 +206,19 @@ print(f"[Final Accuracy {accuracy}]")
 
 #gradients of pass
 step = 1
-batch_id = 0
-y, x = jnp.mgrid[0:N:step, 0:N:step]
+y, x = np.mgrid[0:N:step, 0:N:step]
+#compress/avg across batch dim per step
+frames = jnp.mean(state_test['universe_lp']['universe'], axis=0)
+#show plot per step
 for i in range(1, depth):
-    print("universe shape:", state_test['universe_lp']['universe'][i-1].shape)
-    frame1 = state_test['universe_lp']['universe'][batch_id][i-1]
-    frame2 = state_test['universe_lp']['universe'][batch_id][i]
-    u, v = utils.compute_vector_field(frame1, frame2)
+    print("frames shape:", frames.shape)
+    frame1 = frames[i-1]
+    frame2 = frames[i]
+    u, v, mag = utils.compute_vector_field(frame1, frame2, normalize=True)
     # Mask out vectors where the wave amplitude is very low to keep the plot clean
     mask = frame1[::step, ::step] > 0.1
     # Create another 2D array to use for coloring the arrows (e.g., vector magnitude)
-    color_array = jnp.hypot(jnp.array(u), jnp.array(v))
+    color_array = jnp.array(mag)
     # plot
     plt.quiver(x[mask], y[mask],
                       np.array(u)[::step, ::step][mask],
