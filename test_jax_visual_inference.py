@@ -211,12 +211,13 @@ y, x = np.mgrid[0:N:step, 0:N:step]
 frames = jnp.mean(state_test['universe_lp']['universe'], axis=0)
 #show plot per step
 for i in range(1, depth):
-    print("frames shape:", frames.shape)
+    # print("frames shape:", frames.shape)
     frame1 = frames[i-1]
     frame2 = frames[i]
     u, v, mag = utils.compute_vector_field(frame1, frame2, normalize=True)
     # Mask out vectors where the wave amplitude is very low to keep the plot clean
-    mask = frame1[::step, ::step] > 0.1
+    mask = frame1[::step, ::step] > 0.15
+
     # Create another 2D array to use for coloring the arrows (e.g., vector magnitude)
     color_array = jnp.array(mag)
     # plot
