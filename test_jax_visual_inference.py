@@ -14,7 +14,8 @@ from typing import Tuple
 
 from universe import UniverseLP #local
 from data import generate_arithmetic_logic
-import forward
+import forward #local
+import visualize #local
 import utils #local
 
 utils.jax_status()
@@ -209,6 +210,14 @@ step = 1
 y, x = np.mgrid[0:N:step, 0:N:step]
 #compress/avg across batch dim per step
 frames = jnp.mean(state_test['universe_lp']['universe'], axis=0)
+
+#forward pass animations
+anim = visualize.animate_3d_array(frames, fps=1, cmap='jet', colorbar=True, frame_text=True)
+
+#call plt.show() to render the animation
+plt.show()
+
+#vector fields
 #show plot per step
 for i in range(1, depth):
     # print("frames shape:", frames.shape)
