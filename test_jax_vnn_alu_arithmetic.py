@@ -28,7 +28,7 @@ n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
-samples = 64000
+samples = 128000
 batch_size = 128
 kernel_size = (23,13)
 num_batches = samples//batch_size
@@ -97,7 +97,7 @@ print("Distance rows:", (output_mid+output_size[0])-(ctrl_offset[0]+kernel_size[
 print("Distance cols:", output_left-(input_left+kernel_size[1]//2))
 # depth = max(output_left-(input_left+kernel_size[1]//2), (output_mid+output_size[0])-(ctrl_offset[0]+kernel_size[0]//2))
 # depth = max(output_left-input_left, (output_mid+output_size[0])-ctrl_offset[0])
-depth = 6
+depth = 4
 print("depth:", depth)
 
 #===========
