@@ -225,7 +225,7 @@ for i in range(1, depth):
     frame2 = frames[i]
     u, v, mag = utils.compute_vector_field(frame1, frame2, normalize=True)
     # Mask out vectors where the wave amplitude is very low to keep the plot clean
-    mask = frame1[::step, ::step] > 0.15
+    mask = frame1[::step, ::step] > 0.05
 
     # Create another 2D array to use for coloring the arrows (e.g., vector magnitude)
     color_array = jnp.array(mag)
