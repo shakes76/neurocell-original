@@ -44,8 +44,8 @@ def _propagate_full(input, offset, out_offset, out_size, depth, cells, weights, 
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
-@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13))
-def _propagate_full_slp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
+def _propagate_full_slp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. for all layers across entire universe
     """
@@ -74,15 +74,15 @@ def _propagate_full_slp(input, offset, out_offset, out_size, depth, cells, weigh
 
     #propagate
     for i in range(1, depth):
-        cells = _forward_full(width, cells, weights, biases, states, filter_ffts, activate, norm, dn) #not inplace
+        cells = _forward_full(width, cells, weights, biases, states, filter_ffts, activate, norm, dn, window_strides) #not inplace
         # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+i)) #write result for next propagate
-    cells = _forward_full(width, cells, weights, biases, states, filter_ffts, final_activate, norm, dn) #final prop and activate
+    cells = _forward_full(width, cells, weights, biases, states, filter_ffts, final_activate, norm, dn, window_strides) #final prop and activate
     # cells = jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
-@partial(jax.jit, static_argnums=(2,3,4,10,11,12,13))
-def _propagate_full_clp(input, coords, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn):
+@partial(jax.jit, static_argnums=(2,3,4,10,11,12,13,14))
+def _propagate_full_clp(input, coords, out_offset, out_size, depth, cells, weights, biases, states, filter_ffts, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. for all layers across entire universe
     """
@@ -93,8 +93,8 @@ def _propagate_full_clp(input, coords, out_offset, out_size, depth, cells, weigh
 
     #propagate
     for i in range(1, depth):
-        cells = _forward_full(width, cells, weights, biases, states, filter_ffts, activate, norm, dn) #not inplace
-    cells = _forward_full(width, cells, weights, biases, states, filter_ffts, final_activate, norm, dn) #final prop and activate
+        cells = _forward_full(width, cells, weights, biases, states, filter_ffts, activate, norm, dn, window_strides) #not inplace
+    cells = _forward_full(width, cells, weights, biases, states, filter_ffts, final_activate, norm, dn, window_strides) #final prop and activate
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 

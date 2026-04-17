@@ -11,6 +11,7 @@ import haiku as hk
 import math
 
 import filters #local
+from convs import _filter
 import forward #local
 import utils #local
 

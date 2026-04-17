@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 30
+epochs = 50
 
 #===========
 ##data
@@ -153,7 +153,7 @@ opt_state = opt.init(params)
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     labels = jax.nn.one_hot(labels, num_classes)
 
@@ -217,13 +217,13 @@ for step in range(1, epochs+1):
     # break
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("clp_classify_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("clp_classify_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             N=N, length=length, num_classes=num_classes, input_coords=input_coords, output_coords=output_coords,
             kernel_size=kernel_size,
             allow_pickle=False)
@@ -262,7 +262,7 @@ plt.title("Final States (Thresholded)")
 plt.savefig("vnn_clp_classify_states_thres.png", dpi=75)
 plt.show()
 
-plt.imshow(state['universe_lp']['universe'])
+plt.imshow(state['universe_lp']['universe'][0])
 plt.title("Final Universe")
 plt.savefig("vnn_clp_classify_universe.png", dpi=75)
 plt.show()
