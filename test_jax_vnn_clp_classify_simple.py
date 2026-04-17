@@ -24,8 +24,8 @@ utils.jax_status()
 epochs = 60
 length = 3
 padding = 6
-samples = 160
-batch_size = 1
+samples = 320
+batch_size = 2
 num_batches = samples//batch_size
 num_classes = 3
 epsilon = 1e-8
@@ -77,7 +77,8 @@ print("N:", N, "Epochs:", epochs)
 #setup
 kernel_size = (3,3)
 activation = jax.nn.tanh
-final_activation = None
+final_activation = None #jax.nn.sigmoid
+directions = 1 #how many filters, i.e. possible directions, to learn
 #depth
 # in_row_coord = input_coords[:, 0].min() #top most in
 # out_row_coord = output_coords[:, 0].min() #top most out
@@ -95,8 +96,8 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    clp = UniverseLP(N)
-    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size)
+    clp = UniverseLP(N, sharpen=False)
+    clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size, directions=directions)
     return clp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
@@ -123,7 +124,7 @@ print("arch", arch.shape, type(arch))
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     labels = jax.nn.one_hot(labels, num_classes)
     # print("labels", labels.shape)
@@ -192,13 +193,13 @@ for step in range(1, epochs+1):
         print(f"[Step {step}, Loss {loss_value}, Ave.Loss {loss_value/samples}]")
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("clp_classify_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("clp_classify_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             N=N, length=length, num_classes=num_classes, input_coords=input_coords, output_coords=output_coords,
             neuron_coords=[], kernel_size=kernel_size,
             allow_pickle=False)
@@ -228,7 +229,7 @@ plt.title("Final States")
 plt.savefig("vnn_clp_classify_states.png", dpi=75)
 plt.show()
 
-plt.imshow(state['universe_lp']['universe'])
+plt.imshow(state['universe_lp']['universe'][0])
 plt.title("Final Universe")
 plt.savefig("vnn_clp_classify_universe.png", dpi=75)
 plt.show()
