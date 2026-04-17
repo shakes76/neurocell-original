@@ -502,7 +502,7 @@ class UniverseLP(hk.Module):
 
         return hk.get_state("universe")
 
-    def initialize_slp(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3)):
+    def initialize_slp(self, in_size, out_size, in_offset, out_offset, depth, kernel_size=(3,3), directions=1):
         """
         Init all cells as an open square-like shape
         """
@@ -513,7 +513,7 @@ class UniverseLP(hk.Module):
         self.kernel_size = kernel_size
         self.depth = depth
         # self.depth = self.out_offset[1]-self.in_offset[1]
-        self.directions = 1
+        self.directions = directions
         # print("depth:", self.depth)
 
         cells = jnp.zeros(self.grid_size, dtype=self.dtype)

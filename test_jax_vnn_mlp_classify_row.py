@@ -23,9 +23,9 @@ utils.jax_status()
 
 #parameters
 N = 32
-epochs = 7
+epochs = 6
 batch_size = 2
-layers = 2
+layers = 4
 epsilon = 1e-8
 start_state = 1 #set None for random state
 print("N:", N, "Epochs:", epochs)

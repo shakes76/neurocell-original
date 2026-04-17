@@ -46,6 +46,7 @@ kernel_size = (7,3)
 activation = jax.nn.tanh
 final_activation = None
 depth = output_offset[1]-input_offset[1]
+directions = 1 #how many filters, i.e. possible directions, to learn
 print("depth:", depth)
 
 #===========
@@ -54,9 +55,9 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = UniverseLP(N)
-    mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, layer_size, layer_offset, kernel_size)
-    return mlp(batch, activation, final_activation, norm=False)
+    slp = UniverseLP(N, sharpen=False)
+    slp.initialize_slp(input_size, output_size, input_offset, output_offset, depth, kernel_size, directions=directions)
+    return slp(batch, activation, final_activation, norm=False)
 
 # Make the network and optimizer. Haiku standard
 network = hk.without_apply_rng(hk.transform_with_state(_forward))
@@ -86,7 +87,7 @@ plt.show()
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
-    Cross entropy 
+    Cross entropy
     '''
     labels = jax.nn.one_hot(labels, num_classes)
 
@@ -136,13 +137,13 @@ for step in range(1, epochs+1):
         print(f"[Step {step}, Loss {loss_value}]")
 end = time.time()
 elapsed = end - start
-print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total") 
+print("Training took " + str(elapsed) + " secs or " + str(elapsed/60) + " mins in total")
 
-jnp.savez("mlp_classify_cells.npz", 
-            weights=params['universe_lp']['w'], 
-            biases=params['universe_lp']['b'], 
-            filters=params['universe_lp']['f'], 
-            states=params['universe_lp']['s'], 
+jnp.savez("mlp_classify_cells.npz",
+            weights=params['universe_lp']['w'],
+            biases=params['universe_lp']['b'],
+            filters=params['universe_lp']['f'],
+            states=params['universe_lp']['s'],
             N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             layer_size=layer_size, layer_offset=layer_offset, kernel_size=kernel_size,

@@ -112,7 +112,7 @@ def _propagate_fast_1D(index, depth, cells, weights, biases, states, filter_ffts
     result_block = _forward_fast_1D(index+depth, cells, weights, biases, states, filter_ffts, final_activate, norm)
     return jax.lax.dynamic_update_slice(cells, result_block, (0,index+depth))
 
-@partial(jax.jit, static_argnums=(1,2,3,4,10,11,13,14))
+@partial(jax.jit, static_argnums=(1,2,3,4,10,11,12,13,14))
 def _propagate_mlp(input, offset, out_offset, out_size, depth, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
@@ -225,7 +225,7 @@ def _propagate_full_mlp_list(inputs, offsets, out_offset, out_size, depth, cells
 
     return cells, jax.lax.dynamic_slice(cells, out_offset, out_size)
 
-@partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,14,15))
+@partial(jax.jit, static_argnums=(1,2,3,4,5,11,12,13,14,15))
 def _propagate_mlp_blocks(input, offset, out_offset, out_size, depth, blocks, cells, weights, biases, states, filters, activate, final_activate, norm, dn, window_strides=(1,1)):
     """
     Propagate input across cellular net based on weights etc. as a traditional MLP
@@ -479,7 +479,7 @@ def _forward(cells, weights, biases, states, nethood, activate, norm, dn):
 
     return cells
 
-@partial(jax.jit, static_argnums=(0,6,8,9,10))
+@partial(jax.jit, static_argnums=(0,6,7,8,9,10))
 def _forward_column(index, cells, weights, biases, states, filters, activate, norm, dn, window_strides=(1,1), mode="COMPRESS"):
     """
     Compute the forward pass by computing each neuron depending on its state for a subregion.
@@ -540,7 +540,7 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
     # result_block = result_block[:,(width_pad+1)-1].reshape(-1,1) #reshape promotes to column vec, -1 for 0 indexing
     # print("result_block padded",result_block.shape)
 
-    if norm or isinstance(norm, list):
+    if norm: # or isinstance(norm, list):
         mean_axes = tuple(i for i in range(len(dn.lhs_spec)-2)) #nD cells need norm'ing, ignore B and C
         # print("mean axes", mean_axes)
         #norm, note no B in result due to vectorization
@@ -551,11 +551,11 @@ def _forward_column(index, cells, weights, biases, states, filters, activate, no
         # Calculate scaling factor for ReLU
         # gamma = utils.get_relu_gain_gamma([sub_weights.shape[-3]])
         # sub_weights = jax.nn.standardize(sub_weights, axis=-3)
-        if isinstance(norm, list): #assume layer norm wanted
-            scale = norm[0][index] #usually learnt per layer
-            shift = norm[1][index] #usually learnt per layer
-            # print("layer norm:", scale, shift)
-            result_block = result_block * scale + shift #scale and shift distribution
+        # if isinstance(norm, list): #assume layer norm wanted
+        #     scale = norm[0][index] #usually learnt per layer
+        #     shift = norm[1][index] #usually learnt per layer
+        #     # print("layer norm:", scale, shift)
+        #     result_block = result_block * scale + shift #scale and shift distribution
 
     #~ result_block = jnp.pad(result_block, height_pad) #pad rows to undo valid conv in rows
     #we do this after norm to ensure padding does not skew the norm after valid approach
