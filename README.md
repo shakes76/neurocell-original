@@ -15,6 +15,13 @@ The various modules are:
 * universe - definition and classes of various different VNNs
 * utils - misc helper functions
 
+The different folders contain:
+* doc - documentation of the library
+* misc - tests that are for comparison of similar dataset or task, not essential to this library
+* wip - work in progress tests, could be broken or incomplete
+
+To run tests in misc or wip, move the sscript to parent directory and then run them.
+
 The descriptions of the various scripts can be found on the [experiments page](experiments.md)
 
 ## Implementation
