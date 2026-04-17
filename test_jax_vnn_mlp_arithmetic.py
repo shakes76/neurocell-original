@@ -21,17 +21,18 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 200
+epochs = 100
 n = 8
 # bit_depth = 2**(n-1)
 length = 2*n
 samples = 32000
 batch_size = 128
+kernel_size = (17,3)
 num_batches = samples//batch_size
 delta = 0.2
-padding = 4*length
+padding = 3*max(kernel_size[0], kernel_size[1]) #on one side
 layers = 5
-N = length + 4*padding
+N = 4*n + padding
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -61,11 +62,10 @@ input_size = (length,1)
 input_offset = (center[0]-length//2,center[1]-(depth-1)//2)
 output_size = (n,1)
 output_offset = (center[0]-output_size[0]//2,input_offset[1]+depth+1) #+1 output layer
-kernel_size = (17,3)
 activation = jax.nn.tanh
 final_activation = None
-directions = 2 #how many filters, i.e. possible directions, to learn
-print("depth:", depth, "in offset", input_offset, "out offset", output_offset)
+directions = 8 #how many filters, i.e. possible directions, to learn
+print("depth:", depth, "in offset", input_offset, "out offset", output_offset, "directions:", directions)
 
 #===========
 ##create model
@@ -108,7 +108,7 @@ states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if s
 plt.imshow(states)
 plt.title("Initial States (Thresholded)")
 plt.savefig("vnn_mlp_arith_states_init_thres.png", dpi=75)
-# plt.show()
+plt.show()
 
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
@@ -223,7 +223,7 @@ plt.title("Final States (Thresholded)")
 plt.savefig("vnn_mlp_arith_states_final_thres.png", dpi=75)
 plt.show()
 
-plt.imshow(state['universe_lp']['universe'])
+plt.imshow(state['universe_lp']['universe'][0])
 plt.title("Final Universe")
 plt.savefig("vnn_mlp_arith_universe.png", dpi=75)
 plt.show()

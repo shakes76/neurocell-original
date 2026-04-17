@@ -92,7 +92,7 @@ activation = jax.nn.tanh
 final_activation = None
 directions = 8 #how many filters, i.e. possible directions, to learn
 depth = output_left-input_left
-print("depth:", depth)
+print("depth:", depth, "directions:", directions)
 
 #===========
 ##create model
