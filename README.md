@@ -4,6 +4,17 @@ Cellular machines library for automated systems and self assembly with John von 
 ## Structure
 In general, driver scripts are prefixed with tests_* and unit tests as unit_*.
 
+The various modules are:
+* data - for various data creation primitives
+* grains - Google Grain data primitives
+* convs - for various convolution and filtering operators
+* filters - definitions of very simple filters and kernels
+* forward - forward and propagator operators for VNNs
+* transforms - data augmentation and operation transforms
+* visualize - visualizations of various array types
+* universe - definition and classes of various different VNNs
+* utils - misc helper functions
+
 The descriptions of the various scripts can be found on the [experiments page](experiments.md)
 
 ## Implementation
