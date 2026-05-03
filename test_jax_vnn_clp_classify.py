@@ -22,7 +22,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 50
+epochs = 100
 
 #===========
 ##data
@@ -135,7 +135,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    clp = UniverseLP(N)
+    clp = UniverseLP(N, sharpen=True)
     clp.initialize_clp(input_coords, output_coords, output_offset, output_size, [], depth, kernel_size, directions=directions)
     return clp(batch, activation, final_activation, norm=True)
 

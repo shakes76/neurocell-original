@@ -74,7 +74,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = UniverseLP(N)
+    mlp = UniverseLP(N, sharpen=False)
     mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size)
     return mlp(batch, activation, final_activation, norm=True)
 
