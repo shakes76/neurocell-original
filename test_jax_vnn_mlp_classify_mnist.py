@@ -23,13 +23,16 @@ import utils #local
 utils.jax_status()
 
 #parameters
-N = 1024
 epochs = 8
 num_classes = 10
 layers = 4
 batch_size = 64
 length = 28*28
-print("N:", N, "Epochs:", epochs)
+kernel_size = (71,3)
+depth = layers*2+1 #1 col of signal cells per layer
+Nx = 1024
+Ny = depth + 2*(kernel_size[1]-1) + 4 #channel last
+print("N:", (Nx,Ny), "Epochs:", epochs)
 
 #network IO paths
 path = '/home/shakes/'
@@ -50,11 +53,11 @@ num_classes = 10
 #locations
 #MLP with 784 inputs and 10 outputs, 3 layers inbetween
 #setup network position
-center = N//2
-depth = layers*2+1 #1 col of signal cells per layer
-input_top = center-length//2
-input_left = center-(depth-1)//2
-output_top = center-num_classes//2
+centerx = Nx//2
+centery = Ny//2
+input_top = centerx-length//2
+input_left = centery-(depth-1)//2
+output_top = centerx-num_classes//2
 output_left = input_left+depth+1 #include out layer
 # print("input_top", input_top, "input_left", input_left, "output_top", output_top, "output_left", output_left)
 #setup parameters and lengths
@@ -62,7 +65,6 @@ input_size = (length,1)
 input_offset = (input_top,input_left)
 output_size = (num_classes,1)
 output_offset = (output_top,output_left)
-kernel_size = (71,3)
 activation = jax.nn.tanh
 final_activation = jax.nn.sigmoid
 total_batches = len(train_loader)
@@ -74,7 +76,7 @@ def _forward(batch) -> jnp.ndarray:
     '''
     Forward pass through network
     '''
-    mlp = UniverseLP(N, sharpen=False)
+    mlp = UniverseLP((Nx,Ny), sharpen=False)
     mlp.initialize_mlp(input_size, output_size, input_offset, output_offset, depth, kernel_size)
     return mlp(batch, activation, final_activation, norm=True)
 
@@ -95,6 +97,11 @@ opt_state = opt.init(params)
 
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
+
+plt.imshow(params['universe_lp']['s'])
+plt.title("Initial States")
+plt.savefig("vnn_mlp_classify_mnist_states_init.png", dpi=150)
+plt.show()
 
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
@@ -177,7 +184,7 @@ jnp.savez("mlp_classify_mnist_cells.npz",
             biases=params['universe_lp']['b'],
             filters=params['universe_lp']['f'],
             states=params['universe_lp']['s'],
-            N=N, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
+            Nx=Nx, Ny=Ny, length=length, num_classes=num_classes, input_size=input_size, output_size=output_size,
             input_offset=input_offset, output_offset=output_offset,
             kernel_size=kernel_size,
             allow_pickle=False)

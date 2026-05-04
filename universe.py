@@ -313,8 +313,12 @@ class UniverseLP(hk.Module):
     """
     def __init__(self, N, sharpen=True, dtype=jnp.float32, name=None):
         super().__init__(name=name)
-        self.N = N
-        self.grid_size = (N,N)
+        if isinstance(N, (list, tuple)): #size provided by user
+            self.N = max(N)
+            self.grid_size = N
+        else:
+            self.N = N
+            self.grid_size = (N,N)
         self.sharpen = sharpen
         self.dtype = dtype
         self.states_dtype = jnp.float32
@@ -1144,11 +1148,8 @@ class Universe3D(UniverseLP):
     def __init__(self, N, blocks=1, sharpen=True, dtype=jnp.float32, name=None):
         super().__init__(N, sharpen=sharpen, dtype=dtype, name=name)
         if isinstance(N, (list, tuple)): #size provided by user
-            self.N = max(N)
-            self.grid_size = N
             self.img_shape = (1,)+N+(1,)
         else:
-            self.grid_size = (N,N,N)
             self.img_shape = (1,N,N,N,1)
         self.blocks = blocks
         # print("blocks:", self.blocks)
