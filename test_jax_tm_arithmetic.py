@@ -21,7 +21,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 100
+epochs = 30
 n = 8
 # bit_depth = 2**(n-1)
 length = 2*n
@@ -32,6 +32,8 @@ num_batches = samples//batch_size
 delta = 0.2
 padding = 4*(length+n+blanks)
 N = length + n + blanks + 16*padding
+plot_ratio = 24
+plot_height = 1
 print("N:", N, "Epochs:", epochs)
 
 #===========
@@ -96,8 +98,10 @@ opt_state = opt.init(params)
 # print(params)
 # print(state)
 
-plt.imshow(params['universe_tm']['s'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_tm']['s'], aspect='auto')
 plt.title("Initial States")
+plt.tight_layout()
 plt.savefig("tm_arith_states_init.png", dpi=75)
 plt.show()
 
@@ -182,43 +186,54 @@ jnp.savez("tm_arith_cells.npz",
             kernel_size=kernel_size,
             allow_pickle=False)
 
-plt.imshow(params['universe_tm']['w'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_tm']['w'], aspect='auto')
 plt.title("Final Weights")
+plt.tight_layout()
 plt.savefig("tm_arith_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_tm']['b'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_tm']['b'], aspect='auto')
 plt.title("Final Biases")
+plt.tight_layout()
 plt.savefig("tm_arith_biases.png", dpi=150)
 plt.show()
 
-fig = plt.figure(figsize=(2,2*directions))
+fig = plt.figure(figsize=(plot_ratio//4,directions*2))
 for c in range(directions):
     plt.subplot(directions, 1, c+1)
-    plt.imshow(params['universe_tm']['f'][0,:,:,c])
-    plt.tight_layout()
+    plt.imshow(params['universe_tm']['f'][0,:,:,c], aspect='auto')
     plt.axis('off') # Hides both x and y axes
-    plt.title("Filter "+str(c))
+    # plt.title("Filter "+str(c))
+    plt.title("") #disable
+    plt.tight_layout()
 plt.savefig("tm_arith_filter.png", dpi=75)
 plt.show()
 
-plt.imshow(params['universe_tm']['s'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_tm']['s'], aspect='auto')
 plt.title("Final States")
-plt.savefig("tm_arith_states_final.png", dpi=75)
+plt.tight_layout()
+plt.savefig("tm_arith_states_final.png", dpi=150)
 plt.show()
 
 states = params['universe_tm']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
-plt.imshow(states)
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(states, aspect='auto')
 plt.title("Final States (Thresholded)")
-plt.savefig("tm_arith_states_final_thres.png", dpi=75)
+plt.tight_layout()
+plt.savefig("tm_arith_states_final_thres.png", dpi=150)
 plt.show()
 
-plt.imshow(state['universe_tm']['universe'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(state['universe_tm']['universe'][0], aspect='auto')
 plt.title("Final Universe")
-plt.savefig("tm_arith_universe.png", dpi=75)
+plt.tight_layout()
+plt.savefig("tm_arith_universe.png", dpi=150)
 plt.show()
 
 #function plot
