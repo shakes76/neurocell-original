@@ -93,6 +93,9 @@ params, state = network.init(jax.random.PRNGKey(42), x[0:1])
 opt_state = opt.init(params)
 # print(params)
 
+param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
+print(f"Total number of parameters: {param_count}")
+
 #loss function
 def loss(params: hk.Params, state, batch, labels, l2_scaling=1e-3) -> jnp.ndarray:
     '''
