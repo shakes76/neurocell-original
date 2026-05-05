@@ -28,16 +28,16 @@ n = 8
 bit_depth = 2**(n-1)
 ctrl_bits = 4
 ctrl_bit_depth = 2**ctrl_bits
-samples = 64000
+samples = 128000
 batch_size = 128
 kernel_size = (17,3)
 num_batches = samples//batch_size
 total_steps = num_batches*epochs
 delta = 0.2
-padding = 3*max(kernel_size[0], kernel_size[1]) #on one side
+padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 epsilon = 1e-8
 start_state = 1 #set None for random state
-N = 4*n + padding
+N = 2*n + padding
 layers = 5
 ctrl_gap = 1
 print("N:", N, "Epochs:", epochs, "bit depth:", bit_depth)
@@ -119,6 +119,9 @@ params, state = network.init(jax.random.PRNGKey(42), x)
 opt_state = opt.init(params)
 # print(params)
 # print(state)
+
+param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
+print(f"Total number of parameters: {param_count}")
 
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")

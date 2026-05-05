@@ -127,6 +127,9 @@ opt_state = opt.init(params)
 # print(params)
 # print(state)
 
+param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
+print(f"Total number of parameters: {param_count}")
+
 plt.imshow(params['universe_lp']['s'])
 plt.title("Initial States")
 plt.savefig("vnn_alu_arithmetic_states_init.png", dpi=150)

@@ -32,6 +32,8 @@ kernel_size = (71,3)
 depth = layers*2+1 #1 col of signal cells per layer
 Nx = 1024
 Ny = depth + 2*(kernel_size[1]-1) + 4 #channel last
+plot_ratio = 1
+plot_height = 32
 print("N:", (Nx,Ny), "Epochs:", epochs)
 
 #network IO paths
@@ -98,7 +100,8 @@ opt_state = opt.init(params)
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
 print(f"Total number of parameters: {param_count}")
 
-plt.imshow(params['universe_lp']['s'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_lp']['s'], aspect='auto')
 plt.title("Initial States")
 plt.savefig("vnn_mlp_classify_mnist_states_init.png", dpi=150)
 plt.show()
@@ -208,33 +211,38 @@ for x, y in tqdm(test_loader):
 accuracy = 100 * correct / total
 print(f"[Final Test Accuracy {accuracy}]")
 
-plt.imshow(params['universe_lp']['w'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_lp']['w'], aspect='auto')
 plt.title("Final Weights")
 plt.savefig("vnn_mlp_classify_mnist_weights.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_lp']['b'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_lp']['b'], aspect='auto')
 plt.title("Final Biases")
 plt.savefig("vnn_mlp_classify_mnist_biases.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_lp']['f'][0,:,:,0])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_lp']['f'][0,:,:,0], aspect='auto')
 plt.title("Final Filter")
 plt.savefig("vnn_mlp_classify_mnist_filter.png", dpi=150)
 plt.show()
 
-plt.imshow(params['universe_lp']['s'])
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(params['universe_lp']['s'], aspect='auto')
 plt.title("Final States")
-plt.savefig("vnn_mlp_full_classify_mnist_states.png", dpi=150)
+plt.savefig("vnn_mlp_classify_mnist_states.png", dpi=150)
 plt.show()
 
 states = params['universe_lp']['s']
 states = jnp.where(states>=0.6, 2, states) #activate if passive, more accurate
 states = jnp.where(jnp.logical_and(states>0,states<0.6), 1, states) #weight if signal
 
-plt.imshow(states)
+fig = plt.figure(figsize=(plot_ratio,plot_height))
+plt.imshow(states, aspect='auto')
 plt.title("Final States (Thresholded)")
-plt.savefig("vnn_mlp_full_classify_mnist_states_thres.png", dpi=150)
+plt.savefig("vnn_mlp_classify_mnist_states_thres.png", dpi=150)
 plt.show()
 
 print("END")
