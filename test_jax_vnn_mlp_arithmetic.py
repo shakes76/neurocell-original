@@ -21,7 +21,7 @@ import utils #local
 utils.jax_status()
 
 #parameters
-epochs = 100
+epochs = 200
 n = 8
 # bit_depth = 2**(n-1)
 length = 2*n
@@ -30,9 +30,9 @@ batch_size = 128
 kernel_size = (17,3)
 num_batches = samples//batch_size
 delta = 0.2
-padding = 3*max(kernel_size[0], kernel_size[1]) #on one side
+padding = 2*max(kernel_size[0], kernel_size[1]) #on one side
 layers = 5
-N = 4*n + padding
+N = 2*n + padding
 print("N:", N, "Epochs:", epochs)
 
 #===========
