@@ -1,0 +1,184 @@
+'''
+Von Neumann network that mimics an MLP with a Turing machine structure.
+
+We use cells like a tape
+'''
+import numpy as np
+import jax
+import jax.numpy as jnp
+import haiku as hk
+# import matplotlib as mpl
+# mpl.use('Agg')
+import matplotlib.pyplot as plt
+from typing import Tuple
+
+from universe import UniverseLP #local
+from data import generate_arithmetic_logic
+import utils #local
+
+utils.jax_status()
+
+#repair parameters
+dmg_percentage_pixels = 0.01
+dmg_pixel_value = -jnp.inf  # Constant value for the random pixels (-infinity)
+# fine_tune = True
+
+##create model
+N = 1 #unused
+n = None
+bit_depth = None
+samples = 64000
+batch_size = 128
+gap = None
+ctrl_gap = None
+delta = 0.2
+depth = None
+# filename = "mlp_classify_cells.npz"
+filename = "alu_arithmetic_cells.npz"
+# filename = "alu_tm_arithmetic_cells.npz"
+# length = None
+# num_classes = None
+input_size = None
+input_offset = None
+input_offset_x1 = None
+input_offset_x2 = None
+ctrl_size = None
+ctrl_offset = None
+ctrl_bits = None
+output_size = None
+output_offset = None
+# layer_size = None
+# layer_offset = None
+kernel_size = None
+activation = jax.nn.tanh
+final_activation = None
+directions = None
+
+"""
+TM ALU file format
+
+weights=params['universe_lp']['w'],
+biases=params['universe_lp']['b'],
+filters=params['universe_lp']['f'],
+states=params['universe_lp']['s'],
+N=N, ctrl_bits=ctrl_bits, bit_depth=bit_depth, n=n, input_size=input_size, output_size=output_size,
+input_offset_x1=input_offset_x1, input_offset_x2=input_offset_x2,
+crtl_size=ctrl_size, ctrl_offset=ctrl_offset, output_offset=output_offset,
+kernel_size=kernel_size,
+"""
+
+with np.load(filename, allow_pickle=False) as data:
+    weights = data['weights']
+    biases = data['biases']
+    states = data['states']
+    filters = data['filters']
+    N=int(data['N'])
+    # length=data['length']
+    depth=int(data['depth'])
+    gap=int(data['gap'])
+    ctrl_gap=int(data['ctrl_gap'])
+    directions=int(data['directions'])
+    # num_classes=data['num_classes']
+    input_size=tuple(data['input_size'])
+    output_size=tuple(data['output_size'])
+    # input_offset=data['input_offset']
+    input_offset_x1=tuple(data['input_offset_x1'])
+    input_offset_x2=tuple(data['input_offset_x2'])
+    output_offset=tuple(data['output_offset'])
+    ctrl_size=tuple(data['ctrl_size'])
+    ctrl_offset=tuple(data['ctrl_offset'])
+    ctrl_bits=int(data['ctrl_bits'])
+    bit_depth=int(data['bit_depth'])
+    n=int(data['n'])
+    # layer_size=data['layer_size']
+    # layer_offset=data['layer_offset']
+    kernel_size=tuple(data['kernel_size'])
+
+#damage cells
+dmg_num_pixels = int(N * N * dmg_percentage_pixels)   # Number of random pixels to generate (5% of total)
+key = jax.random.PRNGKey(42)
+
+# Generate the dmg image
+dmg_image = utils.create_random_pixel_image(key, N, dmg_num_pixels, dmg_pixel_value)
+
+#dmg model
+# Apply the random pixel mask to the model parameters.
+# Since the mask is 0 everywhere except the random pixels (-inf),
+# adding it will turn the corresponding pixels in the weights to -inf.
+weights = weights + dmg_image
+biases = biases + dmg_image
+
+print("N:", N, "Number of Bits:", n, "kernel_size", kernel_size)
+print("Dmg Percentage Pixels:", dmg_percentage_pixels, "Dmg Num Pixels:", dmg_num_pixels)
+print("input_size:", input_size, "output_size:", output_size, "ctrl_size:", ctrl_size)
+
+plt.imshow(weights)
+plt.title("Final Weights")
+# plt.savefig("vnn_alu_arithmetic_weights.png", dpi=150)
+plt.show()
+
+plt.imshow(biases)
+plt.title("Final Biases")
+# plt.savefig("vnn_alu_arithmetic_biases.png", dpi=150)
+plt.show()
+
+plt.imshow(states)
+plt.title("Final States")
+plt.savefig("vnn_alu_arithmetic_states_final.png", dpi=150)
+plt.show()
+
+#===========
+#data
+X1, X2, C, Y = generate_arithmetic_logic(samples, n, ctrl_bits, batch_size, delta)
+
+# X1 = jnp.asarray(X1)
+# X2 = jnp.asarray(X2)
+# C = jnp.asarray(C)
+# Y = jnp.asarray(Y)
+
+Y_packed = np.packbits(Y,axis=2)
+print("Y_packed shape", Y_packed.shape)
+
+#===========
+##create model
+def _forward(batch) -> jnp.ndarray:
+    '''
+    Forward pass through network
+    '''
+    mlp = UniverseLP(N, sharpen=False)
+    mlp.initialize([input_size, input_size, ctrl_size], output_size, [input_offset_x1, input_offset_x2, ctrl_offset], output_offset, depth, kernel_size, directions=directions)
+    return mlp(batch, activation, final_activation, norm=True)
+
+# Make the network and optimizer. Haiku standard
+network = hk.without_apply_rng(hk.transform_with_state(_forward))
+
+# Initialize network and optimiser; note we draw an input to get shapes.
+x = [X1[0], X2[0], C[0]] #one batch
+for index, input in enumerate(x):
+    x[index] = x[index][:, :, jnp.newaxis] #fake 2D
+print("X0 shape:", x[0].shape)
+params, state = network.init(jax.random.PRNGKey(42), x)
+
+params['universe_lp']['w'] = weights
+params['universe_lp']['b'] = biases
+params['universe_lp']['s'] = states
+params['universe_lp']['f'] = filters
+
+#test performance
+Y_pred = []
+for x1, x2, c, y in zip(X1, X2, C, Y):
+    x = [x1, x2, c] #batch of inputs
+    for index, input in enumerate(x):
+        x[index] = x[index][:, :, jnp.newaxis] #fake 2D
+    logits, state_test = network.apply(params, state, x)
+    predictions = jnp.squeeze(logits, axis=-1) #remove extra dim, must match output vector type
+    predictions = jnp.round(predictions).astype(np.uint8)
+    predictions = jnp.packbits(predictions,axis=1)
+    Y_pred.append(predictions)
+# Y_pred = jnp.argmax(jnp.array(Y_pred), axis=-1)
+# print("After", Y_pred.shape, Y_pred)
+Y_pred = jnp.array(Y_pred)
+accuracy = jnp.mean(Y_pred == Y_packed)
+print(f"[Final Accuracy {accuracy}]")
+
+print("END")

@@ -326,3 +326,32 @@ def compute_vector_field(frame1, frame2, epsilon=1e-5, normalize=False):
         v = v / (mag + epsilon)
 
     return u, v, mag
+
+def create_random_pixel_image(key, N, num_pixels, pixel_value):
+    """
+    Creates an NxN image of zeros with randomly positioned pixels of a constant value.
+
+    Args:
+        key: A JAX PRNG key.
+        N: The size of the image (NxN).
+        num_pixels: The number of random pixels to place.
+        pixel_value: The constant value assigned to the random pixels.
+
+    Returns:
+        A JAX numpy array representing the image.
+
+    @author Gemini Pro 3.1
+    """
+    # Create an initial image of zeros
+    image = jnp.zeros((N, N))
+
+    # Generate random row and column indices for the pixels
+    keys = jax.random.split(key, 2)
+    rows = jax.random.randint(keys[0], (num_pixels,), 0, N)
+    cols = jax.random.randint(keys[1], (num_pixels,), 0, N)
+
+    # Update the image at the random indices with the specified pixel_value
+    # Note: In JAX, arrays are immutable, so we use .at[...].set(...) to return a new array with updates.
+    image = image.at[rows, cols].set(pixel_value)
+
+    return image
