@@ -59,7 +59,7 @@ final_activation = None
 directions = None
 
 #fine tuning parameters
-epochs = 20
+epochs = 10
 num_batches = samples//batch_size
 total_steps = num_batches*epochs
 
@@ -114,27 +114,28 @@ dmg_image = utils.create_random_pixel_image(key, N, dmg_num_pixels, dmg_pixel_va
 # Apply the random pixel mask to the model parameters.
 # Since the mask is 0 everywhere except the random pixels (-inf),
 # adding it will turn the corresponding pixels in the weights to -inf.
-weights = weights + dmg_image
-biases = biases + dmg_image
-states = states + dmg_image
+weights[dmg_image == dmg_pixel_value] = 0
+biases[dmg_image == dmg_pixel_value] = 0
+dmg_states = states + dmg_image
 
 print("N:", N, "Number of Bits:", n, "kernel_size", kernel_size)
 print("Dmg Percentage Pixels:", dmg_percentage_pixels, "Dmg Num Pixels:", dmg_num_pixels)
 print("input_size:", input_size, "output_size:", output_size, "ctrl_size:", ctrl_size)
+print("depth:", depth, "directions:", directions)
 
 plt.imshow(weights)
 plt.title("Initial Weights")
-# plt.savefig("vnn_alu_arithmetic_weights.png", dpi=150)
+plt.savefig("vnn_alu_arithmetic_repair_weights_init.png", dpi=150)
 plt.show()
 
 plt.imshow(biases)
 plt.title("Initial Biases")
-# plt.savefig("vnn_alu_arithmetic_biases.png", dpi=150)
+plt.savefig("vnn_alu_arithmetic_repair_biases_init.png", dpi=150)
 plt.show()
 
-plt.imshow(states)
+plt.imshow(dmg_states)
 plt.title("Initial States")
-# plt.savefig("vnn_alu_arithmetic_states_final.png", dpi=150)
+plt.savefig("vnn_alu_arithmetic_repair_states_init.png", dpi=150)
 plt.show()
 
 #===========
@@ -190,7 +191,7 @@ params, state = network.init(jax.random.PRNGKey(42), x)
 
 params['universe_lp']['w'] = weights
 params['universe_lp']['b'] = biases
-params['universe_lp']['s'] = states
+params['universe_lp']['s'] = dmg_states
 params['universe_lp']['f'] = filters
 
 #optimizer stuff
@@ -291,6 +292,11 @@ if fine_tune:
     plt.imshow(params['universe_lp']['s'])
     plt.title("Final States")
     plt.savefig("vnn_alu_arithmetic_repair_states.png", dpi=150)
+    plt.show()
+
+    plt.imshow(states-params['universe_lp']['s'])
+    plt.title("Difference States")
+    plt.savefig("vnn_alu_arithmetic_repair_states_diff.png", dpi=150)
     plt.show()
 
 #test performance
