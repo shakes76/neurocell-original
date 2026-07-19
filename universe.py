@@ -74,7 +74,7 @@ class VectorCells(hk.initializers.Initializer):
         return result
 
     def __call__(self, shape: Sequence[int], dtype) -> jax.Array:
-        if self.random_init > 0 or not self.random_init is None:
+        if not self.random_init is None:
             cells = self.initializer(hk.next_rng_key(), shape, jnp.float32)
         else:
             cells = jnp.zeros(shape, dtype=dtype)

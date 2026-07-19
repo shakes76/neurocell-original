@@ -16,14 +16,14 @@ import time, math
 
 from sklearn.model_selection import train_test_split
 
-from universe import UniverseLP #local
+from universe import UniverseLP, VectorCells #local
 from data import generate_arithmetic_logic
 import utils #local
 
 utils.jax_status()
 
 #repair parameters
-dmg_percentage_pixels = 0.01
+dmg_percentage_pixels = 0.03
 dmg_pixel_value = -jnp.inf  # Constant value for the random pixels (-infinity)
 fine_tune = True
 
@@ -59,7 +59,7 @@ final_activation = None
 directions = None
 
 #fine tuning parameters
-epochs = 10
+epochs = 50
 num_batches = samples//batch_size
 total_steps = num_batches*epochs
 
@@ -118,24 +118,48 @@ weights[dmg_image == dmg_pixel_value] = 0
 biases[dmg_image == dmg_pixel_value] = 0
 dmg_states = states + dmg_image
 
+#input and output states
+s_init = VectorCells([input_size, input_size, ctrl_size], output_size, [input_offset_x1, input_offset_x2, ctrl_offset], output_offset, is_states=True, clear=False, random_init=None)
+io_states = s_init(shape=(N,N), dtype=jnp.float32)
+# io_states = hk.get_parameter("io", shape=(N,N), dtype=jnp.float32, init=s_init)
+
+#restore io states
+# dmg_states[io_states > 0] = io_states
+# dmg_states = dmg_states.at[io_states > 0].set(io_states)
+updated_dmg_states = jnp.where(
+        io_states == 1, # Condition
+        states,         # Restore values to take if condition is True
+        dmg_states      # Values to take if condition is False
+    )
+
 print("N:", N, "Number of Bits:", n, "kernel_size", kernel_size)
 print("Dmg Percentage Pixels:", dmg_percentage_pixels, "Dmg Num Pixels:", dmg_num_pixels)
 print("input_size:", input_size, "output_size:", output_size, "ctrl_size:", ctrl_size)
 print("depth:", depth, "directions:", directions)
 
 plt.imshow(weights)
-plt.title("Initial Weights")
+plt.title("Initial Damaged Weights")
 plt.savefig("vnn_alu_arithmetic_repair_weights_init.png", dpi=150)
 plt.show()
 
 plt.imshow(biases)
-plt.title("Initial Biases")
+plt.title("Initial Damaged Biases")
 plt.savefig("vnn_alu_arithmetic_repair_biases_init.png", dpi=150)
 plt.show()
 
 plt.imshow(dmg_states)
-plt.title("Initial States")
+plt.title("Initial Damaged States")
 plt.savefig("vnn_alu_arithmetic_repair_states_init.png", dpi=150)
+plt.show()
+
+plt.imshow(io_states)
+plt.title("Input-Output States")
+plt.savefig("vnn_alu_arithmetic_repair_states_io.png", dpi=150)
+plt.show()
+
+plt.imshow(updated_dmg_states)
+plt.title("Initial Damaged States IO Restored")
+plt.savefig("vnn_alu_arithmetic_repair_states_restored.png", dpi=150)
 plt.show()
 
 #===========
@@ -191,11 +215,11 @@ params, state = network.init(jax.random.PRNGKey(42), x)
 
 params['universe_lp']['w'] = weights
 params['universe_lp']['b'] = biases
-params['universe_lp']['s'] = dmg_states
+params['universe_lp']['s'] = updated_dmg_states
 params['universe_lp']['f'] = filters
 
 #optimizer stuff
-# lr_schedule = optax.warmup_cosine_decay_schedule(init_value=0.0002, peak_value=0.001, warmup_steps=int(0.025*total_steps), decay_steps=total_steps, end_value=0.0001)
+# lr_schedule = optax.warmup_cosine_decay_schedule(init_value=0.0002, peak_value=0.0001, warmup_steps=int(0.025*total_steps), decay_steps=total_steps, end_value=0.0001)
 # opt = optax.adamw(lr_schedule)
 opt = optax.adam(learning_rate=0.0001)
 opt_state = opt.init(params)
